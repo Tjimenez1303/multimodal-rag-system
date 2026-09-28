@@ -1,0 +1,33 @@
+# --- Claude Code ---
+.claude/settings.local.json
+.claude/**/*.local.*
+
+# --- Spec Kit ---
+# .specify/ SÍ se versiona (constitución, plantillas, scripts).
+# Su estado local ya lo ignora .specify/.gitignore (feature.json, local-config.yml).
+
+# --- Secretos ---
+.env
+.env.*
+!.env.example
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- Node ---
+node_modules/
+dist/
+build/
+.next/
+
+# --- SO / IDE ---
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json

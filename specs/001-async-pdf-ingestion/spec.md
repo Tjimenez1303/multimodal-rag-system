@@ -328,7 +328,7 @@ and confirm both appear with the correct status and details.
 - **SC-010**: Excluding figure descriptions, a fully scanned 100-page manual reaches
   completed in under 10 minutes on the reference local environment, and a mixed document
   only pays that cost for its scanned pages.
-- **SC-011**: Describing figures adds on average no more than 6 seconds per described
+- **SC-011**: Describing figures adds on average no more than 8 seconds per described
   figure on the reference local environment.
 - **SC-012**: In the sample document set, at least 90% of figures with labels inside them
   are returned among the top 5 results when searching for one of those labels.

@@ -1,17 +1,19 @@
-# --- Claude Code ---
+# Claude Code (local settings)
 .claude/settings.local.json
 .claude/**/*.local.*
 
-# --- Spec Kit ---
-# .specify/ SÍ se versiona (constitución, plantillas, scripts).
-# Su estado local ya lo ignora .specify/.gitignore (feature.json, local-config.yml).
+# Spec Kit
+# .specify/ is versioned; machine-local state is ignored by .specify/.gitignore
 
-# --- Secretos ---
+# Local reference files (not for distribution)
+docs/RAG Multimodal.pdf
+
+# Environment variables
 .env
 .env.*
 !.env.example
 
-# --- Python ---
+# Python
 __pycache__/
 *.py[cod]
 .venv/
@@ -20,14 +22,16 @@ venv/
 .mypy_cache/
 .ruff_cache/
 
-# --- Node ---
+# Node
 node_modules/
 dist/
 build/
 .next/
 
-# --- SO / IDE ---
+# macOS
 .DS_Store
+
+# IDEs
 .idea/
 .vscode/*
 !.vscode/extensions.json

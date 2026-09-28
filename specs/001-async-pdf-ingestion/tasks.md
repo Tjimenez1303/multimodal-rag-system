@@ -40,45 +40,45 @@ as decided in the plan. Phases 2 onward ship in `feature/async-pdf-ingestion`.
 **Purpose**: Repository tooling that every later task relies on. There is no application
 code yet beyond a package skeleton and one smoke test.
 
-- [ ] T001 Create `backend/.python-version` with the latest Python 3.14 patch available to uv (3.14.7 on 2026-09-28), and `backend/pyproject.toml`:
+- [x] T001 Create `backend/.python-version` with the latest Python 3.14 patch available to uv (3.14.7 on 2026-09-28), and `backend/pyproject.toml`:
   - Project `multimodal-rag`, `requires-python = "==3.14.*"`, src layout with package `multimodal_rag`.
   - Dependency group `dev` with pytest, pytest-asyncio, pytest-cov, respx, ruff, mypy, import-linter and pre-commit.
   - No runtime dependencies yet.
-- [ ] T002 Create the package skeleton with Google-style module docstrings:
+- [x] T002 Create the package skeleton with Google-style module docstrings:
   - `backend/src/multimodal_rag/__init__.py`
   - empty `shared/`, `ingestion/` and `adapters/` subpackages, each with an `__init__.py`
-- [ ] T003 Configure ruff in `backend/pyproject.toml`:
+- [x] T003 Configure ruff in `backend/pyproject.toml`:
   - Line length 88, target py314.
   - `select = ["E", "W", "F", "I", "B", "C4", "UP", "T20", "G", "ASYNC", "TID251", "D"]`.
   - `[tool.ruff.lint.pydocstyle] convention = "google"`, with `D` ignored under `tests/` so the constitution's Google-style docstrings are enforced.
   - `[tool.ruff.lint.flake8-tidy-imports.banned-api]` bans `unittest.mock.MagicMock` and `unittest.mock.Mock`, with the message "use a fake that implements the port".
   - The ruff formatter is enabled.
-- [ ] T004 [P] Configure mypy in `backend/pyproject.toml`: `strict = true`, `plugins = ["pydantic.mypy"]`, `files = ["src", "tests"]`, and pydantic-mypy strict init flags.
-- [ ] T005 [P] Configure pytest and coverage in `backend/pyproject.toml`:
+- [x] T004 [P] Configure mypy in `backend/pyproject.toml`: `strict = true`, `plugins = ["pydantic.mypy"]`, `files = ["src", "tests"]`, and pydantic-mypy strict init flags.
+- [x] T005 [P] Configure pytest and coverage in `backend/pyproject.toml`:
   - `asyncio_mode = "auto"`, `testpaths = ["tests"]`, and markers `integration` and `slow`.
   - `[tool.coverage.run] source = ["multimodal_rag"]`, `branch = true`.
   - `[tool.coverage.report] fail_under = 90`, `show_missing = true`.
-- [ ] T006 [P] Add import-linter contracts in `backend/pyproject.toml` under `[tool.importlinter]`:
+- [x] T006 [P] Add import-linter contracts in `backend/pyproject.toml` under `[tool.importlinter]`:
   - A `forbidden` contract stops `multimodal_rag.ingestion` from importing `multimodal_rag.adapters`, `multimodal_rag.bootstrap`, fastapi, starlette, sqlalchemy, asyncpg, alembic, docling, docling_core, pypdfium2, httpx, qdrant_client, pydantic_settings, structlog, stamina and tokenizers.
   - A `layers` contract orders `multimodal_rag.bootstrap` above `multimodal_rag.adapters`, above `multimodal_rag.ingestion`, above `multimodal_rag.shared`.
-- [ ] T007 [P] Add a smoke test so the coverage gate runs from day one: `backend/tests/unit/test_package.py` asserts that the package exposes `__version__`.
-- [ ] T008 [P] Create `.pre-commit-config.yaml` at the repository root with these hooks, mirroring CI:
+- [x] T007 [P] Add a smoke test so the coverage gate runs from day one: `backend/tests/unit/test_package.py` asserts that the package exposes `__version__`.
+- [x] T008 [P] Create `.pre-commit-config.yaml` at the repository root with these hooks, mirroring CI:
   - ruff check and ruff format from `astral-sh/ruff-pre-commit`
   - local hooks that run `uv run mypy` and `uv run lint-imports` in `backend/`
   - `crate-ci/typos`
   - `pre-commit-hooks`: detect-private-key, end-of-file-fixer, trailing-whitespace and check-yaml
-- [ ] T009 [P] Create `_typos.toml` at the repository root that excludes `docs/samples/`, `uv.lock` and the Spanish sample text, and allows the domain terms that typos flags.
-- [ ] T010 Create `.github/workflows/ci.yml` with a single job running `uv sync --locked`, `ruff check`, `ruff format --check`, `mypy`, `lint-imports` and `pytest --cov`.
+- [x] T009 [P] Create `_typos.toml` at the repository root that excludes `docs/samples/`, `uv.lock` and the Spanish sample text, and allows the domain terms that typos flags.
+- [x] T010 Create `.github/workflows/ci.yml` with a single job running `uv sync --locked`, `ruff check`, `ruff format --check`, `mypy`, `lint-imports` and `pytest --cov`.
   - Pin `actions/checkout` and `astral-sh/setup-uv` by full commit SHA, resolved with `gh api repos/<owner>/<repo>/git/ref/tags/<tag>` at implementation time.
   - Set `permissions: contents: read` and `persist-credentials: false`.
-- [ ] T011 [P] Create `.github/workflows/zizmor.yml`, which runs zizmor on `.github/workflows/`. Pin the action by full commit SHA with read-only permissions.
-- [ ] T012 [P] Create `backend/Dockerfile` following the official uv multi-stage pattern:
+- [x] T011 [P] Create `.github/workflows/zizmor.yml`, which runs zizmor on `.github/workflows/`. Pin the action by full commit SHA with read-only permissions.
+- [x] T012 [P] Create `backend/Dockerfile` following the official uv multi-stage pattern:
   - `COPY --from=ghcr.io/astral-sh/uv:<pinned> /uv /uvx /bin/`
   - `UV_COMPILE_BYTECODE=1`, `UV_LINK_MODE=copy`, `UV_PYTHON_DOWNLOADS=0`
   - cache mounts, `uv sync --locked --no-install-project`, then `uv sync --locked`
   - a runtime stage on `python:3.14-slim-trixie` with non-root user `nonroot` (uid 999)
-- [ ] T013 Run `uv lock` in `backend/` and commit `backend/uv.lock`. Run `pre-commit run --all-files` and CI locally, and paste the output as evidence in the pull request body.
-- [ ] T014 Update `AGENTS.md` with the real commands: install (`uv sync`), lint, types, import contracts, tests with coverage, and pre-commit.
+- [x] T013 Run `uv lock` in `backend/` and commit `backend/uv.lock`. Run `pre-commit run --all-files` and CI locally, and paste the output as evidence in the pull request body.
+- [x] T014 Update `AGENTS.md` with the real commands: install (`uv sync`), lint, types, import contracts, tests with coverage, and pre-commit.
 
 **Checkpoint**: The tooling pull request is merged, and `feature/async-pdf-ingestion` is updated from `main`.
 

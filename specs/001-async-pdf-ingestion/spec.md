@@ -85,6 +85,9 @@ surrounding text, and that no retrieval unit cuts a sentence or a table in half.
    figure) and each one keeps a reference to its section, pages and related images.
 5. **Given** a completed document, **When** any of its images is requested, **Then** the
    original image is available for display.
+6. **Given** a scanned page with no text layer, **When** the document is processed,
+   **Then** its text is recognized from the page image and captured as text elements with
+   page and position, marked as recognized text with a confidence score.
 
 ---
 
@@ -145,8 +148,13 @@ and confirm both appear with the correct status and details.
 - A password-protected or encrypted PDF ends as failed with a reason that says so.
 - A PDF that opens but is damaged partway through ends as failed, and no partial content
   from it stays searchable.
-- Pages without a text layer (scanned pages) are kept as page images and flagged. A
-  document with no extractable text on any page ends as failed with a reason that says so.
+- Pages without a usable text layer (scanned pages) go through text recognition. A
+  document where no text can be extracted or recognized on any page ends as failed with a
+  reason that says so.
+- A document that mixes digital and scanned pages is processed page by page, so only the
+  scanned pages go through text recognition.
+- A recognized word below the configured confidence threshold is kept but marked as low
+  confidence, so later features can weigh it accordingly.
 - Uploading a document whose content is identical to one already completed returns the
   existing document and job instead of processing it again.
 - Uploading a document whose content is identical to one that previously failed starts a
@@ -213,6 +221,14 @@ and confirm both appear with the correct status and details.
 - **FR-021**: Every upload, state transition and failure MUST be recorded in the
   operational logs with the job identifier, without recording document content or
   personal data.
+- **FR-022**: The system MUST detect pages without a usable text layer and recognize their
+  text from the page image, producing text and table elements with page, position and a
+  confidence score, in English and Spanish.
+- **FR-023**: Every text element MUST state whether it came from the document's text layer
+  or from text recognition.
+- **FR-024**: The system SHOULD recognize text printed inside images (labels in diagrams and
+  schematics) and attach it to the image, so an image can be found by the terms it
+  contains.
 
 ### Key Entities
 
@@ -222,8 +238,9 @@ and confirm both appear with the correct status and details.
   stage, progress (pages processed out of total), start and end times, a failure reason
   when failed, and a result summary when completed.
 - **Extracted Element**: a piece of content taken from one page. It has a type (text, table
-  or image), the page number, the position on the page and its content (text, table
-  structure or a stored image).
+  or image), the page number, the position on the page, its content (text, table
+  structure or a stored image) and its origin (text layer or text recognition, with a
+  confidence score for the latter).
 - **Element Relationship**: a link between an image or table and the text that describes
   it (caption, title or nearby paragraph), with the kind of relationship.
 - **Retrieval Unit**: a structurally coherent group of content prepared for search. It
@@ -237,8 +254,8 @@ and confirm both appear with the correct status and details.
   upload up to the size limit, whatever the size of the document.
 - **SC-002**: Job status reflects a change in state or progress within 5 seconds of it
   happening.
-- **SC-003**: A 100-page technical manual with figures and tables reaches completed in
-  under 10 minutes on the reference local environment.
+- **SC-003**: A 100-page digital technical manual with figures and tables reaches
+  completed in under 4 minutes on the reference local environment.
 - **SC-004**: 100% of captured elements carry a document, page number and position.
 - **SC-005**: In the sample document set, at least 90% of figures that have a caption are
   linked to that caption, and no table or sentence is split across two retrieval units.
@@ -247,6 +264,11 @@ and confirm both appear with the correct status and details.
 - **SC-007**: 100% of failed jobs carry a human-readable reason.
 - **SC-008**: Re-processing a document after a retry, restart or crash produces zero
   duplicate elements or retrieval units.
+- **SC-009**: On clean scanned sample pages (300 dpi), at least 95% of words are recognized
+  correctly.
+- **SC-010**: A fully scanned 100-page manual reaches completed in under 10 minutes on the
+  reference local environment, and a mixed document only pays that cost for its scanned
+  pages.
 
 ## Assumptions
 
@@ -254,8 +276,8 @@ and confirm both appear with the correct status and details.
   and per-user document permissions are out of scope for this feature.
 - Uploads are limited to 100 MB and 500 pages per file by default, and both limits are
   configurable.
-- Scanned pages are not converted to text in this feature. They are stored as page images
-  so they can still be shown to users.
+- Text recognition runs inside the system itself with open-source components. Documents
+  are never sent to an external recognition service.
 - Documents are primarily in English or Spanish, and language detection is not required.
 - Job and document records are kept until they are deleted manually. Document deletion is
   out of scope for this feature.
@@ -264,4 +286,6 @@ and confirm both appear with the correct status and details.
 - Answering questions, hybrid search ranking and the chat client are separate features
   that consume what this feature produces.
 - The reference local environment is the full system started locally with the project's
-  one-step startup on a typical developer laptop.
+  one-step startup on a typical developer laptop, without a graphics accelerator available
+  to the processing components. An accelerator, when present, only makes processing
+  faster.

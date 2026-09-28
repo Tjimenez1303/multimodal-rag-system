@@ -35,6 +35,8 @@
   named in the challenge brief, so they are treated as domain vocabulary rather than
   implementation detail.
 - Defaults chosen without explicit input and worth confirming in `/speckit-clarify`: the
-  100 MB and 500-page upload limits, no text recognition for scanned pages, the 10-minute
-  target for a 100-page manual, and returning the existing document on identical
-  re-upload.
+  100 MB and 500-page upload limits, returning the existing document on identical
+  re-upload, and whether text inside diagrams (FR-024) is required or desirable.
+- The processing-time targets (SC-003, SC-010) come from published CPU-only benchmarks of
+  open-source extraction and OCR engines and must be confirmed with a measurement during
+  planning.

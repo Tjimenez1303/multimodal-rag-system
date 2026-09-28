@@ -18,7 +18,6 @@ An uploaded PDF, identified by the fingerprint of its bytes.
 | `file_name` | text | Original name as uploaded, at most 255 characters |
 | `size_bytes` | integer | At most the configured size limit (200 MB by default) |
 | `page_count` | integer, nullable | Read at upload. Null only for encrypted files, which fail later |
-| `language` | enum `en`, `es`, `unknown` | Set by the worker from a stopword heuristic. Informational |
 | `blob_key` | text | `documents/{sha256}.pdf` |
 | `created_at` | timestamp with time zone | Set on registration |
 
@@ -110,7 +109,7 @@ A typed piece of content from one page.
 | `description` | text, nullable | Generated description. Images only (FR-026) |
 | `description_status` | enum `described`, `skipped`, `not_described`, nullable | Images only (FR-027) |
 | `unverified_identifiers` | list of text | Identifiers in the description missing from labels and caption (FR-028) |
-| `is_decorative` | boolean | Logos, icons, signatures, stamps, codes, full-page scan images or images repeated on many pages (FR-014). Decorative images are `skipped` for description |
+| `is_decorative` | boolean | Logos, icons, signatures, stamps, codes, full-page scan images or images repeated on at least 3 pages or on at least 20% of the pages (FR-014). Decorative images are `skipped` for description |
 
 ### BoundingBox (value object)
 
@@ -150,7 +149,6 @@ A structurally coherent group of content prepared for search.
 | `boxes` | list of `{page, left, top, right, bottom}` | For highlighting in later features |
 | `figure_ids` | list of UUID | Related images for text and table units |
 | `image_key` | text, nullable | Figure units only |
-| `language` | text | Document language |
 | `visible` | boolean | Indexed. `false` until the job completes (FR-018) |
 
 Vectors: `dense` (1024 dimensions, cosine) and `bm25` (sparse, IDF modifier, computed by

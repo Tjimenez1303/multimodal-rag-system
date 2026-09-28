@@ -49,7 +49,8 @@ code yet beyond a package skeleton and one smoke test.
   - empty `shared/`, `ingestion/` and `adapters/` subpackages, each with an `__init__.py`
 - [ ] T003 Configure ruff in `backend/pyproject.toml`:
   - Line length 88, target py314.
-  - `select = ["E", "W", "F", "I", "B", "C4", "UP", "T20", "G", "ASYNC", "TID251"]`.
+  - `select = ["E", "W", "F", "I", "B", "C4", "UP", "T20", "G", "ASYNC", "TID251", "D"]`.
+  - `[tool.ruff.lint.pydocstyle] convention = "google"`, with `D` ignored under `tests/` so the constitution's Google-style docstrings are enforced.
   - `[tool.ruff.lint.flake8-tidy-imports.banned-api]` bans `unittest.mock.MagicMock` and `unittest.mock.Mock`, with the message "use a fake that implements the port".
   - The ruff formatter is enabled.
 - [ ] T004 [P] Configure mypy in `backend/pyproject.toml`: `strict = true`, `plugins = ["pydantic.mypy"]`, `files = ["src", "tests"]`, and pydantic-mypy strict init flags.
@@ -108,7 +109,9 @@ code yet beyond a package skeleton and one smoke test.
     - upload limits: 200 MB and 500 pages
     - `MAX_ATTEMPTS=3`, `LEASE_SECONDS=90`, `HEARTBEAT_SECONDS=30`, `POLL_SECONDS=2`
     - timeouts and retry budgets per provider
-    - `FIGURE_DESCRIPTION_ENABLED=true`, `FIGURE_CONCURRENCY=2`, `MAX_UNIT_TOKENS=480`, `EXTRACTION_PAGE_BATCH=10`, `WORKER_MAX_JOBS=20`
+    - `FIGURE_DESCRIPTION_ENABLED=true`, `FIGURE_CONCURRENCY=2`, `MAX_UNIT_TOKENS=480`, `EXTRACTION_PAGE_BATCH=4`, `WORKER_MAX_JOBS=20`
+    - external call timeouts: `DB_CONNECT_TIMEOUT_SECONDS=5`, `DB_STATEMENT_TIMEOUT_MS=15000`, `QDRANT_TIMEOUT_SECONDS=10`
+    - figure rules: `DECORATIVE_MIN_PAGES=3`, `DECORATIVE_MIN_PAGE_SHARE=0.2`, `NEAR_TEXT_MAX_POINTS=72`
     - `LOG_FORMAT` (`json` or `console`)
   - A missing required value raises `ConfigurationError` at startup with the variable name.
   - Unit tests in `backend/tests/unit/shared/test_config.py`.
@@ -140,11 +143,11 @@ code yet beyond a package skeleton and one smoke test.
 - [ ] T023 Define the ports as `typing.Protocol` in `backend/src/multimodal_rag/ingestion/ports.py`, each with Google-style docstrings:
   - `DocumentRepository`, `JobQueue`, `ElementRepository`, `BlobStorage`
   - `PdfInspector`, `DocumentExtractor`, `FigureDescriber`, `Embedder`
-  - `TokenCounter`, `VectorIndex`, `Clock`
+  - `TokenCounter`, `VectorIndex` (`ensure_collection`, `upsert_units`, `publish`, `delete_document`, `search_hybrid(query_text, query_vector, limit, document_ids=None)`), `Clock`
 - [ ] T024 [P] Implement one in-memory fake per port in `backend/tests/fakes.py`:
   - `InMemoryDocumentRepository`, `InMemoryJobQueue` (with lease and fencing semantics), `InMemoryElementRepository`, `InMemoryBlobStorage`
   - `FakePdfInspector`, `FakeExtractor` (canned elements), `FakeFigureDescriber` (can be set to fail), `FakeEmbedder` (deterministic 1024-dim vectors from a hash)
-  - `WordTokenCounter`, `InMemoryVectorIndex`, `FrozenClock`
+  - `WordTokenCounter`, `InMemoryVectorIndex` (its `search_hybrid` scores simple word overlap and honors `visible`), `FrozenClock`
 - [ ] T025 [P] Implement the filesystem `BlobStorage` in `backend/src/multimodal_rag/adapters/storage/filesystem.py`:
   - Content-addressed keys, `documents/{sha256}.pdf` and `figures/{document_id}/{element_id}.png`.
   - Writes go to a temporary file followed by an atomic rename.
@@ -154,6 +157,7 @@ code yet beyond a package skeleton and one smoke test.
   - `ingestion_jobs`, with an index on `(status, lease_expires_at)`.
   - `extracted_elements` and `element_relationships`.
   - Columns exactly as in data-model.md.
+  - The engine sets `connect_args` with `timeout=DB_CONNECT_TIMEOUT_SECONDS` and `server_settings={"statement_timeout": DB_STATEMENT_TIMEOUT_MS}`, and the pool sets `pool_timeout` (constitution Principle VI).
 - [ ] T027 Initialize Alembic:
   - `backend/alembic.ini` and `backend/migrations/env.py` (async).
   - The first revision `backend/migrations/versions/0001_initial_schema.py` creates the tables from T026, plus a `NOTIFY ingestion_jobs` trigger on insert.
@@ -169,7 +173,7 @@ code yet beyond a package skeleton and one smoke test.
   - request id middleware that reads `X-Request-ID` or generates one, binds it for logging and echoes it
   - RFC 9457 problem details in `backend/src/multimodal_rag/adapters/http/problems.py`, mapping every `MultimodalRagError` family to a status and `code` in one place
   - `/health/live` and `/health/ready` (database and blob storage)
-- [ ] T030 Implement the composition root `backend/src/multimodal_rag/bootstrap.py`. It builds settings, logging, adapters and use cases for two entry points, `api` and `worker`, and it is the only module that imports both `ingestion` and `adapters`.
+- [ ] T030 Implement the composition root `backend/src/multimodal_rag/bootstrap.py`. It builds settings, logging, adapters and use cases for two entry points, `api` and `worker`, and it is the only module that imports both `ingestion` and `adapters`. In this phase the worker entry point only starts, logs readiness and idles. User story tasks register their adapters here.
 - [ ] T031 Create `compose.yaml` at the repository root:
   - Services: `postgres` (18, healthcheck), `qdrant` (1.19, healthcheck), `migrate` (one-shot `alembic upgrade head`), `api` (published on 127.0.0.1:8000) and `worker`.
   - A named volume for blobs.
@@ -212,6 +216,7 @@ code yet beyond a package skeleton and one smoke test.
   - On `digital.pdf`, it yields headings, paragraphs, a table and an image, each with page and a top-left box.
   - On `scanned.pdf`, it yields recognized text with a confidence.
   - The inspector reports the page count, detects `encrypted.pdf`, and rejects `not_a_pdf.pdf` by content.
+  - `digital.pdf` converted with a page batch of 1 yields the same reading order and heading levels as a batch of 3.
 
 ### Implementation for User Story 1
 
@@ -226,7 +231,7 @@ code yet beyond a package skeleton and one smoke test.
 - [ ] T044 [US1] Implement the Docling `DocumentExtractor` in `backend/src/multimodal_rag/adapters/docling/extractor.py`:
   - RapidOCR on onnxruntime, TableFormer, the picture classifier, and `generate_picture_images` with `images_scale=2.0`.
   - Artifacts from `DOCLING_ARTIFACTS_PATH` and threads from settings.
-  - Converts in page batches of `EXTRACTION_PAGE_BATCH` and yields progress per batch.
+  - Converts in page batches of `EXTRACTION_PAGE_BATCH` and yields progress per batch. `reading_order` is offset by the count of previous batches, and the heading level stack carries over between batches.
   - Maps Docling items to domain `ExtractedElement`: boxes via `to_top_left_origin(page_height)`, `origin` and `confidence` for recognized text, picture labels from children with `traverse_pictures`, and `image_class` from the classifier.
   - Stores crops through `BlobStorage`.
   - Raises `EncryptedDocumentError`, `CorruptDocumentError` or `NoExtractableTextError`.
@@ -244,6 +249,7 @@ code yet beyond a package skeleton and one smoke test.
   - `POST /api/v1/documents` rejects early on `Content-Length`, copies the spooled upload into blob storage in 1 MiB chunks while hashing, and returns 202 or 200.
   - `GET /api/v1/jobs/{job_id}`.
   - Responses match the OpenAPI contract.
+  - Logs `document_uploaded` at info level with `request_id`, `document_id`, `job_id`, `size_bytes`, `page_count` and `already_ingested`. The file name and content are never logged (FR-021).
 - [ ] T048 [US1] Implement the worker entry point in `backend/src/multimodal_rag/adapters/worker/main.py`:
   - `LISTEN ingestion_jobs` with a `POLL_SECONDS` fallback, and claims one job at a time.
   - Binds the job's `correlation_id` and `job_id` for logging.
@@ -271,7 +277,7 @@ code yet beyond a package skeleton and one smoke test.
 
 - [ ] T050 [P] [US2] Unit tests for the relationship rules in `backend/tests/unit/ingestion/test_relationships.py`:
   - Caption and title links.
-  - `near` on the same page, and on the adjacent page when the caption continues there.
+  - `near` links the closest text block in the same column within `NEAR_TEXT_MAX_POINTS` on the same page, and on the adjacent page when the caption continues there.
   - `continues` for tables "on consecutive pages with the same column count, the earlier part in the lower part of its page, the later part in the upper part of its page, only page furniture between them", including negative cases for a different column count and body text in between.
   - Repeated-header detection.
 - [ ] T051 [P] [US2] Unit tests for the retrieval unit builder in `backend/tests/unit/ingestion/test_retrieval_units.py`:
@@ -282,7 +288,7 @@ code yet beyond a package skeleton and one smoke test.
   - Units carry `heading_path`, `pages`, `element_ids` and `figure_ids`.
   - Deterministic unit keys.
 - [ ] T052 [P] [US2] Unit tests for figure handling in `backend/tests/unit/ingestion/test_figures.py`:
-  - Skips `logo`, `icon`, `signature`, `stamp`, code and `full_page_image`, figures below 5% of the page area, and images repeated on many pages (`is_decorative`).
+  - Skips `logo`, `icon`, `signature`, `stamp`, code and `full_page_image`, figures below 5% of the page area, and images repeated "on at least 3 pages or on at least 20% of the pages" (`is_decorative`).
   - Identifier verification flags tokens mixing letters and digits that are absent from labels and caption (FR-028).
 - [ ] T053 [P] [US2] Unit tests for `ProcessJob` stages `describing_figures` to `indexing` in `backend/tests/unit/ingestion/test_process_job_enrichment.py`:
   - Descriptions run with concurrency 2.
@@ -291,21 +297,25 @@ code yet beyond a package skeleton and one smoke test.
   - Units are upserted with `visible=false`, then published on completion.
   - On failure, points are deleted by `document_id` (FR-018).
   - Re-processing yields the same point ids (FR-015).
+  - Attempt 2 leaves no point that only attempt 1 wrote, because each attempt starts by deleting the document's points.
+  - When the embedder exhausts its retries, `failure_reason` names the service and contains no document content.
 - [ ] T054 [P] [US2] respx tests for the OpenAI-compatible adapters in `backend/tests/unit/adapters/test_openai_compatible.py`:
-  - The describer sends the base64 `image_url` data URI, the caption and the neighboring text, `chat_template_kwargs.enable_thinking=false` and the document-language instruction.
+  - The describer sends the base64 `image_url` data URI, the caption and the neighboring text, `chat_template_kwargs.enable_thinking=false`, and the instruction to answer in the language of the caption and surrounding text, or in English when there is none.
   - Maps timeouts, 429 and 5xx to transient errors, and 4xx to non-retryable errors.
   - The embedder batches inputs and validates 1024 dimensions, raising `DataInconsistencyError` otherwise.
 - [ ] T055 [P] [US2] Integration test for the Qdrant `VectorIndex` in `backend/tests/integration/test_qdrant_index.py`:
   - The collection has dense (1024, cosine) and `bm25` sparse (IDF) vectors, plus payload indexes.
   - Upserts are idempotent.
   - `publish` flips `visible`, and `delete_document` removes all points.
+  - `search_hybrid` returns a figure unit in the top 5 for one of its labels and never returns points with `visible=false`.
+  - An unreachable Qdrant URL raises `ProviderUnavailableError` after the retry budget.
 - [ ] T056 [P] [US2] Contract tests for `GET /api/v1/documents/{document_id}/elements` (200, 404, and 409 before completion) and `GET /api/v1/documents/{document_id}/images/{element_id}` in `backend/tests/contract/test_elements_contract.py`.
 
 ### Implementation for User Story 2
 
 - [ ] T057 [P] [US2] Implement the relationship rules in `backend/src/multimodal_rag/ingestion/relationships.py`: caption and title, proximity, and table continuation with repeated-header detection (research §8).
 - [ ] T058 [P] [US2] Implement the figure policy in `backend/src/multimodal_rag/ingestion/figures.py`:
-  - The relevance filter: classes, the 5% area threshold, and images repeated on many pages.
+  - The relevance filter: classes, the 5% area threshold, and images repeated on at least `DECORATIVE_MIN_PAGES` pages or `DECORATIVE_MIN_PAGE_SHARE` of the pages, compared by image content hash.
   - The identifier verifier.
   - The neighbor-context selector that feeds the description prompt.
 - [ ] T059 [US2] Implement the retrieval unit builder in `backend/src/multimodal_rag/ingestion/retrieval_units.py` using the `TokenCounter` port, with unit keys stable across runs (research §7).
@@ -313,17 +323,20 @@ code yet beyond a package skeleton and one smoke test.
 - [ ] T061 [P] [US2] Implement the OpenAI-compatible `FigureDescriber` and `Embedder` in `backend/src/multimodal_rag/adapters/openai_compatible/`:
   - httpx with timeouts and stamina retries.
   - Images downscaled to at most 1280 px on the long side.
-  - The prompt asks for a short description in the document language plus every printed label verbatim.
+  - The prompt asks for a short description in the language of the caption and surrounding text (English when there is none) plus every printed label verbatim (FR-026).
 - [ ] T062 [P] [US2] Implement the Qdrant `VectorIndex` in `backend/src/multimodal_rag/adapters/qdrant/index.py`:
   - `ensure_collection`, which creates the payload indexes before inserts.
   - `upsert_units`, using `uuid5` point ids and server-side `Document(model="qdrant/bm25")` with language-neutral options.
-  - `publish` and `delete_document`.
+  - `publish`, `delete_document`, and `search_hybrid`, which runs `prefetch` on `dense` and `bm25` with RRF fusion and filters `visible=true`.
+  - The client uses `timeout=QDRANT_TIMEOUT_SECONDS`, and every call is wrapped in the stamina policy from T019 for connection errors and 5xx.
   - Verify the exact BM25 option names for lowercase, ASCII folding and no stemming, and record them in research.md §12.
 - [ ] T063 [US2] Extend `ProcessJob` in `backend/src/multimodal_rag/ingestion/use_cases.py` with the stages `describing_figures`, `building_units`, `embedding` and `indexing`:
   - Relationships are computed after extraction.
   - Descriptions are persisted per figure.
   - The summary is updated.
+  - Each attempt starts with `VectorIndex.delete_document(document_id)` before any upsert.
   - Points are published on completion and deleted on failure.
+  - When a provider exhausts its retry budget, `failure_reason` names the service (`embedding model`, `vector index`) and never includes document content (FR-017).
 - [ ] T064 [US2] Implement `ListDocumentElements` and the image route in `backend/src/multimodal_rag/ingestion/use_cases.py` and `backend/src/multimodal_rag/adapters/http/routes_documents.py`:
   - Cursor pagination with a page and kind filter.
   - 409 `ingestion_not_completed` when no completed job exists.
@@ -399,8 +412,11 @@ code yet beyond a package skeleton and one smoke test.
   - Setup with `docker compose up`, and how to run the tests.
   - A technical decision log that links the ADRs.
   - The sample documents and their licenses. The INSST guide requires "Origen de los datos: INSST".
-- [ ] T083 Run every scenario in `specs/001-async-pdf-ingestion/quickstart.md` against `docs/samples/`, record the timings against SC-001 to SC-012 in the pull request "Test plan" section, and update research.md §15 if any number changes.
-- [ ] T084 Run the full gate (`ruff`, `mypy`, `lint-imports`, `pytest --cov` at or above 90%, `pre-commit run --all-files` and zizmor), then fix root causes instead of suppressing checks.
+- [ ] T083 Create the evaluation harness in `backend/tests/evaluation/`. It is not part of CI because the samples are not versioned.
+  - `annotations.yaml` lists, for each sample in `docs/samples/`, figures with their expected caption and 2 or 3 labels printed inside them.
+  - `evaluate.py` prints a table with SC-005 (share of annotated captions linked to their figure), SC-009 (OCR word recall on the 10-page rendered Spanish scan against its text layer, as in research §15) and SC-012 (share of annotated labels whose figure appears in the top 5 of `search_hybrid`).
+- [ ] T084 Run every scenario in `specs/001-async-pdf-ingestion/quickstart.md` against `docs/samples/`, record the timings and the T083 results against SC-001 to SC-012 in the pull request "Test plan" section, and update research.md §15 if any number changes.
+- [ ] T085 Run the full gate (`ruff`, `mypy`, `lint-imports`, `pytest --cov` at or above 90%, `pre-commit run --all-files` and zizmor), then fix root causes instead of suppressing checks.
 
 ---
 

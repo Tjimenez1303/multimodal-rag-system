@@ -28,7 +28,7 @@ lengths, and indexes it so it can be searched later."
 ### User Story 1 - Upload a manual and follow its processing (Priority: P1)
 
 A technician uploads a technical manual in PDF format. The system accepts it immediately
-and gives back a tracking identifier, without making the technician wait for the document
+and gives back a job identifier, without making the technician wait for the document
 to be processed. The technician uses that identifier to check whether processing is
 pending, in progress, finished or failed, how far along it is, and why it failed if it did.
 
@@ -36,14 +36,14 @@ pending, in progress, finished or failed, how far along it is, and why it failed
 system, and heavy documents must not freeze or time out the service while they are
 processed.
 
-**Independent Test**: upload a sample manual, confirm a tracking identifier comes back
+**Independent Test**: upload a sample manual, confirm a job identifier comes back
 immediately, then poll its status until it reaches completed. Upload a corrupt file and
 confirm it is rejected or ends as failed with a readable reason.
 
 **Acceptance Scenarios**:
 
 1. **Given** a valid PDF within the size limit, **When** the technician uploads it,
-   **Then** the system acknowledges the upload with a unique tracking identifier before
+   **Then** the system acknowledges the upload with a unique job identifier before
    any content processing starts, and the job status is pending.
 2. **Given** a job that is being processed, **When** the technician checks its status,
    **Then** the status is processing and shows the current stage and the number of pages
@@ -56,7 +56,7 @@ confirm it is rejected or ends as failed with a readable reason.
 5. **Given** a file that is not a PDF or exceeds the size limit, **When** the technician
    uploads it, **Then** the upload is rejected immediately with a message that explains
    why, and no job is created.
-6. **Given** an unknown tracking identifier, **When** the technician checks its status,
+6. **Given** an unknown job identifier, **When** the technician checks its status,
    **Then** the system answers that the job does not exist.
 
 ---
@@ -224,7 +224,9 @@ and confirm both appear with the correct status and details.
   on the page, expressed in a single documented coordinate convention (unit and origin)
   shared across the system.
 - **FR-009**: The system MUST record relationships between images and text (captions and
-  nearby text on the same page, or an adjacent page when the caption continues there),
+  nearby text on the same page, meaning the closest text block in the same column within a
+  configurable distance of 72 points by default, or an adjacent page when the caption
+  continues there),
   between tables and their titles, and between the parts of a table that continues across
   pages.
 - **FR-010**: The system MUST group content into retrieval units that follow the
@@ -240,9 +242,10 @@ and confirm both appear with the correct status and details.
   and by exact keywords in later features.
 - **FR-013**: The system MUST store every extracted image so it can be displayed later,
   linked to its document, page and position.
-- **FR-014**: The system MUST flag images that are decorative or repeat across many pages
-  (such as logos or
-  page decorations) so they are not offered as relevant context.
+- **FR-014**: The system MUST flag images that are decorative (such as logos or page
+  decorations) or that repeat across pages, meaning the same image on at least 3 pages or
+  on at least 20% of the pages (both configurable), so they are not offered as relevant
+  context.
 - **FR-015**: Processing the same document again (after a retry, a restart or a crash)
   MUST NOT create duplicate elements or retrieval units.
 - **FR-016**: The system MUST identify documents by a fingerprint of their exact content,
@@ -276,8 +279,10 @@ and confirm both appear with the correct status and details.
   the last attempt the job MUST end as failed with a reason.
 - **FR-026**: The system MUST generate a text description of each relevant figure with a
   vision model that runs locally, giving the model the figure's caption and surrounding
-  text as context. Figure description MUST be enabled by default and MUST be possible to
-  turn off by configuration.
+  text as context. The description MUST be written in the language of the figure's
+  caption and surrounding text, or in English when the figure has no textual context.
+  Figure description MUST be enabled by default and MUST be possible to turn off by
+  configuration.
 - **FR-027**: When the vision model is unavailable or fails on a figure after its retries,
   the job MUST still complete, the figure MUST be marked as not described, and the job
   summary MUST report the number of figures described, skipped and not described.
@@ -308,7 +313,7 @@ and confirm both appear with the correct status and details.
 
 ### Measurable Outcomes
 
-- **SC-001**: Users receive a tracking identifier in under 2 seconds for any accepted
+- **SC-001**: Users receive a job identifier in under 2 seconds for any accepted
   upload up to the size limit, whatever the size of the document.
 - **SC-002**: Job status reflects a change in state or progress within 5 seconds of it
   happening.
@@ -342,7 +347,10 @@ and confirm both appear with the correct status and details.
   storage and memory, so a 500-page color scan fits within it.
 - Text recognition runs inside the system itself with open-source components. Documents
   are never sent to an external recognition service.
-- Documents are primarily in English or Spanish, and language detection is not required.
+- Documents in any language are accepted and processed, and no language detection is
+  performed. Text recognition on scanned pages is verified for English and Spanish. Other
+  Latin-script languages are expected to work, while recognition quality for non-Latin
+  scripts is out of scope.
 - Job and document records are kept until they are deleted manually. Document deletion is
   out of scope for this feature.
 - Uploads happen through the service's programmatic interface. Uploading from the chat

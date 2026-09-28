@@ -245,7 +245,6 @@ components:
         file_name: { type: string }
         size_bytes: { type: integer }
         page_count: { type: [integer, "null"] }
-        language: { type: string, enum: [en, es, unknown] }
         created_at: { type: string, format: date-time }
         latest_job: { $ref: "#/components/schemas/Job" }
     DocumentPage:

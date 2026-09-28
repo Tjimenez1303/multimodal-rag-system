@@ -252,7 +252,8 @@ as a base64 `image_url` data URI with thinking disabled.
   and figures below 5% of the page area, are skipped. Full-page images come from scanned
   pages, where text recognition already provides the content.
 - **Prompt.** The model receives the caption and the neighboring text, and is asked for a
-  short description in the document's language plus every printed label verbatim.
+  short description in the language of the caption and surrounding text (English when there
+  is none) plus every printed label verbatim.
 - **Input.** Images are downscaled to at most 1280 px on the long side.
 - **Concurrency.** Two figures are described at a time, which measured fastest.
 - **Resilience.** Each call has its own timeout and retry budget. When a figure still

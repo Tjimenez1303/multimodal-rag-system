@@ -1,0 +1,112 @@
+[project]
+name = "multimodal-rag"
+version = "0.1.0"
+description = "Multimodal RAG system for technical PDF manuals"
+requires-python = "==3.14.*"
+dependencies = []
+
+[build-system]
+requires = ["uv_build>=0.12.9,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "import-linter>=2.15",
+    "mypy>=2.3.1",
+    "pre-commit>=4.6.2",
+    "pydantic>=2.13.5",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "pytest-cov>=7.1.0",
+    "respx>=0.23.1",
+    "ruff>=0.16.9",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py314"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "C4", "UP", "T20", "G", "ASYNC", "TID251", "D"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["D"]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"unittest.mock.MagicMock".msg = "Use a fake that implements the port."
+"unittest.mock.Mock".msg = "Use a fake that implements the port."
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.mypy]
+strict = true
+python_version = "3.14"
+files = ["src", "tests"]
+mypy_path = "src"
+plugins = ["pydantic.mypy"]
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["--strict-markers", "--strict-config"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "integration: needs real services started with testcontainers",
+    "slow: takes more than a few seconds, such as model-backed extraction",
+]
+
+[tool.coverage.run]
+source = ["multimodal_rag"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
+skip_covered = true
+
+[tool.importlinter]
+root_package = "multimodal_rag"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "The ingestion core depends on no adapter, framework, SDK or provider"
+type = "forbidden"
+source_modules = ["multimodal_rag.ingestion"]
+forbidden_modules = [
+    "multimodal_rag.adapters",
+    "multimodal_rag.bootstrap",
+    "fastapi",
+    "starlette",
+    "sqlalchemy",
+    "asyncpg",
+    "alembic",
+    "docling",
+    "docling_core",
+    "pypdfium2",
+    "httpx",
+    "qdrant_client",
+    "pydantic_settings",
+    "structlog",
+    "stamina",
+    "tokenizers",
+]
+
+[[tool.importlinter.contracts]]
+name = "Dependencies point inward: bootstrap, adapters, ingestion, shared"
+type = "layers"
+layers = [
+    "(multimodal_rag.bootstrap)",
+    "multimodal_rag.adapters",
+    "multimodal_rag.ingestion",
+    "multimodal_rag.shared",
+]

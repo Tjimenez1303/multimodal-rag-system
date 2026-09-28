@@ -39,6 +39,22 @@ Template customizations go in `.specify/templates/overrides/`, which takes
 precedence over the core templates and survives Spec Kit upgrades. Core templates
 under `.specify/templates/` are not edited by hand.
 
+## Commands
+
+Run these from the repository root. The backend is a uv project in `backend/`.
+
+| Purpose | Command |
+|---|---|
+| Install dependencies | `uv sync --project backend` |
+| Install the git hooks once | `uv run --project backend pre-commit install` |
+| Run every static check (ruff, typos, mypy, import contracts, file hygiene) | `uv run --project backend pre-commit run --all-files` |
+| Run the tests with the 90% coverage gate | `uv run --directory backend pytest --cov` |
+| Check the import contracts only | `uv run --directory backend lint-imports` |
+| Audit the GitHub Actions workflows | `uvx zizmor --persona=pedantic .github/workflows/` |
+
+CI runs the same pre-commit hooks and the same test command, so a clean local run means
+a clean CI run.
+
 ## Architecture rules
 
 The constitution holds the full list. The rules an agent is most likely to break

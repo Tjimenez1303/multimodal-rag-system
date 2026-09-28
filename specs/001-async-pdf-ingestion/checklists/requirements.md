@@ -34,9 +34,8 @@
 - The job states (pending, processing, completed, failed) and the tracking identifier are
   named in the challenge brief, so they are treated as domain vocabulary rather than
   implementation detail.
-- Defaults chosen without explicit input and worth confirming in `/speckit-clarify`: the
-  100 MB and 500-page upload limits, returning the existing document on identical
-  re-upload, and whether text inside diagrams (FR-024) is required or desirable.
+- Upload limits, identical re-uploads, figure handling, tables across pages and recovery of
+  interrupted jobs were resolved in the clarification session of 2026-09-28.
 - The processing-time targets (SC-003, SC-010) come from published CPU-only benchmarks of
   open-source extraction and OCR engines and must be confirmed with a measurement during
   planning.

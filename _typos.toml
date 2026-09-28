@@ -1,0 +1,8 @@
+[files]
+extend-exclude = [
+    "docs/samples/",
+    ".specify/",
+    ".claude/skills/",
+    "*.lock",
+    "*.pdf",
+]

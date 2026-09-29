@@ -1,6 +1,7 @@
 import pytest
 
 from multimodal_rag.shared import errors
+from multimodal_rag.shared.resilience import TRANSIENT_ERRORS
 
 FAMILIES = [
     errors.ConfigurationError,
@@ -10,6 +11,7 @@ FAMILIES = [
     errors.ProviderError,
     errors.StorageError,
     errors.ConcurrencyError,
+    errors.CapacityError,
     errors.DataInconsistencyError,
 ]
 
@@ -63,3 +65,9 @@ def test_an_error_keeps_its_message() -> None:
 
     assert str(error) == "job 42 does not exist"
     assert error.code == "not_found"
+
+
+def test_capacity_errors_are_not_provider_errors_so_they_are_never_retried() -> None:
+    assert errors.CapacityError.code == "capacity_exceeded"
+    assert not issubclass(errors.CapacityError, errors.ProviderError)
+    assert not issubclass(errors.CapacityError, TRANSIENT_ERRORS)

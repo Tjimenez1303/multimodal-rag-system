@@ -1,4 +1,4 @@
-"""The OpenAPI document the API serves agrees with the feature's contract."""
+"""The OpenAPI document the API serves agrees with the features' contracts."""
 
 from typing import Any
 
@@ -7,7 +7,7 @@ import pytest
 from multimodal_rag.adapters.http.app import create_app
 from multimodal_rag.adapters.http.routes_documents import documents_router
 from multimodal_rag.adapters.http.routes_ingestion import ingestion_router
-from tests.contract.contract import CONTRACT, resolve
+from tests.contract.contract import PATHS, resolve
 
 SERVED: dict[str, Any] = create_app(
     readiness_checks={}, routers=(ingestion_router, documents_router)
@@ -21,7 +21,7 @@ OPERATIONS = [
 
 
 def test_every_served_operation_is_in_the_contract() -> None:
-    missing = [op for op in OPERATIONS if op[1] not in CONTRACT["paths"].get(op[0], {})]
+    missing = [op for op in OPERATIONS if op[1] not in PATHS.get(op[0], {})]
 
     assert missing == []
 
@@ -29,7 +29,7 @@ def test_every_served_operation_is_in_the_contract() -> None:
 @pytest.mark.parametrize(("path", "method"), OPERATIONS)
 def test_operation_ids_and_statuses_match(path: str, method: str) -> None:
     served = SERVED["paths"][path][method]
-    declared = CONTRACT["paths"][path][method]
+    declared = PATHS[path][method]
 
     assert served["operationId"] == declared["operationId"]
     assert set(served["responses"]) == set(declared["responses"])
@@ -38,10 +38,10 @@ def test_operation_ids_and_statuses_match(path: str, method: str) -> None:
 @pytest.mark.parametrize(("path", "method"), OPERATIONS)
 def test_media_types_and_headers_match(path: str, method: str) -> None:
     served = SERVED["paths"][path][method]["responses"]
-    declared = CONTRACT["paths"][path][method]["responses"]
+    declared = PATHS[path][method]["responses"]
 
     for status, contract_response in declared.items():
-        expected = resolve(contract_response)
+        expected = resolve(contract_response, path=path)
         if "content" in expected:
             assert set(served[status].get("content", {})) == set(expected["content"])
         assert set(served[status].get("headers", {})) == set(
@@ -60,8 +60,8 @@ def test_problem_bodies_are_documented_as_problem_json() -> None:
 @pytest.mark.parametrize(("path", "method"), OPERATIONS)
 def test_parameters_match(path: str, method: str) -> None:
     served = SERVED["paths"][path][method].get("parameters", [])
-    declared = CONTRACT["paths"][path][method].get("parameters", [])
+    declared = PATHS[path][method].get("parameters", [])
 
     assert {(p["name"], p["in"]) for p in served} == {
-        (resolve(p)["name"], resolve(p)["in"]) for p in declared
+        (resolve(p, path=path)["name"], resolve(p, path=path)["in"]) for p in declared
     }

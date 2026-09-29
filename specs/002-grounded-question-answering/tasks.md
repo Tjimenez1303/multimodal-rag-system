@@ -58,49 +58,49 @@ tested and demonstrated on its own.
 
 **⚠️ CRITICAL**: no user story work can begin until this phase is complete
 
-- [ ] T004 [P] Add the `CapacityError(MultimodalRagError)` family with code `capacity_exceeded` to `backend/src/multimodal_rag/shared/errors.py`, documented as "work the system refuses because it is saturated". Extend `backend/tests/unit/shared/test_errors.py` to cover its code and that it is not a `ProviderError`, so the retry policy never repeats it.
-- [ ] T005 Refactor the settings in `backend/src/multimodal_rag/shared/config.py` (research section 12):
+- [x] T004 [P] Add the `CapacityError(MultimodalRagError)` family with code `capacity_exceeded` to `backend/src/multimodal_rag/shared/errors.py`, documented as "work the system refuses because it is saturated". Extend `backend/tests/unit/shared/test_errors.py` to cover its code and that it is not a `ProviderError`, so the retry policy never repeats it.
+- [x] T005 Refactor the settings in `backend/src/multimodal_rag/shared/config.py` (research section 12):
   - **`ProviderSettings(CommonSettings)`.** Move `QDRANT_*`, `EMBEDDER_URL`, `EMBEDDER_MODEL`, `EMBEDDER_TIMEOUT_SECONDS`, `EMBEDDER_DIMENSIONS` and `PROVIDER_RETRY_*` there from `WorkerSettings`. Add `EMBEDDER_QUERY_INSTRUCTION`, default `Given a question about a technical manual, retrieve the passages that answer it`.
   - **Parents.** `WorkerSettings` and `ApiSettings` both derive from `ProviderSettings`.
   - **`ApiSettings` additions.** `ANSWER_MODEL_URL: HttpUrl` (required), `ANSWER_MODEL: str` (required, `min_length=1`), `ANSWER_MODEL_TIMEOUT_SECONDS=60`, `ANSWER_MAX_TOKENS=800`, `ANSWER_TEMPERATURE=0` (`ge=0`, `le=2`), `RETRIEVAL_TOP_K=8`, `MIN_SIMILARITY=0.60` (`ge=0`, `le=1`), `LOW_CONFIDENCE_THRESHOLD=0.90` (`ge=0`, `le=1`), `MAX_QUESTION_CHARS=2000`, `MAX_FILTER_DOCUMENTS=20`, `ANSWER_CONCURRENCY=2`, `ANSWER_QUEUE_LIMIT=10` (`ge=0`), `ANSWER_DEADLINE_SECONDS=90`.
   - **Validator.** A model validator raises "ANSWER_MODEL_TIMEOUT_SECONDS must be shorter than ANSWER_DEADLINE_SECONDS".
   - **Retry policy.** Change `RetryPolicy.for_providers` in `backend/src/multimodal_rag/shared/resilience.py` to take `ProviderSettings`.
   - **Tests.** Extend `backend/tests/unit/shared/test_config.py` for the new defaults, the required answer model settings and the validator, and keep `backend/tests/unit/shared/test_resilience.py` passing.
-- [ ] T006 [P] Add `BoundingBox.gap_to(other) -> float` to `backend/src/multimodal_rag/ingestion/domain.py`: the shortest distance between two boxes on the same page in PDF points, 0 when they touch or overlap. Add cases (overlap, side by side, above, diagonal) to `backend/tests/unit/ingestion/test_domain.py`.
-- [ ] T007 Implement the answering domain in `backend/src/multimodal_rag/answering/domain.py` as frozen, slotted dataclasses and `StrEnum`s, exactly as [data-model.md](data-model.md) defines them:
+- [x] T006 [P] Add `BoundingBox.gap_to(other) -> float` to `backend/src/multimodal_rag/ingestion/domain.py`: the shortest distance between two boxes on the same page in PDF points, 0 when they touch or overlap. Add cases (overlap, side by side, above, diagonal) to `backend/tests/unit/ingestion/test_domain.py`.
+- [x] T007 Implement the answering domain in `backend/src/multimodal_rag/answering/domain.py` as frozen, slotted dataclasses and `StrEnum`s, exactly as [data-model.md](data-model.md) defines them:
   - **`Question`.** `text` is trimmed and holds "1 to `MAX_QUESTION_CHARS` (2,000) characters, else `InvalidQuestionError`". When `document_ids` is set it holds "1 to `MAX_FILTER_DOCUMENTS` (20) distinct ids". Build it through a `Question.create(text, *, document_ids, max_chars, max_documents)` factory.
   - **Enums.** `AnswerStatus` (`answered`, `not_enough_information`) and `NotEnoughReason` (`no_searchable_documents`, `no_relevant_content`, `not_answered_by_sources`, `no_valid_citations`).
   - **Entities.** `Citation`, `RetrievedSource`, `TableContent`, `AnswerImage`, `Answer`, `GroundedPrompt` and `GeneratedAnswer`. `Answer` provides a `not_enough(reason, text)` constructor that leaves citations, sources and images empty.
-- [ ] T008 [P] Implement the answering errors in `backend/src/multimodal_rag/answering/errors.py` with the codes and families of research section 11. Each 5xx error has a fixed message without provider data:
+- [x] T008 [P] Implement the answering errors in `backend/src/multimodal_rag/answering/errors.py` with the codes and families of research section 11. Each 5xx error has a fixed message without provider data:
   - Validation and state: `InvalidQuestionError`, `UnknownDocumentsError` (holds and names the ids), `DocumentsNotReadyError` (holds and names the ids).
   - Capacity: `AnsweringBusyError`.
   - Search: `SearchUnavailableError`, `SearchTimeoutError`.
   - Answer model: `AnswerModelUnavailableError`, `AnswerModelTimeoutError`, `AnswerModelResponseError`, `AnswerDeadlineExceededError`.
-- [ ] T009 Define the answering ports as `typing.Protocol` with Google-style docstrings in `backend/src/multimodal_rag/answering/ports.py`:
+- [x] T009 Define the answering ports as `typing.Protocol` with Google-style docstrings in `backend/src/multimodal_rag/answering/ports.py`:
   - `AnswerGenerator.generate(prompt: GroundedPrompt) -> GeneratedAnswer`
   - `AnswerSlots.admit()`, an async context manager that raises `AnsweringBusyError`
   - `LanguageIdentifier.identify(text: str, *, candidates: Sequence[str]) -> str`
-- [ ] T010 Extend the ingestion ports in `backend/src/multimodal_rag/ingestion/ports.py`:
+- [x] T010 Extend the ingestion ports in `backend/src/multimodal_rag/ingestion/ports.py`:
   - `Embedder.embed_query(text: str) -> list[float]`.
   - `SearchHit.similarity: float`, the dense cosine similarity.
   - `ElementRepository.get_many(element_ids: Sequence[uuid.UUID]) -> tuple[ExtractedElement, ...]`.
   - `DocumentRepository.get_many(document_ids: Sequence[uuid.UUID]) -> tuple[Document, ...]`, which skips unknown ids.
   - The `search_hybrid` docstring states that a missing collection returns no hits.
-- [ ] T011 Update `backend/tests/fakes.py`:
+- [x] T011 Update `backend/tests/fakes.py`:
   - **Existing fakes.** Implement the extended ports. The fake embedder's `embed_query` is deterministic, the in-memory index returns a configurable similarity per unit, and both repositories get `get_many`.
   - **New fakes.** `FakeAnswerGenerator` (scripted `GeneratedAnswer`s or errors, a delay, and a record of the prompts it received), `FakeAnswerSlots` (capacity and queue limit, raising `AnsweringBusyError`) and `FakeLanguageIdentifier` (fixed or keyword-based answers).
   - **Protocol check.** Extend `backend/tests/unit/test_fakes_match_ports.py` to the new ports.
-- [ ] T012 [P] Implement `embed_query` in `backend/src/multimodal_rag/adapters/openai_compatible/embedder.py`. It prefixes the text with `Instruct: {instruction}\nQuery:` (research section 2), takes the instruction as a keyword-only constructor argument, and sends one input. Add respx tests to `backend/tests/unit/adapters/test_openai_compatible.py`: the exact request body, and the vector returned.
-- [ ] T013 Extend `QdrantVectorIndex.search_hybrid` in `backend/src/multimodal_rag/adapters/qdrant/index.py` (research section 3):
+- [x] T012 [P] Implement `embed_query` in `backend/src/multimodal_rag/adapters/openai_compatible/embedder.py`. It prefixes the text with `Instruct: {instruction}\nQuery:` (research section 2), takes the instruction as a keyword-only constructor argument, and sends one input. Add respx tests to `backend/tests/unit/adapters/test_openai_compatible.py`: the exact request body, and the vector returned.
+- [x] T013 Extend `QdrantVectorIndex.search_hybrid` in `backend/src/multimodal_rag/adapters/qdrant/index.py` (research section 3):
   - **Similarity.** After the RRF query, run a second `query_points` with the same dense vector, `using=DENSE`, a `HasIdCondition` on the fused ids, `limit=len(ids)` and `SearchParams(exact=True)`. Set `SearchHit.similarity` from its scores. A fused id missing from that answer raises `DataInconsistencyError`.
   - **Missing collection.** A missing collection (404) returns `[]`.
   - **Tests.** Extend `backend/tests/integration/test_qdrant_index.py`: the similarity equals the cosine of known vectors, and a missing collection returns no hits. Extend `backend/tests/unit/adapters/test_qdrant_http.py` for the 404 path.
-- [ ] T014 [P] Implement `get_many` in `backend/src/multimodal_rag/adapters/postgres/documents.py` and `backend/src/multimodal_rag/adapters/postgres/elements.py`, each with one `WHERE id = ANY(:ids)` query. Add cases to `backend/tests/integration/test_postgres_documents_and_jobs.py`: known ids, unknown ids skipped, and an empty input.
-- [ ] T015 [P] Move `ChatCompletion` and its private models from `backend/src/multimodal_rag/adapters/openai_compatible/describer.py` to a new `backend/src/multimodal_rag/adapters/openai_compatible/chat.py`, import it from the describer, and keep `backend/tests/unit/adapters/test_openai_compatible.py` passing.
-- [ ] T016 [P] Make `backend/tests/contract/contract.py` load both `specs/001-async-pdf-ingestion/contracts/openapi.yaml` and `specs/002-grounded-question-answering/contracts/openapi.yaml`:
+- [x] T014 [P] Implement `get_many` in `backend/src/multimodal_rag/adapters/postgres/documents.py` and `backend/src/multimodal_rag/adapters/postgres/elements.py`, each with one `WHERE id = ANY(:ids)` query. Add cases to `backend/tests/integration/test_postgres_documents_and_jobs.py`: known ids, unknown ids skipped, and an empty input.
+- [x] T015 [P] Move `ChatCompletion` and its private models from `backend/src/multimodal_rag/adapters/openai_compatible/describer.py` to a new `backend/src/multimodal_rag/adapters/openai_compatible/chat.py`, import it from the describer, and keep `backend/tests/unit/adapters/test_openai_compatible.py` passing.
+- [x] T016 [P] Make `backend/tests/contract/contract.py` load both `specs/001-async-pdf-ingestion/contracts/openapi.yaml` and `specs/002-grounded-question-answering/contracts/openapi.yaml`:
   - Register both in the `referencing` registry under their file URIs, so the relative `$ref`s of the 002 contract resolve.
   - Expose the merged `paths`, so `backend/tests/contract/test_openapi_matches_contract.py` checks every served operation against both files.
-- [ ] T017 Update `compose.yaml`: the `api` service gets `QDRANT_URL: http://qdrant:6333` and a `models` element binding `vlm` (`endpoint_var: ANSWER_MODEL_URL`, `model_var: ANSWER_MODEL`) and `embedder` (`endpoint_var: EMBEDDER_URL`, `model_var: EMBEDDER_MODEL`). The API must not depend on Qdrant or the models to start (FR-024). Document every new setting of T005 with its default in `.env.example`, in the same style as the existing entries.
+- [x] T017 Update `compose.yaml`: the `api` service gets `QDRANT_URL: http://qdrant:6333` and a `models` element binding `vlm` (`endpoint_var: ANSWER_MODEL_URL`, `model_var: ANSWER_MODEL`) and `embedder` (`endpoint_var: EMBEDDER_URL`, `model_var: EMBEDDER_MODEL`). The API must not depend on Qdrant or the models to start (FR-024). Document every new setting of T005 with its default in `.env.example`, in the same style as the existing entries.
 
 **Checkpoint**: settings load, the ports and fakes match, and the extended adapters pass their tests.
 

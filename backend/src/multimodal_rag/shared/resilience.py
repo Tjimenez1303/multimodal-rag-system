@@ -11,7 +11,7 @@ from typing import Self
 
 import stamina
 
-from multimodal_rag.shared.config import WorkerSettings
+from multimodal_rag.shared.config import ProviderSettings, WorkerSettings
 from multimodal_rag.shared.errors import ProviderTimeoutError, ProviderUnavailableError
 
 TRANSIENT_ERRORS: tuple[type[Exception], ...] = (
@@ -40,11 +40,11 @@ class RetryPolicy:
     timeout_seconds: float | None
 
     @classmethod
-    def for_providers(cls, settings: WorkerSettings) -> Self:
+    def for_providers(cls, settings: ProviderSettings) -> Self:
         """Build the policy shared by calls to models and to the vector index.
 
         Args:
-            settings: Worker settings holding the retry bounds.
+            settings: Settings of the API or the worker, holding the retry bounds.
 
         Returns:
             The policy configured by the ``PROVIDER_RETRY_*`` settings.

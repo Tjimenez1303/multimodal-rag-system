@@ -2,8 +2,10 @@
 
 Each point carries a named dense vector and a named sparse vector that Qdrant computes
 with its BM25 inference from the unit's contextualized text. Hybrid search prefetches
-both and fuses them with Reciprocal Rank Fusion. Points stay hidden (``visible=false``)
-until their job completes, and their payload is validated when it is read back.
+both and fuses them with Reciprocal Rank Fusion, then scores the fused points again on
+the dense side alone, so every hit also carries its cosine similarity to the query.
+Points stay hidden (``visible=false``) until their job completes, and their payload is
+validated when it is read back.
 """
 
 import uuid
@@ -50,6 +52,7 @@ PAYLOAD_INDEXES = {
 PREFETCH_FACTOR = 2
 # Points per upsert request, which keeps each request small on long documents.
 UPSERT_BATCH = 64
+_NOT_FOUND = 404
 _CONFLICT = 409
 
 
@@ -284,12 +287,15 @@ class QdrantVectorIndex:
             document_ids: Only units of these documents, when set.
 
         Returns:
-            The hits, best first.
+            The hits, best first, each with its dense cosine similarity. A
+            collection that does not exist yet returns no hits.
 
         Raises:
             ProviderUnavailableError: If Qdrant stays unreachable after retries.
             ProviderTimeoutError: If Qdrant keeps timing out after retries.
             ProviderResponseError: If Qdrant rejects the request.
+            DataInconsistencyError: If a stored payload is invalid, or a fused point
+                has no dense score.
         """
         conditions: list[models.Condition] = [
             models.FieldCondition(key="visible", match=models.MatchValue(value=True))
@@ -316,19 +322,58 @@ class QdrantVectorIndex:
                 limit=limit * PREFETCH_FACTOR,
             ),
         ]
-        response = await self._call(
-            lambda: self._client.query_points(
-                self.collection,
+        fused = await self._call(
+            partial(
+                self._points_or_none,
                 prefetch=prefetch,
                 query=models.FusionQuery(fusion=models.Fusion.RRF),
                 limit=limit,
                 with_payload=True,
             )
         )
+        if not fused:
+            return []
+        units = [_unit(point.id, point.payload) for point in fused]
+        similarities = await self._similarities(query_vector, units)
         return [
-            SearchHit(unit=_unit(point.id, point.payload), score=point.score)
-            for point in response.points
+            SearchHit(unit=unit, score=point.score, similarity=similarities[unit.id])
+            for unit, point in zip(units, fused, strict=True)
         ]
+
+    async def _similarities(
+        self, query_vector: Sequence[float], units: Sequence[RetrievalUnit]
+    ) -> dict[uuid.UUID, float]:
+        # RRF scores only reflect ranks, so the dense side scores the fused ids again,
+        # exactly, to give each hit a similarity that is comparable across queries.
+        ids: list[models.ExtendedPointId] = [str(unit.id) for unit in units]
+        scored = await self._call(
+            partial(
+                self._points_or_none,
+                query=list(query_vector),
+                using=DENSE,
+                query_filter=models.Filter(must=[models.HasIdCondition(has_id=ids)]),
+                search_params=models.SearchParams(exact=True),
+                limit=len(ids),
+                with_payload=False,
+            )
+        )
+        similarities = {uuid.UUID(str(point.id)): point.score for point in scored or []}
+        missing = [unit.id for unit in units if unit.id not in similarities]
+        if missing:
+            raise DataInconsistencyError(
+                f"The {SERVICE} returned no dense score for points {missing}"
+            )
+        return similarities
+
+    async def _points_or_none(self, **query: Any) -> list[models.ScoredPoint] | None:
+        try:
+            response = await self._client.query_points(self.collection, **query)
+        except UnexpectedResponse as error:
+            # No document was ever indexed, so there is nothing to find.
+            if error.status_code == _NOT_FOUND:
+                return None
+            raise
+        return response.points
 
     async def _create_collection(self) -> None:
         try:

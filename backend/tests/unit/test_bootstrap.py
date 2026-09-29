@@ -25,6 +25,14 @@ WORKER_ENV = {
     "EMBEDDER_MODEL": "ai/qwen3-embedding:0.6b",
     "EMBEDDER_TOKENIZER_PATH": "/opt/tokenizers/embedder/tokenizer.json",
 }
+# The API connects to none of these at startup, so unreachable hosts are enough.
+ANSWERING_ENV = {
+    "QDRANT_URL": "http://127.0.0.1:9",
+    "EMBEDDER_URL": "http://127.0.0.1:9/v1/",
+    "EMBEDDER_MODEL": "ai/qwen3-embedding:0.6b",
+    "ANSWER_MODEL_URL": "http://127.0.0.1:9/v1/",
+    "ANSWER_MODEL": "ai/qwen3.5:9b",
+}
 
 
 @pytest.fixture
@@ -34,6 +42,8 @@ def api_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> pytest.MonkeyPat
     monkeypatch.setenv("BLOB_ROOT", str(tmp_path))
     monkeypatch.setenv("DB_CONNECT_TIMEOUT_SECONDS", "1")
     monkeypatch.setenv("LOG_FORMAT", "console")
+    for name, value in ANSWERING_ENV.items():
+        monkeypatch.setenv(name, value)
     return monkeypatch
 
 

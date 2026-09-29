@@ -267,6 +267,7 @@ async def _process_job(
             model=settings.embedder_model,
             dimensions=settings.embedder_dimensions,
             batch_size=settings.embedder_batch_size,
+            query_instruction=settings.embedder_query_instruction,
             retry=retry,
         ),
         token_counter=HuggingFaceTokenCounter.from_file(

@@ -25,6 +25,7 @@ from multimodal_rag.shared.errors import (
 from multimodal_rag.shared.resilience import RetryPolicy
 
 BASE_URL = "http://models.test/v1/"
+QUERY_INSTRUCTION = "Given a question, retrieve the passages that answer it"
 RETRY = RetryPolicy(
     attempts=3,
     initial_wait_seconds=0.01,
@@ -230,6 +231,7 @@ class TestEmbedder:
             model="ai/qwen3-embedding:0.6b",
             dimensions=3,
             batch_size=2,
+            query_instruction=QUERY_INSTRUCTION,
             retry=RETRY,
         )
 
@@ -296,3 +298,28 @@ class TestEmbedder:
             await embedder.embed(["a"])
 
         assert route.call_count == 3
+
+    @respx.mock
+    async def test_a_query_is_sent_alone_with_the_retrieval_instruction(
+        self, embedder: OpenAICompatibleEmbedder
+    ) -> None:
+        route = respx.post(f"{BASE_URL}embeddings").respond(
+            json=embeddings_reply([[0.5, 0.25, 0.125]])
+        )
+
+        vector = await embedder.embed_query("What is code SPL-480?")
+
+        assert vector == [0.5, 0.25, 0.125]
+        assert json.loads(route.calls.last.request.content) == {
+            "model": "ai/qwen3-embedding:0.6b",
+            "input": [f"Instruct: {QUERY_INSTRUCTION}\nQuery:What is code SPL-480?"],
+        }
+
+    @respx.mock
+    async def test_a_query_vector_of_the_wrong_length_is_a_data_inconsistency(
+        self, embedder: OpenAICompatibleEmbedder
+    ) -> None:
+        respx.post(f"{BASE_URL}embeddings").respond(json=embeddings_reply([[0.1]]))
+
+        with pytest.raises(DataInconsistencyError):
+            await embedder.embed_query("x")

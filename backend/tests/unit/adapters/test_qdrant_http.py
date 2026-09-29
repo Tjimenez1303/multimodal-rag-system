@@ -10,7 +10,7 @@ import respx
 import stamina
 from qdrant_client import AsyncQdrantClient
 
-from multimodal_rag.adapters.qdrant.index import QdrantVectorIndex
+from multimodal_rag.adapters.qdrant.index import QdrantVectorIndex, UnitPayload
 from multimodal_rag.ingestion.domain import (
     BoundingBox,
     PagedBox,
@@ -178,3 +178,88 @@ async def test_a_stored_payload_of_the_wrong_shape_is_an_inconsistency(
 
     with pytest.raises(DataInconsistencyError):
         await index.search_hybrid(query_text="x", query_vector=[0.0] * 4, limit=5)
+
+
+def point(number: int, score: float) -> dict[str, object]:
+    return {"id": str(unit(number).id), "version": 1, "score": score}
+
+
+def payload(number: int) -> dict[str, object]:
+    return UnitPayload.of(unit(number)).model_dump(mode="json") | {"visible": True}
+
+
+@respx.mock
+async def test_a_missing_collection_answers_no_hits_without_retry(
+    index: QdrantVectorIndex,
+) -> None:
+    route = respx.post(f"{COLLECTION}/points/query").respond(
+        404, json={"status": {"error": "Collection `units` doesn't exist!"}}
+    )
+
+    hits = await index.search_hybrid(query_text="x", query_vector=[0.0] * 4, limit=5)
+
+    assert hits == []
+    assert route.call_count == 1
+
+
+@respx.mock
+async def test_similarities_are_scored_exactly_for_the_fused_ids(
+    index: QdrantVectorIndex,
+) -> None:
+    fused = OK | {
+        "result": {
+            "points": [
+                point(1, 0.5) | {"payload": payload(1)},
+                point(2, 0.33) | {"payload": payload(2)},
+            ]
+        }
+    }
+    dense = OK | {"result": {"points": [point(2, 0.71), point(1, 0.42)]}}
+    route = respx.post(f"{COLLECTION}/points/query").mock(
+        side_effect=[httpx.Response(200, json=fused), httpx.Response(200, json=dense)]
+    )
+
+    hits = await index.search_hybrid(
+        query_text="x", query_vector=[0.1, 0.2, 0.3, 0.4], limit=5
+    )
+
+    assert [(hit.unit, hit.score, hit.similarity) for hit in hits] == [
+        (unit(1), 0.5, 0.42),
+        (unit(2), 0.33, 0.71),
+    ]
+    rescoring = json.loads(route.calls.last.request.content)
+    assert rescoring["query"] == {"nearest": [0.1, 0.2, 0.3, 0.4]}
+    assert rescoring["using"] == "dense"
+    assert rescoring["limit"] == 2
+    assert rescoring["params"]["exact"] is True
+    assert rescoring["filter"]["must"] == [
+        {"has_id": [str(unit(1).id), str(unit(2).id)]}
+    ]
+
+
+@respx.mock
+async def test_a_fused_hit_without_a_similarity_is_an_inconsistency(
+    index: QdrantVectorIndex,
+) -> None:
+    fused = OK | {"result": {"points": [point(1, 0.5) | {"payload": payload(1)}]}}
+    empty = OK | {"result": {"points": []}}
+    respx.post(f"{COLLECTION}/points/query").mock(
+        side_effect=[httpx.Response(200, json=fused), httpx.Response(200, json=empty)]
+    )
+
+    with pytest.raises(DataInconsistencyError):
+        await index.search_hybrid(query_text="x", query_vector=[0.0] * 4, limit=5)
+
+
+@respx.mock
+async def test_no_fused_hit_needs_no_similarity_query(
+    index: QdrantVectorIndex,
+) -> None:
+    route = respx.post(f"{COLLECTION}/points/query").respond(
+        json=OK | {"result": {"points": []}}
+    )
+
+    assert (
+        await index.search_hybrid(query_text="x", query_vector=[0.0] * 4, limit=5) == []
+    )
+    assert route.call_count == 1

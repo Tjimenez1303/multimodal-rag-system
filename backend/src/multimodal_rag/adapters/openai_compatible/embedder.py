@@ -1,7 +1,9 @@
 """``Embedder`` over the ``embeddings`` route of the OpenAI API format.
 
 Passages are sent in batches. The answer lists one item per input with its ``index``,
-which gives the order, and every vector must have the collection's dimensions.
+which gives the order, and every vector must have the collection's dimensions. Queries
+carry a task instruction in the format Qwen3-Embedding documents for retrieval, while
+passages are embedded as they are.
 """
 
 from collections.abc import Sequence
@@ -40,6 +42,7 @@ class OpenAICompatibleEmbedder:
         model: Model reference, such as ``ai/qwen3-embedding:0.6b``.
         dimensions: Length every vector must have.
         batch_size: Passages sent per request.
+        query_instruction: Task sentence prepended to every query.
         retry: Retry policy for transient failures.
     """
 
@@ -50,12 +53,14 @@ class OpenAICompatibleEmbedder:
         model: str,
         dimensions: int,
         batch_size: int,
+        query_instruction: str,
         retry: RetryPolicy,
     ) -> None:
         self._client = client
         self._model = model
         self._dimensions = dimensions
         self._batch_size = batch_size
+        self._query_instruction = query_instruction
         self._retry = retry
 
     @property
@@ -91,6 +96,27 @@ class OpenAICompatibleEmbedder:
             )
             vectors += self._vectors(answer, expected=len(batch))
         return vectors
+
+    async def embed_query(self, text: str) -> list[float]:
+        """Return the vector of a search query, with the retrieval instruction.
+
+        Args:
+            text: The query.
+
+        Returns:
+            The query vector.
+
+        Raises:
+            ProviderUnavailableError: If the model stays unreachable after retries.
+            ProviderTimeoutError: If the model keeps timing out after retries.
+            ProviderResponseError: If the model rejects the request or answers with
+                the wrong shape.
+            DataInconsistencyError: If the vector has an unexpected length.
+        """
+        [vector] = await self.embed(
+            [f"Instruct: {self._query_instruction}\nQuery:{text}"]
+        )
+        return vector
 
     def _vectors(self, answer: EmbeddingList, *, expected: int) -> list[list[float]]:
         if sorted(item.index for item in answer.data) != list(range(expected)):

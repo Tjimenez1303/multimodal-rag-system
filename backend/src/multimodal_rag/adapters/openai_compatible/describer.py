@@ -10,9 +10,9 @@ import base64
 import io
 
 import httpx
-import pydantic
 from PIL import Image, UnidentifiedImageError
 
+from multimodal_rag.adapters.openai_compatible.chat import ChatCompletion
 from multimodal_rag.adapters.openai_compatible.transport import post_json
 from multimodal_rag.shared.errors import DataInconsistencyError, ProviderResponseError
 from multimodal_rag.shared.resilience import RetryPolicy
@@ -44,24 +44,6 @@ Surrounding text:
 Language: write the whole answer, including the "Labels:" line, in the same language
 as the caption and surrounding text above. If that text is Spanish, answer in Spanish.
 If both are (none), answer in English."""
-
-
-class _Message(pydantic.BaseModel):
-    content: str | None = None
-
-
-class _Choice(pydantic.BaseModel):
-    message: _Message
-
-
-class ChatCompletion(pydantic.BaseModel):
-    """Part of a ``chat/completions`` answer that the describer reads.
-
-    Attributes:
-        choices: Generated messages, at least one.
-    """
-
-    choices: list[_Choice] = pydantic.Field(min_length=1)
 
 
 class OpenAICompatibleFigureDescriber:
@@ -130,7 +112,7 @@ class OpenAICompatibleFigureDescriber:
             service=SERVICE,
             retry=self._retry,
         )
-        content = (completion.choices[0].message.content or "").strip()
+        content = completion.content.strip()
         if not content:
             raise ProviderResponseError(f"The {SERVICE} answered an empty description")
         return content

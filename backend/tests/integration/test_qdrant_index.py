@@ -162,6 +162,42 @@ async def test_keyword_search_ignores_accents_and_case(
     assert hits[0].unit.id == spanish.id
 
 
+async def test_each_hit_carries_its_cosine_similarity_to_the_query(
+    index: QdrantVectorIndex,
+) -> None:
+    document_id = uuid.uuid4()
+    units = manual(document_id)
+    await index.upsert_units(units, [vector(n) for n in range(len(units))])
+    await index.publish(document_id)
+
+    # Cosine of (3, 4, 0, 0) with the one-hot vectors 0, 1 and 2.
+    hits = await index.search_hybrid(
+        query_text="magneto", query_vector=[3.0, 4.0, 0.0, 0.0], limit=5
+    )
+
+    expected = {units[0].id: 0.6, units[1].id: 0.8, units[2].id: 0.0}
+    assert {hit.unit.id for hit in hits} == set(expected)
+    for hit in hits:
+        assert hit.similarity == pytest.approx(expected[hit.unit.id], abs=1e-6)
+
+
+async def test_a_collection_that_does_not_exist_yet_has_no_hits(
+    client: AsyncQdrantClient,
+) -> None:
+    index = QdrantVectorIndex(
+        client,
+        collection=f"missing_{uuid.uuid4().hex}",
+        dimensions=DIMENSIONS,
+        retry=RETRY,
+    )
+
+    hits = await index.search_hybrid(
+        query_text="magneto", query_vector=vector(0), limit=5
+    )
+
+    assert hits == []
+
+
 async def test_deleting_a_document_removes_all_its_points(
     client: AsyncQdrantClient, index: QdrantVectorIndex
 ) -> None:

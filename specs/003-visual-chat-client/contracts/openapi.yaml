@@ -1,0 +1,46 @@
+openapi: 3.1.0
+info:
+  title: Multimodal RAG page image API
+  version: 0.1.0
+  description: >
+    Rendered pages of completed documents, so a client can show the original page
+    behind a citation or a figure. Pages are rendered at ingestion, never on request.
+    Errors use RFC 9457 problem details, defined in the ingestion contract. Every
+    response carries an X-Request-ID header.
+servers:
+  - url: http://localhost:8000
+paths:
+  /api/v1/documents/{document_id}/pages/{page_number}/image:
+    get:
+      operationId: getDocumentPageImage
+      summary: Get the rendered image of a document page
+      description: >
+        PNG of the whole page at 144 dpi, stored when the document was ingested.
+        Available once the document's latest job has completed.
+      parameters:
+        - $ref: "../../001-async-pdf-ingestion/contracts/openapi.yaml#/components/parameters/DocumentId"
+        - name: page_number
+          in: path
+          required: true
+          description: 1-based page number, at most the document's page count.
+          schema: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: PNG image of the page
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+        "400":
+          $ref: "../../001-async-pdf-ingestion/contracts/openapi.yaml#/components/responses/Problem"
+        "404":
+          description: document_not_found or page_not_found
+          content:
+            application/problem+json:
+              schema:
+                $ref: "../../001-async-pdf-ingestion/contracts/openapi.yaml#/components/schemas/Problem"
+        "409":
+          description: ingestion_not_completed (the document has no completed ingestion yet)
+          content:
+            application/problem+json:
+              schema:
+                $ref: "../../001-async-pdf-ingestion/contracts/openapi.yaml#/components/schemas/Problem"

@@ -7,7 +7,9 @@
   "paths": {
     "/health/live": {
       "get": {
-        "tags": ["health"],
+        "tags": [
+          "health"
+        ],
         "summary": "Liveness",
         "description": "The process is running.",
         "operationId": "liveness",
@@ -31,7 +33,9 @@
     },
     "/health/ready": {
       "get": {
-        "tags": ["health"],
+        "tags": [
+          "health"
+        ],
         "summary": "Readiness",
         "description": "Dependencies (database, blob storage) are reachable.",
         "operationId": "readiness",
@@ -59,7 +63,9 @@
     },
     "/api/v1/documents": {
       "post": {
-        "tags": ["ingestion"],
+        "tags": [
+          "ingestion"
+        ],
         "summary": "Upload Document",
         "description": "Stores the file, registers the document by the SHA-256 of its bytes and enqueues an ingestion job. Answers 202 while the job is pending or processing, and 200 when identical content already completed.",
         "operationId": "uploadDocument",
@@ -164,7 +170,9 @@
         ]
       },
       "get": {
-        "tags": ["documents"],
+        "tags": [
+          "documents"
+        ],
         "summary": "List Documents",
         "description": "Known documents with their latest job status, newest first.",
         "operationId": "listDocuments",
@@ -224,7 +232,9 @@
     },
     "/api/v1/jobs/{job_id}": {
       "get": {
-        "tags": ["ingestion"],
+        "tags": [
+          "ingestion"
+        ],
         "summary": "Get Job",
         "description": "State, stage and page progress of an ingestion job.",
         "operationId": "getJob",
@@ -276,7 +286,9 @@
     },
     "/api/v1/documents/{document_id}": {
       "get": {
-        "tags": ["documents"],
+        "tags": [
+          "documents"
+        ],
         "summary": "Get Document",
         "description": "A document and its latest job.",
         "operationId": "getDocument",
@@ -328,7 +340,9 @@
     },
     "/api/v1/documents/{document_id}/elements": {
       "get": {
-        "tags": ["documents"],
+        "tags": [
+          "documents"
+        ],
         "summary": "List Document Elements",
         "description": "Captured elements of a completed document, in reading order.",
         "operationId": "listDocumentElements",
@@ -451,7 +465,9 @@
     },
     "/api/v1/documents/{document_id}/images/{element_id}": {
       "get": {
-        "tags": ["documents"],
+        "tags": [
+          "documents"
+        ],
         "summary": "Get Document Image",
         "description": "Stored crop of an image element.",
         "operationId": "getDocumentImage",
@@ -514,7 +530,9 @@
     },
     "/api/v1/documents/{document_id}/pages/{page_number}/image": {
       "get": {
-        "tags": ["documents"],
+        "tags": [
+          "documents"
+        ],
         "summary": "Get Document Page Image",
         "description": "PNG of a whole page at 144 dpi, stored when the document was ingested. Available once the document's latest job has completed.",
         "operationId": "getDocumentPageImage",
@@ -587,7 +605,9 @@
     },
     "/api/v1/questions": {
       "post": {
-        "tags": ["questions"],
+        "tags": [
+          "questions"
+        ],
         "summary": "Ask Question",
         "description": "Searches the completed documents by meaning and by exact keywords, asks the local answer model when relevant content exists, and returns the answer with numbered citations. When the documents do not support an answer, status is not_enough_information and no citation or image is returned. The request is cancelled when the client disconnects.",
         "operationId": "askQuestion",
@@ -824,7 +844,10 @@
       },
       "AnswerStatus": {
         "type": "string",
-        "enum": ["answered", "not_enough_information"],
+        "enum": [
+          "answered",
+          "not_enough_information"
+        ],
         "title": "AnswerStatus",
         "description": "Whether the documents supported an answer."
       },
@@ -837,7 +860,9 @@
           }
         },
         "type": "object",
-        "required": ["file"],
+        "required": [
+          "file"
+        ],
         "title": "Body_uploadDocument"
       },
       "BoundingBoxBody": {
@@ -866,7 +891,12 @@
           }
         },
         "type": "object",
-        "required": ["left", "top", "right", "bottom"],
+        "required": [
+          "left",
+          "top",
+          "right",
+          "bottom"
+        ],
         "title": "BoundingBoxBody",
         "description": "Position on a page in PDF points with a top-left origin.\n\nAttributes:\n    left: Distance from the left edge of the page.\n    top: Distance from the top edge of the page.\n    right: Distance from the left edge to the right side of the box.\n    bottom: Distance from the top edge to the bottom side of the box.\n    origin: Always ``top_left``."
       },
@@ -902,13 +932,23 @@
           }
         },
         "type": "object",
-        "required": ["number", "document_id", "document_name", "pages", "unit_ids"],
+        "required": [
+          "number",
+          "document_id",
+          "document_name",
+          "pages",
+          "unit_ids"
+        ],
         "title": "CitationBody",
         "description": "A numbered citation of the answer.\n\nAttributes:\n    number: Number of the ``[n]`` markers that refer to it.\n    document_id: Cited document.\n    document_name: File name of the cited document.\n    pages: Cited pages, ascending.\n    unit_ids: Retrieval units behind the citation."
       },
       "DescriptionStatus": {
         "type": "string",
-        "enum": ["described", "skipped", "not_described"],
+        "enum": [
+          "described",
+          "skipped",
+          "not_described"
+        ],
         "title": "DescriptionStatus",
         "description": "Outcome of describing an image with the vision model."
       },
@@ -988,7 +1028,10 @@
           }
         },
         "type": "object",
-        "required": ["items", "next_cursor"],
+        "required": [
+          "items",
+          "next_cursor"
+        ],
         "title": "DocumentPageBody",
         "description": "One page of documents, newest first.\n\nAttributes:\n    items: Documents of this page.\n    next_cursor: Cursor of the next page, or ``None`` on the last page."
       },
@@ -1188,7 +1231,10 @@
           }
         },
         "type": "object",
-        "required": ["items", "next_cursor"],
+        "required": [
+          "items",
+          "next_cursor"
+        ],
         "title": "ElementPageBody",
         "description": "One page of elements in reading order.\n\nAttributes:\n    items: Elements of this page.\n    next_cursor: Cursor of the next page, or ``None`` on the last page."
       },
@@ -1349,7 +1395,12 @@
       },
       "JobStatus": {
         "type": "string",
-        "enum": ["pending", "processing", "completed", "failed"],
+        "enum": [
+          "pending",
+          "processing",
+          "completed",
+          "failed"
+        ],
         "title": "JobStatus",
         "description": "Lifecycle state of an ingestion job."
       },
@@ -1465,7 +1516,13 @@
           }
         },
         "type": "object",
-        "required": ["title", "status", "instance", "code", "request_id"],
+        "required": [
+          "title",
+          "status",
+          "instance",
+          "code",
+          "request_id"
+        ],
         "title": "Problem",
         "description": "RFC 9457 problem details, the body of every error response.\n\nAttributes:\n    type: Always ``about:blank``, so ``title`` is the phrase of the status.\n    title: Standard phrase of the HTTP status.\n    status: HTTP status code.\n    detail: Explanation of this occurrence, sent for client errors only.\n    instance: Path of the request.\n    code: Stable machine-readable code in lowercase snake case.\n    request_id: Correlation id of the request."
       },
@@ -1478,7 +1535,9 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": ["question"],
+        "required": [
+          "question"
+        ],
         "title": "QuestionBody",
         "description": "A question about the ingested documents.\n\nThe length of the question is not limited here: the use case enforces the\nconfigurable limit and answers ``invalid_question``.\n\nAttributes:\n    question: The question, in any language."
       },
@@ -1499,13 +1558,23 @@
           }
         },
         "type": "object",
-        "required": ["source_id", "target_id", "kind"],
+        "required": [
+          "source_id",
+          "target_id",
+          "kind"
+        ],
         "title": "RelationshipBody",
         "description": "A directed link between two elements.\n\nAttributes:\n    source_id: Element the link starts from, such as a caption.\n    target_id: Element the link points to, such as an image.\n    kind: Meaning of the link."
       },
       "RelationshipKind": {
         "type": "string",
-        "enum": ["caption_of", "title_of", "describes", "near", "continues"],
+        "enum": [
+          "caption_of",
+          "title_of",
+          "describes",
+          "near",
+          "continues"
+        ],
         "title": "RelationshipKind",
         "description": "Kind of link between two extracted elements."
       },
@@ -1644,7 +1713,11 @@
           }
         },
         "type": "object",
-        "required": ["rows", "columns", "cells"],
+        "required": [
+          "rows",
+          "columns",
+          "cells"
+        ],
         "title": "TableBody",
         "description": "Rows and columns of a table.\n\nAttributes:\n    rows: Number of rows, the header included.\n    columns: Number of columns.\n    cells: Cell text, row by row."
       },
@@ -1666,19 +1739,29 @@
           }
         },
         "type": "object",
-        "required": ["page", "rows"],
+        "required": [
+          "page",
+          "rows"
+        ],
         "title": "TableContentBody",
         "description": "Rows of one part of a table.\n\nAttributes:\n    page: Page of this part.\n    rows: Cell text, header row first."
       },
       "TextOrigin": {
         "type": "string",
-        "enum": ["text_layer", "recognized"],
+        "enum": [
+          "text_layer",
+          "recognized"
+        ],
         "title": "TextOrigin",
         "description": "Where the text of an element came from."
       },
       "UnitType": {
         "type": "string",
-        "enum": ["text", "table", "figure"],
+        "enum": [
+          "text",
+          "table",
+          "figure"
+        ],
         "title": "UnitType",
         "description": "Type of a retrieval unit."
       },
@@ -1703,7 +1786,12 @@
           }
         },
         "type": "object",
-        "required": ["document_id", "job_id", "status", "already_ingested"],
+        "required": [
+          "document_id",
+          "job_id",
+          "status",
+          "already_ingested"
+        ],
         "title": "UploadAccepted",
         "description": "Identifiers returned by an upload.\n\nAttributes:\n    document_id: Document registered for the file's content.\n    job_id: Job that ingests the document.\n    status: Current state of that job.\n    already_ingested: Whether identical content had already completed."
       }

@@ -306,8 +306,10 @@ restricted to one of them, and confirm every source and image comes from that ma
 - **FR-011**: The system MUST verify that every cited document and page belongs to the
   retrieval units supplied for that question and MUST drop any citation that does not,
   together with its markers in the answer text. A marker that points to no citation MUST
-  also be removed. When no valid citation remains, the response MUST be a
-  not-enough-information outcome.
+  also be removed. When the answer model writes an answer without any citation marker,
+  the system MUST attribute each statement to the supplied unit it matches best, and
+  only when the match reaches a configurable minimum. When no valid citation remains, the
+  response MUST be a not-enough-information outcome.
 - **FR-012**: Every response MUST list the retrieval units used, meaning every unit
   supplied to the answer model for that question, each with its document, section,
   pages, content type (text, table or figure), an excerpt of its content and whether the

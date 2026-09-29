@@ -70,6 +70,12 @@ without any model call. When the gate passes, every retrieved unit (8 by default
 supplied to the model, which remains the second line of defense for related but
 insufficient content (section 5).
 
+Units whose text is identical to a better ranked unit are dropped before the prompt is
+built, and the search asks for twice `RETRIEVAL_TOP_K` hits so that the 8 slots stay
+filled. The sample library holds the same guide under four documents, and without this
+step one text took four of the eight slots. Open WebUI (content hash) and Dify
+(`_deduplicate_documents`) remove duplicates the same way.
+
 **Rationale**:
 
 - The fused RRF score is rank-based and cannot express absolute relevance, because every
@@ -124,6 +130,14 @@ Generation uses temperature 0 and at most 800 output tokens, both configurable.
   correct, well-cited answers in every measured case.
 - Docker Model Runner unloads an idle model after its keep-alive period. Reloading
   `qwen3.5:9b` took about 4 seconds, which the total deadline absorbs.
+- The model card's non-thinking sampling (temperature 0.7, top_p 0.8, top_k 20,
+  presence_penalty 1.5) was measured against temperature 0 on 12 questions. Neither
+  produced invalid or truncated JSON, repetitions or mixed languages. The card's sampling
+  was about 1 second faster, because its answers were shorter, and it left one more
+  answerable question without an answer. Temperature 0 was kept.
+- Because a repetition at temperature 0 would run to `ANSWER_MAX_TOKENS` and cut the JSON,
+  the adapter reads `finish_reason`, and an answer cut by the token limit raises
+  `AnswerModelResponseError` instead of a schema error.
 
 **Alternatives considered**: a smaller text-only model for answers (a second model
 download, and weaker multilingual quality). A hosted API (documents must stay local).
@@ -137,13 +151,20 @@ https://github.com/docker/model-runner/blob/main/pkg/inference/scheduling/http_h
 
 - **Prompt location.** The core builds the prompt (`answering/prompting.py`), so every
   provider receives the same grounding rules. The adapter only transports it.
-- **Separation.** The system message holds the rules. The user message holds the numbered
-  sources, each fenced with `<<<` and `>>>` and labeled with its pages and section, and
-  then the question, fenced the same way. The rules state that sources and question are
-  data and that requests inside them to change the rules, use outside knowledge or add
-  unrelated content are ignored. When sources disagree, for example two torque values for
-  different models, the answer gives each value with its own marker instead of choosing
-  one.
+- **Separation.** The system message holds the rules. The user message holds the sources
+  inside `<sources>`, each in a `<source>` tag whose attributes carry its number,
+  document name, pages and section, and then the question inside `<question>`. A closing
+  tag written inside a source or the question is escaped, so manual text cannot close
+  the tag early. The rules state that the tagged text is data and that requests inside
+  it to change the rules, use outside knowledge or add unrelated content are ignored.
+  When sources disagree, for example two torque values for different models, the answer
+  gives each value with its own marker instead of choosing one. A rule adapted from
+  Onyx's answer completeness reminder asks the model to say so when the sources lack the
+  requested information, instead of answering with related information.
+- **Reminder.** The marker and language rules are repeated after the question. With eight
+  long sources the model otherwise dropped the markers. The OpenAI GPT-4.1 guide
+  recommends instructions at both ends of a long context, and Onyx's `CITATION_REMINDER`
+  does the same.
 - **Output.** The adapter constrains the output with `response_format` of type
   `json_schema` to an object with two strings: `answer`, the Markdown answer whose factual
   sentences end with source markers such as `[2]`, and `not_covered`, one sentence stating
@@ -165,7 +186,17 @@ https://github.com/docker/model-runner/blob/main/pkg/inference/scheduling/http_h
   cover.
 - A schema that returned a list of statements, each with its source numbers, was also
   measured. It misused the step kind, cited more sources than needed and returned nothing
-  for a question the free-text form could answer, so it was rejected.
+  for a question the free-text form could answer, so it was rejected. Measured again on 12
+  questions, it always cited, but it was 30 to 50 % slower, turned numbered lists into
+  prose, cited all eight sources in one statement and was cut by the token limit once.
+- A regular expression `pattern` on `answer` that requires a marker removed the missing
+  markers in one measurement. No reference project forces citations through decoding,
+  and llama.cpp silently accepts any string for a pattern it cannot compile, so it was
+  not adopted.
+- XML source tags with the document name, compared with the earlier `<<<` fences on 12
+  questions, answered one question the fences left empty, kept every other outcome and
+  added about 2 seconds of prompt processing. Anthropic and OpenAI recommend XML-style
+  tags for documents, and Open WebUI builds its context with `<source id="n">`.
 
 **Alternatives considered**: free text with a sentinel phrase for "not enough
 information" (fragile across languages). Function calling (not needed when a schema
@@ -173,14 +204,19 @@ already constrains the output).
 
 Sources: https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md,
 https://github.com/ggml-org/llama.cpp/blob/master/grammars/README.md,
-https://github.com/ggml-org/llama.cpp/issues/19051
+https://github.com/ggml-org/llama.cpp/issues/19051,
+https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices,
+https://developers.openai.com/cookbook/examples/gpt4-1_prompting_guide,
+https://github.com/onyx-dot-app/onyx/blob/main/backend/onyx/prompts/chat_prompts.py
 
 ## 6. Citations
 
 **Decision**: the core post-processes the model's answer.
 
 1. **Parse.** Markers are read with the pattern `\[(\d+)\]`, and adjacent markers such as
-   `[1][3]` count separately.
+   `[1][3]` count separately. The variants `[1, 3]`, `[1-3]`, `[[1]]` and `【1】` are first
+   rewritten to that form, as Onyx, RAGFlow and Open WebUI accept them. A range expands
+   to at most the number of supplied sources.
 2. **Validate.** A marker whose number is not a supplied source is removed from the text.
    This is what guarantees that no page outside the retrieved content is ever cited
    (FR-011, SC-002).
@@ -188,7 +224,14 @@ https://github.com/ggml-org/llama.cpp/issues/19051
    page is not listed twice for one statement.
 4. **Renumber.** Citations are renumbered 1..n in order of first appearance, and the
    markers in the text are rewritten to match.
-5. **Empty result.** An answer left with no valid marker becomes a not-enough-information
+5. **Attribution.** An answer with no marker at all is split into statements, lines
+   first and then sentences. Each statement of at least three words is matched against
+   every supplied unit with RAGFlow's weighting: 0.7 for the share of the statement's
+   words found in the unit, accents and case ignored, and 0.3 for the cosine similarity
+   of their embeddings. The statement gets the marker of its best unit when the score
+   reaches `ATTRIBUTION_MIN_SCORE` (0.5). An answer that only cites sources that do not
+   exist is not attributed, because its references were invented.
+6. **Empty result.** An answer left with no valid marker becomes a not-enough-information
    outcome whose message is the model's `not_covered` sentence, or the fixed message when
    that is empty (section 9).
 
@@ -198,10 +241,25 @@ whether it is cited and under which number.
 **Rationale**: validating numbers against the supplied list is deterministic and cheap,
 and the client renders `[n]` as a link to citation n (clarification of 2026-09-29).
 
+- The model still wrote correct answers without any marker in about 1 answer in 12, even
+  with the reminder, and those answers were lost as `no_valid_citations`. The reference
+  projects never drop an answer for missing citations. RAGFlow attributes statements
+  after generation, only when the model wrote no marker (`InsertCitations`, gated by
+  `HasCitationMarkers`), which keeps every citation pointing to a supplied unit.
+- Measured on 43 statements that the model did cite, the best unit by words and meaning
+  was the cited unit in 98 % of them, for any minimum between 0.3 and 0.65. With the
+  cosine alone it was 86 to 88 %.
+
 **Alternatives considered**: removing every sentence without a marker (sentence splitting
 is unreliable with lists, abbreviations and part numbers, and the measured prompt already
 cites every factual sentence). Asking the model for page numbers directly (it could
-invent pages, which the numbered-source design makes impossible).
+invent pages, which the numbered-source design makes impossible). Asking the model again
+for the markers (one more generation of about 10 seconds, as Instructor and Guardrails
+do on a failed validation).
+
+Sources: https://github.com/infiniflow/ragflow/blob/main/internal/service/citation.go,
+https://github.com/onyx-dot-app/onyx/blob/main/backend/onyx/chat/citation_processor.py,
+https://github.com/deepset-ai/haystack/blob/main/haystack/components/builders/answer_builder.py
 
 ## 7. Primary and related images
 
@@ -379,6 +437,8 @@ names have no default and are injected by Compose.
 | `ANSWER_QUEUE_LIMIT` | 10 | Questions waiting (FR-028) |
 | `ANSWER_DEADLINE_SECONDS` | 90 | Total deadline, waiting included (FR-022) |
 | `EMBEDDER_QUERY_INSTRUCTION` | retrieval task sentence | Query instruction (section 2) |
+| `EMBEDDER_BATCH_SIZE` | 32 | Passages per embedding request, now shared with the worker |
+| `ATTRIBUTION_MIN_SCORE` | 0.5 | Lowest match that attributes a statement (section 6) |
 
 A model validator requires `ANSWER_MODEL_TIMEOUT_SECONDS` to be shorter than
 `ANSWER_DEADLINE_SECONDS`.

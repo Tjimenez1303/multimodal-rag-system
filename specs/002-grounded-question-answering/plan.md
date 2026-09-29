@@ -20,10 +20,15 @@ request, while ingestion stays in the worker.
   enough information" at once, in the question's language.
 - **Generation.** `ai/qwen3.5:9b`, the model ingestion already serves through Docker Model
   Runner, receives a prompt that the core builds, with instructions separated from fenced,
-  numbered sources. Its output is constrained by a JSON schema to `answer` (Markdown with
-  `[n]` markers) and `not_covered`.
-- **Citations.** The core keeps only markers that point to supplied sources, merges units
-  that share document and pages, and renumbers them. No other page can be cited.
+  numbered sources tagged with their document, pages and section. Its output is
+  constrained by a JSON schema to `answer` (Markdown with `[n]` markers) and
+  `not_covered`. Generation stays at temperature 0, and an answer cut off by the token
+  limit is an error rather than a partial answer.
+- **Citations.** The core keeps only markers that point to supplied sources, accepts the
+  common variants such as `[1, 2]`, merges units that share document and pages, and
+  renumbers them. No other page can be cited. When the model writes no marker at all,
+  each statement is attributed to the supplied unit it matches best by words and meaning,
+  as RAGFlow does.
 - **Images.** The primary image is the figure of the most relevant cited unit that sits
   closest to its text. Other figures of the cited units are listed as related images, and
   decorative ones are never returned.
@@ -157,6 +162,7 @@ backend/
 │   │   ├── prompting.py          # grounded prompt with fenced, numbered sources
 │   │   ├── relevance.py          # similarity threshold and identifier rule
 │   │   ├── citations.py          # marker validation, merging, renumbering
+│   │   ├── attribution.py        # statement-to-unit matching when no marker was written
 │   │   ├── images.py             # primary and related image selection
 │   │   ├── sources.py            # source flags, tables and excerpts
 │   │   ├── messages.py           # fixed not-enough-information messages (en, es)

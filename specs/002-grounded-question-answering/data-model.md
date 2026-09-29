@@ -47,7 +47,7 @@ The HTTP schema accepts any string and any list of UUIDs. These rules live only 
 | `no_searchable_documents` | The search returned no unit, because no document in scope completed ingestion | No |
 | `no_relevant_content` | No retrieved unit passed the relevance gate | No |
 | `not_answered_by_sources` | The model returned an empty answer | Yes |
-| `no_valid_citations` | Every marker in the model's answer pointed outside the supplied sources | Yes |
+| `no_valid_citations` | The model's markers all pointed outside the supplied sources, or the answer had no marker and no statement matched a supplied unit | Yes |
 
 When the model was asked, `text` is its `not_covered` sentence if it wrote one. Otherwise,
 and whenever the model was not asked, `text` is the fixed message for the reason in the

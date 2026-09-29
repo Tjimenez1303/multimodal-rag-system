@@ -92,7 +92,7 @@ A typed piece of content from one page.
 
 | Field | Type | Rules |
 |---|---|---|
-| `id` | UUID | Deterministic: `uuid5(document sha256, element key)` so re-processing yields the same ids |
+| `id` | UUID | Deterministic: `uuid5(ID_NAMESPACE, "element:{sha256}:{element_key}")`, so re-processing yields the same ids. `ID_NAMESPACE` is a fixed random UUID (RFC 9562 section 6.6) |
 | `document_id` | UUID | Foreign key |
 | `kind` | enum `heading`, `paragraph`, `list_item`, `caption`, `table`, `image`, `page_furniture` | `page_furniture` covers headers, footers and page numbers |
 | `page` | integer | 1-based |
@@ -139,7 +139,7 @@ A structurally coherent group of content prepared for search.
 
 | Payload field | Type | Rules |
 |---|---|---|
-| point id | UUID | `uuid5(namespace, "{sha256}:{unit_key}")` |
+| point id | UUID | `uuid5(ID_NAMESPACE, "unit:{sha256}:{unit_key}")` |
 | `document_id` | UUID | Indexed |
 | `unit_type` | `text`, `table`, `figure` | Indexed |
 | `text` | text | Content that is embedded and fed to BM25. Figures combine caption, labels and description |

@@ -366,7 +366,8 @@ Sources:
 (cosine, 1024 dimensions) and a named sparse vector computed by Qdrant's server-side BM25
 with the IDF modifier, so hybrid search later fuses the two with RRF.
 
-- **Point ids.** Deterministic: `uuid5(namespace, "{sha256}:{unit_key}")`.
+- **Point ids.** Deterministic: `uuid5(ID_NAMESPACE, "unit:{sha256}:{unit_key}")`, where
+  `ID_NAMESPACE` is a random UUID generated once, as RFC 9562 section 6.6 recommends.
 - **Payload indexes.** `document_id`, `unit_type`, `pages` and `visible` are indexed
   before the first insert.
 - **Visibility.** Points are written with `visible=false` and flipped to `true` in one

@@ -90,7 +90,7 @@ code yet beyond a package skeleton and one smoke test.
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T015 Add the runtime dependencies to `backend/pyproject.toml`:
+- [x] T015 Add the runtime dependencies to `backend/pyproject.toml`:
   - fastapi, python-multipart, pydantic-settings
   - sqlalchemy[asyncio] 2.1, asyncpg, alembic
   - docling 2.130 and an explicit onnxruntime
@@ -98,12 +98,12 @@ code yet beyond a package skeleton and one smoke test.
   - torch and torchvision from the `pytorch-cpu` index with the `sys_platform == 'linux'` marker (research §1, §6)
 
   Add reportlab and pypdf to the `dev` group for fixture generation. Refresh `backend/uv.lock`.
-- [ ] T016 [P] Implement the error hierarchy in `backend/src/multimodal_rag/shared/errors.py`:
+- [x] T016 [P] Implement the error hierarchy in `backend/src/multimodal_rag/shared/errors.py`:
   - Root `MultimodalRagError`.
   - Families `ConfigurationError`, `ValidationError`, `NotFoundError`, `ExtractionError`, `ProviderError`, `StorageError`, `ConcurrencyError` and `DataInconsistencyError`.
   - Every error has a stable `code` attribute.
   - Unit tests in `backend/tests/unit/shared/test_errors.py`.
-- [ ] T017 [P] Implement `Settings` with pydantic-settings in `backend/src/multimodal_rag/shared/config.py`.
+- [x] T017 [P] Implement `Settings` with pydantic-settings in `backend/src/multimodal_rag/shared/config.py`.
   - Required, with no default: `DATABASE_URL`, `QDRANT_URL`, `BLOB_ROOT`, `VLM_URL`, `VLM_MODEL`, `EMBEDDER_URL`, `EMBEDDER_MODEL`.
   - With documented defaults:
     - upload limits: 200 MB and 500 pages
@@ -115,15 +115,15 @@ code yet beyond a package skeleton and one smoke test.
     - `LOG_FORMAT` (`json` or `console`)
   - A missing required value raises `ConfigurationError` at startup with the variable name.
   - Unit tests in `backend/tests/unit/shared/test_config.py`.
-- [ ] T018 [P] Implement structured logging in `backend/src/multimodal_rag/shared/logging.py`:
+- [x] T018 [P] Implement structured logging in `backend/src/multimodal_rag/shared/logging.py`:
   - structlog over stdlib, with `ProcessorFormatter` using `foreign_pre_chain`, `PositionalArgumentsFormatter`, `merge_contextvars` and ISO timestamps.
   - JSON renderer when `LOG_FORMAT=json`, console renderer otherwise.
   - `bind_correlation(request_id=..., job_id=...)` helpers using contextvars.
   - Unit tests in `backend/tests/unit/shared/test_logging.py` assert that the JSON output has `request_id` and `job_id` and that `%s` arguments are rendered.
-- [ ] T019 [P] Implement retry policies in `backend/src/multimodal_rag/shared/resilience.py`:
+- [x] T019 [P] Implement retry policies in `backend/src/multimodal_rag/shared/resilience.py`:
   - stamina with exponential backoff and jitter, retrying only transient `ProviderError` subclasses (`ProviderUnavailableError`, `ProviderTimeoutError`), with attempts and timeouts from `Settings`.
   - Unit tests in `backend/tests/unit/shared/test_resilience.py` use `stamina.set_testing`.
-- [ ] T020 Implement the domain value objects and enums in `backend/src/multimodal_rag/ingestion/domain.py`, with no framework imports:
+- [x] T020 Implement the domain value objects and enums in `backend/src/multimodal_rag/ingestion/domain.py`, with no framework imports:
   - `JobStatus`: `pending`, `processing`, `completed`, `failed`
   - `JobStage`: `extracting`, `describing_figures`, `building_units`, `embedding`, `indexing`, `finalizing`
   - `FailureCode`: `encrypted_document`, `corrupt_document`, `no_extractable_text`, `provider_unavailable`, `interrupted_repeatedly`, `internal_error`
@@ -132,36 +132,36 @@ code yet beyond a package skeleton and one smoke test.
   - `DescriptionStatus`: `described`, `skipped`, `not_described`
   - `RelationshipKind`: `caption_of`, `title_of`, `describes`, `near`, `continues`
   - `BoundingBox`, as a frozen dataclass in PDF points with `origin = top_left`. It validates "`left < right`, `top < bottom`, and every value within the page size" (data-model.md).
-- [ ] T021 Add the domain entities to `backend/src/multimodal_rag/ingestion/domain.py`:
+- [x] T021 Add the domain entities to `backend/src/multimodal_rag/ingestion/domain.py`:
   - `Document`, whose `sha256` is "64 hex chars" and whose `file_name` is the "Original name as uploaded, at most 255 characters".
   - `IngestionJob`, with forward-only transition methods (`start`, `advance`, `complete`, `fail`) that raise `ConcurrencyError` on an invalid transition.
   - `JobSummary`, `ExtractedElement` (requires `page` and `bbox`), `ElementRelationship` and `RetrievalUnit`.
-- [ ] T022 [P] Add unit tests for the domain in `backend/tests/unit/ingestion/test_domain.py`:
+- [x] T022 [P] Add unit tests for the domain in `backend/tests/unit/ingestion/test_domain.py`:
   - bounding box validation
   - forward-only job transitions, including the rejected `completed → processing`
   - a missing page or box on an element raises `DataInconsistencyError`
-- [ ] T023 Define the ports as `typing.Protocol` in `backend/src/multimodal_rag/ingestion/ports.py`, each with Google-style docstrings:
+- [x] T023 Define the ports as `typing.Protocol` in `backend/src/multimodal_rag/ingestion/ports.py`, each with Google-style docstrings:
   - `DocumentRepository`, `JobQueue`, `ElementRepository`, `BlobStorage`
   - `PdfInspector`, `DocumentExtractor`, `FigureDescriber`, `Embedder`
   - `TokenCounter`, `VectorIndex` (`ensure_collection`, `upsert_units`, `publish`, `delete_document`, `search_hybrid(query_text, query_vector, limit, document_ids=None)`), `Clock`
-- [ ] T024 [P] Implement one in-memory fake per port in `backend/tests/fakes.py`:
+- [x] T024 [P] Implement one in-memory fake per port in `backend/tests/fakes.py`:
   - `InMemoryDocumentRepository`, `InMemoryJobQueue` (with lease and fencing semantics), `InMemoryElementRepository`, `InMemoryBlobStorage`
   - `FakePdfInspector`, `FakeExtractor` (canned elements), `FakeFigureDescriber` (can be set to fail), `FakeEmbedder` (deterministic 1024-dim vectors from a hash)
   - `WordTokenCounter`, `InMemoryVectorIndex` (its `search_hybrid` scores simple word overlap and honors `visible`), `FrozenClock`
-- [ ] T025 [P] Implement the filesystem `BlobStorage` in `backend/src/multimodal_rag/adapters/storage/filesystem.py`:
+- [x] T025 [P] Implement the filesystem `BlobStorage` in `backend/src/multimodal_rag/adapters/storage/filesystem.py`:
   - Content-addressed keys, `documents/{sha256}.pdf` and `figures/{document_id}/{element_id}.png`.
   - Writes go to a temporary file followed by an atomic rename.
   - Unit tests in `backend/tests/unit/adapters/test_filesystem_storage.py` use `tmp_path`.
-- [ ] T026 Create the async engine and session factory in `backend/src/multimodal_rag/adapters/postgres/engine.py`, and the SQLAlchemy table metadata in `backend/src/multimodal_rag/adapters/postgres/tables.py`:
+- [x] T026 Create the async engine factories (pooled for the API and the worker, `NullPool` for migrations) and the database readiness probe in `backend/src/multimodal_rag/adapters/postgres/engine.py`. Repositories use SQLAlchemy Core, so no ORM session factory is needed, and the SQLAlchemy table metadata in `backend/src/multimodal_rag/adapters/postgres/tables.py`:
   - `documents`, with `UNIQUE(sha256)`.
   - `ingestion_jobs`, with an index on `(status, lease_expires_at)`.
   - `extracted_elements` and `element_relationships`.
   - Columns exactly as in data-model.md.
   - The engine sets `connect_args` with `timeout=DB_CONNECT_TIMEOUT_SECONDS` and `server_settings={"statement_timeout": DB_STATEMENT_TIMEOUT_MS}`, and the pool sets `pool_timeout` (constitution Principle VI).
-- [ ] T027 Initialize Alembic:
+- [x] T027 Initialize Alembic:
   - `backend/alembic.ini` and `backend/migrations/env.py` (async).
   - The first revision `backend/migrations/versions/0001_initial_schema.py` creates the tables from T026, plus a `NOTIFY ingestion_jobs` trigger on insert.
-- [ ] T028 [P] Create the test fixture generator `backend/tests/fixtures/build_fixtures.py` (reportlab plus pypdf). It writes these files to `backend/tests/fixtures/`, each at most 3 pages:
+- [x] T028 [P] Create the test fixture generator `backend/tests/fixtures/build_fixtures.py` (reportlab plus pypdf). It writes these files to `backend/tests/fixtures/`, each at most 3 pages:
   - `digital.pdf`: heading, paragraphs, a table and a labeled diagram with a caption
   - `split_table.pdf`: a table that continues on page 2 with a repeated header
   - `scanned.pdf`: image-only pages
@@ -169,19 +169,19 @@ code yet beyond a package skeleton and one smoke test.
   - `not_a_pdf.pdf`: plain text with a `.pdf` name
 
   Commit the generated fixtures.
-- [ ] T029 Implement the FastAPI application factory in `backend/src/multimodal_rag/adapters/http/app.py`:
+- [x] T029 Implement the FastAPI application factory in `backend/src/multimodal_rag/adapters/http/app.py`:
   - request id middleware that reads `X-Request-ID` or generates one, binds it for logging and echoes it
   - RFC 9457 problem details in `backend/src/multimodal_rag/adapters/http/problems.py`, mapping every `MultimodalRagError` family to a status and `code` in one place
   - `/health/live` and `/health/ready` (database and blob storage)
-- [ ] T030 Implement the composition root `backend/src/multimodal_rag/bootstrap.py`. It builds settings, logging, adapters and use cases for two entry points, `api` and `worker`, and it is the only module that imports both `ingestion` and `adapters`. In this phase the worker entry point only starts, logs readiness and idles. User story tasks register their adapters here.
-- [ ] T031 Create `compose.yaml` at the repository root:
+- [x] T030 Implement the composition root `backend/src/multimodal_rag/bootstrap.py`. It builds settings, logging, adapters and use cases for two entry points, `api` and `worker`, and it is the only module that imports both `ingestion` and `adapters`. In this phase the worker entry point only starts, logs readiness and idles. User story tasks register their adapters here.
+- [x] T031 Create `compose.yaml` at the repository root:
   - Services: `postgres` (18, healthcheck), `qdrant` (1.19, healthcheck), `migrate` (one-shot `alembic upgrade head`), `api` (published on 127.0.0.1:8000) and `worker`.
   - A named volume for blobs.
   - A `models` top-level element with `vlm: ai/qwen3.5:9b`, whose runtime flags disable thinking with `--chat-template-kwargs {"enable_thinking": false}`.
   - `embedder: ai/qwen3-embedding:0.6b`, with runtime flags `--embeddings --ubatch-size 2048 --batch-size 2048` (research §11, §13).
   - Long syntax with `endpoint_var: VLM_URL`, `model_var: VLM_MODEL`, `endpoint_var: EMBEDDER_URL` and `model_var: EMBEDDER_MODEL`.
-- [ ] T032 [P] Create `.env.example` at the repository root. Document every variable from T017 with its default or "required". Also document the one-time `docker desktop enable model-runner --tcp 12434 --cors none` prerequisite.
-- [ ] T033 [P] Add an integration test fixture module `backend/tests/integration/conftest.py` that starts PostgreSQL 18 and Qdrant 1.19 with testcontainers and applies the Alembic migrations. Mark the tests `integration`.
+- [x] T032 [P] Create `.env.example` at the repository root. Document every variable from T017 with its default or "required". Also document the one-time `docker desktop enable model-runner --tcp 12434 --cors none` prerequisite.
+- [x] T033 [P] Add an integration test fixture module `backend/tests/integration/conftest.py` that starts PostgreSQL 18 and Qdrant 1.19 with testcontainers and applies the Alembic migrations. Mark the tests `integration`.
 
 **Checkpoint**: `docker compose up` starts healthy `postgres`, `qdrant`, `api` and an idle `worker`. `uv run pytest` passes with coverage at or above 90%. `lint-imports` passes.
 

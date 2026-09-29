@@ -323,17 +323,25 @@ components:
     Problem:
       type: object
       description: RFC 9457 problem details.
-      required: [type, title, status]
+      required: [type, title, status, code, instance, request_id]
       properties:
-        type: { type: string, format: uri-reference }
-        title: { type: string }
+        type:
+          type: string
+          const: about:blank
+          description: >
+            Always about:blank (RFC 9457 section 4.2.1). The specific cause is in code.
+        title:
+          type: string
+          description: Standard phrase of the HTTP status, for example Not Found.
         status: { type: integer }
         detail: { type: string }
         instance: { type: string }
         code:
           type: string
+          pattern: "^[a-z][a-z0-9_]*$"
           description: >
-            Stable machine-readable code, for example unsupported_media_type,
+            Stable machine-readable code in lowercase snake case, like every other
+            enumerated value in this contract, for example unsupported_media_type,
             file_too_large, page_limit_exceeded, job_not_found, document_not_found,
             ingestion_not_completed.
         request_id: { type: string }

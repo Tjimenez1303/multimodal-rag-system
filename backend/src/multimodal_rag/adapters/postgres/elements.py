@@ -185,6 +185,26 @@ class PostgresElementRepository:
             raise ElementNotFoundError(f"Element {element_id} not found")
         return _element(row)
 
+    async def get_many(
+        self, element_ids: Sequence[uuid.UUID]
+    ) -> tuple[ExtractedElement, ...]:
+        """Return several elements with one query, whatever their documents.
+
+        Args:
+            element_ids: Ids of the elements.
+
+        Returns:
+            The stored elements, in no particular order. Unknown ids are skipped.
+        """
+        if not element_ids:
+            return ()
+        query = sa.select(extracted_elements).where(
+            extracted_elements.c.id.in_(element_ids)
+        )
+        async with connect(self._engine) as connection:
+            rows = (await connection.execute(query)).mappings().all()
+        return tuple(_element(row) for row in rows)
+
 
 def _position(parts: list[str]) -> int:
     [reading_order] = parts

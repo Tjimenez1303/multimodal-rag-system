@@ -1,10 +1,14 @@
 """mypy checks these assignments, so a fake that drifts from its port fails CI."""
 
+from multimodal_rag.answering import ports as answering_ports
 from multimodal_rag.ingestion import ports
 from tests.fakes import (
+    FakeAnswerGenerator,
+    FakeAnswerSlots,
     FakeEmbedder,
     FakeExtractor,
     FakeFigureDescriber,
+    FakeLanguageIdentifier,
     FakePdfInspector,
     FrozenClock,
     InMemoryBlobStorage,
@@ -34,5 +38,9 @@ def test_every_fake_satisfies_its_port() -> None:
     index: ports.VectorIndex = InMemoryVectorIndex()
     implementations += [clock_port, documents, jobs, elements, blobs, inspector]
     implementations += [extractor, describer, embedder, tokens, index]
+    generator: answering_ports.AnswerGenerator = FakeAnswerGenerator()
+    slots: answering_ports.AnswerSlots = FakeAnswerSlots()
+    languages: answering_ports.LanguageIdentifier = FakeLanguageIdentifier()
+    implementations += [generator, slots, languages]
 
-    assert len(implementations) == 11
+    assert len(implementations) == 14

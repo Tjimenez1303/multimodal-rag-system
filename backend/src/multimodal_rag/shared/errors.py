@@ -87,6 +87,12 @@ class ConcurrencyError(MultimodalRagError):
     code = "conflict"
 
 
+class CapacityError(MultimodalRagError):
+    """Work the system refuses because it is saturated. Never retried."""
+
+    code = "capacity_exceeded"
+
+
 class DataInconsistencyError(MultimodalRagError):
     """Data breaks an invariant the system relies on. Always an internal error."""
 

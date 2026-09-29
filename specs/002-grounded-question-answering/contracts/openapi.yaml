@@ -1,0 +1,221 @@
+openapi: 3.1.0
+info:
+  title: Multimodal RAG question answering API
+  version: 0.1.0
+  description: >
+    Ask a natural-language question about the ingested documents and receive an answer
+    built only from their content, with citations, the sources used and the closest
+    related image. Errors use RFC 9457 problem details, defined in the ingestion
+    contract. Every response carries an X-Request-ID header.
+servers:
+  - url: http://localhost:8000
+paths:
+  /api/v1/questions:
+    post:
+      operationId: askQuestion
+      summary: Answer a question from the ingested documents
+      description: >
+        Searches the completed documents by meaning and by exact keywords, asks the local
+        answer model when relevant content exists, and returns the answer with numbered
+        citations. The answer text marks each supported statement with [n], which refers
+        to the citation with that number. When the documents do not support an answer,
+        status is not_enough_information and no citation or image is returned. The
+        request is cancelled when the client disconnects.
+      parameters:
+        - $ref: "../../001-async-pdf-ingestion/contracts/openapi.yaml#/components/parameters/RequestId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/QuestionRequest" }
+      responses:
+        "200":
+          description: Answer, or a not-enough-information outcome
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Answer" }
+        "400":
+          description: >
+            invalid_question (empty or too long), unknown_documents (the restriction names
+            documents that do not exist) or invalid_request (malformed body)
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "409":
+          description: documents_not_ready (the restriction names documents whose ingestion has not completed)
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "502":
+          description: answer_model_invalid_response
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "503":
+          description: >
+            answering_busy (too many questions at once, retry after the Retry-After
+            seconds), answer_model_unavailable or search_unavailable
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying, sent with answering_busy
+              schema: { type: integer, minimum: 1 }
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "504":
+          description: answer_model_timeout, search_timeout or answer_deadline_exceeded
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+components:
+  schemas:
+    Problem:
+      $ref: "../../001-async-pdf-ingestion/contracts/openapi.yaml#/components/schemas/Problem"
+    BoundingBox:
+      $ref: "../../001-async-pdf-ingestion/contracts/openapi.yaml#/components/schemas/BoundingBox"
+    QuestionRequest:
+      type: object
+      additionalProperties: false
+      required: [question]
+      properties:
+        question:
+          type: string
+          description: >
+            Question in any language. After trimming it must hold 1 to MAX_QUESTION_CHARS
+            characters (2000 by default), else 400 invalid_question.
+        document_ids:
+          type: [array, "null"]
+          items: { type: string, format: uuid }
+          description: >
+            Restrict the answer to these completed documents. When set, it must hold 1 to
+            MAX_FILTER_DOCUMENTS distinct ids (20 by default), else 400 invalid_question.
+    AnswerStatus:
+      type: string
+      enum: [answered, not_enough_information]
+    NotEnoughReason:
+      type: string
+      enum:
+        - no_searchable_documents
+        - no_relevant_content
+        - not_answered_by_sources
+        - no_valid_citations
+    Answer:
+      type: object
+      required: [status, reason, answer, not_covered, citations, sources, primary_image, related_images]
+      properties:
+        status: { $ref: "#/components/schemas/AnswerStatus" }
+        reason:
+          oneOf: [{ $ref: "#/components/schemas/NotEnoughReason" }, { type: "null" }]
+        answer:
+          type: string
+          description: >
+            Markdown written in the language of the question. When answered, statements
+            end with [n] markers that match citation numbers. Otherwise, a message saying
+            the documents do not contain enough information.
+        not_covered:
+          type: [string, "null"]
+          description: What the documents do not answer, for a partial answer.
+        citations:
+          type: array
+          items: { $ref: "#/components/schemas/Citation" }
+        sources:
+          type: array
+          description: Every retrieval unit supplied to the answer model, in rank order.
+          items: { $ref: "#/components/schemas/Source" }
+        primary_image:
+          oneOf: [{ $ref: "#/components/schemas/AnswerImage" }, { type: "null" }]
+        related_images:
+          type: array
+          items: { $ref: "#/components/schemas/AnswerImage" }
+    Citation:
+      type: object
+      required: [number, document_id, document_name, pages, unit_ids]
+      properties:
+        number: { type: integer, minimum: 1 }
+        document_id: { type: string, format: uuid }
+        document_name: { type: string }
+        pages:
+          type: array
+          minItems: 1
+          items: { type: integer, minimum: 1 }
+        unit_ids:
+          type: array
+          minItems: 1
+          items: { type: string, format: uuid }
+    Source:
+      type: object
+      required:
+        - unit_id
+        - rank
+        - similarity
+        - document_id
+        - document_name
+        - section
+        - pages
+        - content_type
+        - excerpt
+        - cited
+        - citation_number
+        - low_confidence_text
+        - generated_description
+        - unverified_identifiers
+        - tables
+        - figure_ids
+      properties:
+        unit_id: { type: string, format: uuid }
+        rank: { type: integer, minimum: 1 }
+        similarity: { type: number }
+        document_id: { type: string, format: uuid }
+        document_name: { type: string }
+        section:
+          type: array
+          items: { type: string }
+        pages:
+          type: array
+          minItems: 1
+          items: { type: integer, minimum: 1 }
+        content_type: { type: string, enum: [text, table, figure] }
+        excerpt: { type: string, maxLength: 300 }
+        cited: { type: boolean }
+        citation_number: { type: [integer, "null"], minimum: 1 }
+        low_confidence_text:
+          type: boolean
+          description: Part of the content was recognized from a scan with low confidence.
+        generated_description:
+          type: boolean
+          description: The content includes a figure description written by a model.
+        unverified_identifiers:
+          type: array
+          items: { type: string }
+        tables:
+          type: array
+          description: Rows of each part of a table unit, one entry per page.
+          items: { $ref: "#/components/schemas/TableContent" }
+        figure_ids:
+          type: array
+          description: Non-decorative image elements associated with the unit.
+          items: { type: string, format: uuid }
+    TableContent:
+      type: object
+      required: [page, rows]
+      properties:
+        page: { type: integer, minimum: 1 }
+        rows:
+          type: array
+          items:
+            type: array
+            items: { type: string }
+    AnswerImage:
+      type: object
+      required: [element_id, document_id, document_name, page, bbox, caption, unit_id, url]
+      properties:
+        element_id: { type: string, format: uuid }
+        document_id: { type: string, format: uuid }
+        document_name: { type: string }
+        page: { type: integer, minimum: 1 }
+        bbox: { $ref: "#/components/schemas/BoundingBox" }
+        caption: { type: [string, "null"] }
+        unit_id: { type: string, format: uuid }
+        url:
+          type: string
+          description: Path of the PNG, served by getDocumentImage.

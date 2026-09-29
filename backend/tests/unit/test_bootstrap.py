@@ -6,9 +6,11 @@ import os
 import time
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
+import httpx
 import pytest
+from asgi_lifespan import LifespanManager
 from fastapi.testclient import TestClient
 
 from multimodal_rag import bootstrap
@@ -25,6 +27,14 @@ WORKER_ENV = {
     "EMBEDDER_MODEL": "ai/qwen3-embedding:0.6b",
     "EMBEDDER_TOKENIZER_PATH": "/opt/tokenizers/embedder/tokenizer.json",
 }
+# The API connects to none of these at startup, so unreachable hosts are enough.
+ANSWERING_ENV = {
+    "QDRANT_URL": "http://127.0.0.1:9",
+    "EMBEDDER_URL": "http://127.0.0.1:9/v1/",
+    "EMBEDDER_MODEL": "ai/qwen3-embedding:0.6b",
+    "ANSWER_MODEL_URL": "http://127.0.0.1:9/v1/",
+    "ANSWER_MODEL": "ai/qwen3.5:9b",
+}
 
 
 @pytest.fixture
@@ -34,6 +44,8 @@ def api_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> pytest.MonkeyPat
     monkeypatch.setenv("BLOB_ROOT", str(tmp_path))
     monkeypatch.setenv("DB_CONNECT_TIMEOUT_SECONDS", "1")
     monkeypatch.setenv("LOG_FORMAT", "console")
+    for name, value in ANSWERING_ENV.items():
+        monkeypatch.setenv(name, value)
     return monkeypatch
 
 
@@ -78,6 +90,54 @@ def test_api_answers_503_while_the_database_is_unreachable(
 
     assert response.status_code == 503
     assert response.json()["code"] == "storage_unavailable"
+
+
+class RecordingClient(httpx.AsyncClient):
+    """An httpx client that records every instance created."""
+
+    created: ClassVar[list[httpx.AsyncClient]] = []
+
+    def __init__(self, **options: Any) -> None:
+        super().__init__(**options)
+        RecordingClient.created.append(self)
+
+
+async def test_answering_clients_live_only_inside_the_lifespan(
+    api_env: pytest.MonkeyPatch,
+) -> None:
+    RecordingClient.created = []
+    api_env.setattr(httpx, "AsyncClient", RecordingClient)
+    app = bootstrap.create_api_app()
+    assert RecordingClient.created == []
+
+    async with LifespanManager(app):
+        opened = list(RecordingClient.created)
+        assert len(opened) == 2
+        assert not any(client.is_closed for client in opened)
+
+    assert all(client.is_closed for client in opened)
+
+
+def test_questions_are_served_and_fail_while_search_is_unreachable(
+    api_env: pytest.MonkeyPatch,
+) -> None:
+    api_env.setenv("PROVIDER_RETRY_ATTEMPTS", "1")
+
+    with TestClient(bootstrap.create_api_app()) as client:
+        response = client.post("/api/v1/questions", json={"question": "What is V-12?"})
+
+    assert response.status_code == 503
+    assert response.json()["code"] == "search_unavailable"
+
+
+@pytest.mark.parametrize("name", ["ANSWER_MODEL_URL", "QDRANT_URL", "EMBEDDER_MODEL"])
+def test_api_refuses_to_start_without_the_answering_settings(
+    api_env: pytest.MonkeyPatch, name: str
+) -> None:
+    api_env.delenv(name)
+
+    with pytest.raises(ConfigurationError, match=name):
+        bootstrap.create_api_app()
 
 
 def test_api_refuses_to_start_without_required_settings(

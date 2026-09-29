@@ -107,6 +107,23 @@ class TestBoundingBox:
                 left=0, top=0, right=700, bottom=100, page_width=612, page_height=792
             )
 
+    @pytest.mark.parametrize(
+        ("other", "gap"),
+        [
+            (BoundingBox(left=50, top=40, right=200, bottom=90), 0.0),
+            (BoundingBox(left=110, top=20, right=150, bottom=70), 0.0),
+            (BoundingBox(left=130, top=30, right=180, bottom=60), 20.0),
+            (BoundingBox(left=0, top=100, right=60, bottom=150), 30.0),
+            (BoundingBox(left=140, top=110, right=200, bottom=150), 50.0),
+        ],
+        ids=["overlap", "touching", "side_by_side", "above", "diagonal"],
+    )
+    def test_gap_to_is_the_shortest_distance_between_the_boxes(
+        self, other: BoundingBox, gap: float
+    ) -> None:
+        assert BOX.gap_to(other) == pytest.approx(gap)
+        assert other.gap_to(BOX) == pytest.approx(gap)
+
     def test_a_box_starting_beyond_the_page_edge_is_rejected(self) -> None:
         with pytest.raises(InvalidBoundingBoxError):
             BoundingBox.on_page(

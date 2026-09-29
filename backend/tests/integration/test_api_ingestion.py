@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from multimodal_rag import bootstrap
+from tests.integration.model_apis import MODELS_URL
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 
@@ -13,12 +14,18 @@ FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 def client(
     engine: AsyncEngine,
     database_url: str,
+    qdrant_url: str,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> TestClient:
     monkeypatch.setenv("DATABASE_URL", database_url)
     monkeypatch.setenv("BLOB_ROOT", str(tmp_path))
     monkeypatch.setenv("LOG_FORMAT", "console")
+    monkeypatch.setenv("QDRANT_URL", qdrant_url)
+    for name in ("EMBEDDER_URL", "ANSWER_MODEL_URL"):
+        monkeypatch.setenv(name, MODELS_URL)
+    monkeypatch.setenv("EMBEDDER_MODEL", "embedder")
+    monkeypatch.setenv("ANSWER_MODEL", "answerer")
     return TestClient(bootstrap.create_api_app())
 
 

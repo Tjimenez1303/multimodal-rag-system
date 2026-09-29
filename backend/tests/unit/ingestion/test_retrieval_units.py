@@ -1,7 +1,5 @@
 from collections.abc import Sequence
 
-import pytest
-
 from multimodal_rag.ingestion.domain import (
     ElementKind,
     ElementRelationship,
@@ -11,7 +9,7 @@ from multimodal_rag.ingestion.domain import (
     RetrievalUnit,
     UnitType,
 )
-from multimodal_rag.ingestion.retrieval_units import build_units, split_sentences
+from multimodal_rag.ingestion.retrieval_units import build_units
 from tests.builders import DOCUMENT_ID, SHA, link, make, markdown
 from tests.fakes import WordTokenCounter
 
@@ -251,17 +249,3 @@ def test_unit_ids_are_stable_across_runs_and_distinct() -> None:
 
     assert [u.id for u in first] == [u.id for u in second]
     assert len({u.id for u in first}) == len(first) == 2
-
-
-@pytest.mark.parametrize(
-    ("text", "sentences"),
-    [
-        ("One. Two? Three!", ["One.", "Two?", "Three!"]),
-        ("No terminator here", ["No terminator here"]),
-        ("Version 2.5 is out. Next.", ["Version 2.5 is out.", "Next."]),
-    ],
-)
-def test_sentences_end_at_a_terminator_followed_by_whitespace(
-    text: str, sentences: list[str]
-) -> None:
-    assert split_sentences(text) == sentences

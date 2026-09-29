@@ -10,6 +10,7 @@ from typing import Annotated, TypedDict
 from fastapi import Depends, Request
 
 from multimodal_rag.adapters.http.request_context import request_id_of
+from multimodal_rag.answering.use_cases.ask import AnswerQuestion
 from multimodal_rag.ingestion.use_cases.intake import GetJob, SubmitDocument
 from multimodal_rag.ingestion.use_cases.library import (
     GetDocument,
@@ -37,6 +38,16 @@ class IngestionState(TypedDict):
     get_element_image: GetElementImage
     list_documents: ListDocuments
     get_document: GetDocument
+
+
+class AnsweringState(TypedDict):
+    """Lifespan state that serves the question route.
+
+    Attributes:
+        answer_question: Use case behind the question route.
+    """
+
+    answer_question: AnswerQuestion
 
 
 def provide_submit_document(request: Request) -> SubmitDocument:
@@ -117,6 +128,19 @@ def provide_get_document(request: Request) -> GetDocument:
     return use_case
 
 
+def provide_answer_question(request: Request) -> AnswerQuestion:
+    """Return the question use case built at startup.
+
+    Args:
+        request: Request being handled.
+
+    Returns:
+        The shared ``AnswerQuestion`` instance.
+    """
+    use_case: AnswerQuestion = request.state.answer_question
+    return use_case
+
+
 def provide_request_id(request: Request) -> str:
     """Return the correlation id of the request.
 
@@ -138,3 +162,4 @@ ListDocumentElementsDep = Annotated[
 GetElementImageDep = Annotated[GetElementImage, Depends(provide_get_element_image)]
 ListDocumentsDep = Annotated[ListDocuments, Depends(provide_list_documents)]
 GetDocumentDep = Annotated[GetDocument, Depends(provide_get_document)]
+AnswerQuestionDep = Annotated[AnswerQuestion, Depends(provide_answer_question)]

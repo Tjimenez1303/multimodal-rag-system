@@ -227,6 +227,20 @@ class BoundingBox:
         """Surface of the box in square points."""
         return self.width * self.height
 
+    def gap_to(self, other: BoundingBox) -> float:
+        """Return the shortest distance to another box on the same page.
+
+        Args:
+            other: Box to measure the distance to.
+
+        Returns:
+            The distance in PDF points between the closest edges or corners, 0 when
+            the boxes touch or overlap.
+        """
+        horizontal = max(0.0, other.left - self.right, self.left - other.right)
+        vertical = max(0.0, other.top - self.bottom, self.top - other.bottom)
+        return math.hypot(horizontal, vertical)
+
 
 @dataclass(frozen=True, slots=True)
 class PageSize:

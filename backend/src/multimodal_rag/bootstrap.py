@@ -23,16 +23,22 @@ from starlette.types import ASGIApp
 
 from multimodal_rag import __version__
 from multimodal_rag.adapters.clock import SystemClock
+from multimodal_rag.adapters.concurrency.anyio_slots import AnyioAnswerSlots
 from multimodal_rag.adapters.docling.pdfium import PdfiumInspector
 from multimodal_rag.adapters.http.app import create_app
 from multimodal_rag.adapters.http.body_limit import (
     MULTIPART_OVERHEAD_BYTES,
     BodyLimits,
 )
-from multimodal_rag.adapters.http.dependencies import IngestionState
+from multimodal_rag.adapters.http.dependencies import AnsweringState, IngestionState
 from multimodal_rag.adapters.http.request_context import RequestContextMiddleware
 from multimodal_rag.adapters.http.routes_documents import documents_router
 from multimodal_rag.adapters.http.routes_ingestion import UPLOAD_PATH, ingestion_router
+from multimodal_rag.adapters.http.routes_questions import questions_router
+from multimodal_rag.adapters.language.py3langid_identifier import Py3LangidIdentifier
+from multimodal_rag.adapters.openai_compatible.answerer import (
+    OpenAICompatibleAnswerGenerator,
+)
 from multimodal_rag.adapters.openai_compatible.describer import (
     OpenAICompatibleFigureDescriber,
 )
@@ -51,6 +57,7 @@ from multimodal_rag.adapters.storage.filesystem import FilesystemBlobStorage
 from multimodal_rag.adapters.tokenizer.huggingface import HuggingFaceTokenCounter
 from multimodal_rag.adapters.worker.liveness import LivenessFile
 from multimodal_rag.adapters.worker.loop import WorkerLoop
+from multimodal_rag.answering.use_cases.ask import AnsweringOptions, AnswerQuestion
 from multimodal_rag.ingestion.figures import FigurePolicy
 from multimodal_rag.ingestion.ports import DocumentExtractor
 from multimodal_rag.ingestion.use_cases.intake import (
@@ -75,6 +82,10 @@ from multimodal_rag.shared.resilience import RetryPolicy
 logger = logging.getLogger(__name__)
 
 
+class ApiState(IngestionState, AnsweringState):
+    """Lifespan state of the API: every use case its routes serve."""
+
+
 def create_api_app() -> ASGIApp:
     """Build the REST API from environment settings.
 
@@ -88,13 +99,15 @@ def create_api_app() -> ASGIApp:
     configure_logging(log_format=settings.log_format, level=settings.log_level)
     engine = create_engine(settings)
     storage = FilesystemBlobStorage(settings.blob_root)
-    state = _ingestion_state(settings, engine, storage)
+    ingestion = _ingestion_state(settings, engine, storage)
 
     @asynccontextmanager
-    async def lifespan(_: FastAPI) -> AsyncGenerator[IngestionState]:
-        logger.info("api ready, version %s", __version__)
-        yield state
-        await engine.dispose()
+    async def lifespan(_: FastAPI) -> AsyncGenerator[ApiState]:
+        async with AsyncExitStack() as resources:
+            resources.push_async_callback(engine.dispose)
+            answering = await _answering_state(settings, engine, storage, resources)
+            logger.info("api ready, version %s", __version__)
+            yield ApiState(**ingestion, **answering)
 
     app = create_app(
         readiness_checks={
@@ -102,7 +115,7 @@ def create_api_app() -> ASGIApp:
             "blob_storage": storage.check_writable,
         },
         readiness_timeout_seconds=settings.readiness_timeout_seconds,
-        routers=(ingestion_router, documents_router),
+        routers=(ingestion_router, documents_router, questions_router),
         lifespan=lifespan,
         version=__version__,
         body_limits=BodyLimits(
@@ -141,6 +154,77 @@ def _ingestion_state(
         get_element_image=GetElementImage(elements=elements, blobs=storage),
         list_documents=ListDocuments(documents=documents, jobs=jobs),
         get_document=GetDocument(documents=documents, jobs=jobs),
+    )
+
+
+async def _answering_state(
+    settings: ApiSettings,
+    engine: AsyncEngine,
+    storage: FilesystemBlobStorage,
+    resources: AsyncExitStack,
+) -> AnsweringState:
+    # No client connects here, so the API starts while Qdrant or the models are down.
+    retry = RetryPolicy.for_providers(settings)
+    qdrant = AsyncQdrantClient(
+        url=str(settings.qdrant_url),
+        timeout=math.ceil(settings.qdrant_timeout_seconds),
+        # The version check would call Qdrant from a thread at startup.
+        check_compatibility=False,
+    )
+    resources.push_async_callback(qdrant.close)
+    embedder_client = await resources.enter_async_context(
+        httpx.AsyncClient(
+            base_url=str(settings.embedder_url),
+            timeout=settings.embedder_timeout_seconds,
+        )
+    )
+    answer_client = await resources.enter_async_context(
+        httpx.AsyncClient(
+            base_url=str(settings.answer_model_url),
+            timeout=settings.answer_model_timeout_seconds,
+        )
+    )
+    return AnsweringState(
+        answer_question=AnswerQuestion(
+            embedder=OpenAICompatibleEmbedder(
+                embedder_client,
+                model=settings.embedder_model,
+                dimensions=settings.embedder_dimensions,
+                batch_size=settings.embedder_batch_size,
+                query_instruction=settings.embedder_query_instruction,
+                retry=retry,
+            ),
+            index=QdrantVectorIndex(
+                qdrant,
+                collection=settings.qdrant_collection,
+                dimensions=settings.embedder_dimensions,
+                retry=retry,
+            ),
+            documents=PostgresDocumentRepository(engine),
+            elements=PostgresElementRepository(engine),
+            generator=OpenAICompatibleAnswerGenerator(
+                answer_client,
+                model=settings.answer_model,
+                max_tokens=settings.answer_max_tokens,
+                temperature=settings.answer_temperature,
+                retry=retry,
+            ),
+            languages=Py3LangidIdentifier(),
+            blobs=storage,
+            slots=AnyioAnswerSlots(
+                capacity=settings.answer_concurrency,
+                queue_limit=settings.answer_queue_limit,
+            ),
+            options=AnsweringOptions(
+                top_k=settings.retrieval_top_k,
+                max_question_chars=settings.max_question_chars,
+                max_filter_documents=settings.max_filter_documents,
+                low_confidence_threshold=settings.low_confidence_threshold,
+                min_similarity=settings.min_similarity,
+                attribution_min_score=settings.attribution_min_score,
+                deadline_seconds=settings.answer_deadline_seconds,
+            ),
+        )
     )
 
 
@@ -267,6 +351,7 @@ async def _process_job(
             model=settings.embedder_model,
             dimensions=settings.embedder_dimensions,
             batch_size=settings.embedder_batch_size,
+            query_instruction=settings.embedder_query_instruction,
             retry=retry,
         ),
         token_counter=HuggingFaceTokenCounter.from_file(

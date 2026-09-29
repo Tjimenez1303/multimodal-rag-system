@@ -87,7 +87,7 @@ def worker_env(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> Iterator[dict[str, str]]:
-    """Set the worker's environment and yield the values set.
+    """Set the environment of the worker and the API, and yield the values set.
 
     The models point at ``MODELS_URL``, answered by respx, and the Qdrant collection
     is new for each test, so tests never see each other's points. Worker
@@ -103,6 +103,8 @@ def worker_env(
         "EMBEDDER_URL": MODELS_URL,
         "EMBEDDER_MODEL": "embedder",
         "EMBEDDER_TOKENIZER_PATH": str(embedder_tokenizer_path),
+        "ANSWER_MODEL_URL": MODELS_URL,
+        "ANSWER_MODEL": "answerer",
         "LIVENESS_FILE": str(tmp_path / "alive"),
         "POLL_SECONDS": "0.2",
         "EXTRACTION_THREADS": "2",

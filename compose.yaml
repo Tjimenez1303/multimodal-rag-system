@@ -69,8 +69,19 @@ services:
       <<: *backend-env
       MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-209715200}
       MAX_UPLOAD_PAGES: ${MAX_UPLOAD_PAGES:-500}
+      QDRANT_URL: http://qdrant:6333
     volumes:
       - blobs:/data/blobs
+    # Questions are answered by the same model instances the worker uses. The API has
+    # no dependency on Qdrant and calls the models only when a question arrives, so
+    # uploads and job status keep working while search or the answer model is down.
+    models:
+      vlm:
+        endpoint_var: ANSWER_MODEL_URL
+        model_var: ANSWER_MODEL
+      embedder:
+        endpoint_var: EMBEDDER_URL
+        model_var: EMBEDDER_MODEL
     ports:
       - "127.0.0.1:${API_PUBLISHED_PORT:-8000}:8000"
     healthcheck:

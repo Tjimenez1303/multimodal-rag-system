@@ -5,13 +5,22 @@ import hashlib
 import re
 import tempfile
 import uuid
-from collections.abc import AsyncIterable, Collection, Generator, Iterator, Sequence
-from contextlib import contextmanager
+from collections.abc import (
+    AsyncGenerator,
+    AsyncIterable,
+    Collection,
+    Generator,
+    Iterator,
+    Sequence,
+)
+from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from multimodal_rag.adapters.postgres.pagination import decode_cursor, encode_cursor
+from multimodal_rag.answering.domain import GeneratedAnswer, GroundedPrompt
+from multimodal_rag.answering.errors import AnsweringBusyError
 from multimodal_rag.ingestion.domain import (
     Document,
     ElementKind,
@@ -133,6 +142,13 @@ class InMemoryDocumentRepository:
             self.documents.values(), key=lambda d: (d.created_at, d.id), reverse=True
         )
         return _page_of(newest_first, limit=limit, cursor=cursor)
+
+    async def get_many(self, document_ids: Sequence[uuid.UUID]) -> tuple[Document, ...]:
+        return tuple(
+            self.documents[document_id]
+            for document_id in dict.fromkeys(document_ids)
+            if document_id in self.documents
+        )
 
 
 class InMemoryJobQueue:
@@ -314,6 +330,17 @@ class InMemoryElementRepository:
                 return element
         raise ElementNotFoundError(f"Element {element_id} not found")
 
+    async def get_many(
+        self, element_ids: Sequence[uuid.UUID]
+    ) -> tuple[ExtractedElement, ...]:
+        wanted = set(element_ids)
+        return tuple(
+            element
+            for elements in self.elements.values()
+            for element in elements
+            if element.id in wanted
+        )
+
 
 class InMemoryBlobStorage:
     def __init__(self) -> None:
@@ -426,11 +453,12 @@ class FakeFigureDescriber:
 
 
 class FakeEmbedder:
-    """Deterministic vectors derived from a hash of each passage."""
+    """Deterministic vectors derived from a hash of each passage or query."""
 
     def __init__(self, *, dimensions: int = EMBEDDING_DIMENSIONS) -> None:
         self._dimensions = dimensions
         self.calls: list[list[str]] = []
+        self.queries: list[str] = []
         self.error: Exception | None = None
 
     @property
@@ -442,6 +470,12 @@ class FakeEmbedder:
         if self.error is not None:
             raise self.error
         return [self._vector(text) for text in texts]
+
+    async def embed_query(self, text: str) -> list[float]:
+        self.queries.append(text)
+        if self.error is not None:
+            raise self.error
+        return self._vector(f"query:{text}")
 
     def _vector(self, text: str) -> list[float]:
         seed = hashlib.sha256(text.encode()).digest()
@@ -474,14 +508,19 @@ def _words(text: str) -> set[str]:
 class InMemoryVectorIndex:
     """Index that ranks units by word overlap with the query.
 
-    ``failures`` maps a method name to the error that method raises.
+    ``failures`` maps a method name to the error that method raises. Each hit
+    carries the similarity set for its unit in ``similarities``, or
+    ``default_similarity``. ``searches`` records the arguments of every search.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, *, default_similarity: float = 1.0) -> None:
         self.points: dict[uuid.UUID, _IndexedUnit] = {}
         self.collection_ready = False
         self.failures: dict[str, Exception] = {}
         self.deletions: list[uuid.UUID] = []
+        self.similarities: dict[uuid.UUID, float] = {}
+        self.default_similarity = default_similarity
+        self.searches: list[dict[str, object]] = []
 
     def _fail(self, operation: str) -> None:
         if operation in self.failures:
@@ -520,10 +559,18 @@ class InMemoryVectorIndex:
         limit: int,
         document_ids: Sequence[uuid.UUID] | None = None,
     ) -> list[SearchHit]:
+        self.searches.append(
+            {"query_text": query_text, "limit": limit, "document_ids": document_ids}
+        )
+        self._fail("search_hybrid")
         query = _words(query_text)
         hits = [
             SearchHit(
-                unit=point.unit, score=float(len(query & _words(point.unit.text)))
+                unit=point.unit,
+                score=float(len(query & _words(point.unit.text))),
+                similarity=self.similarities.get(
+                    point.unit.id, self.default_similarity
+                ),
             )
             for point in self.points.values()
             if point.visible
@@ -531,3 +578,78 @@ class InMemoryVectorIndex:
         ]
         ranked = sorted((hit for hit in hits if hit.score > 0), key=lambda h: -h.score)
         return ranked[:limit]
+
+
+@dataclass
+class FakeAnswerGenerator:
+    """Answers with scripted replies in order, then with ``default``.
+
+    A reply that is an exception is raised instead. Every prompt is recorded, and
+    ``delay_seconds`` makes each call sleep first, so tests can exceed deadlines or
+    cancel a running generation.
+    """
+
+    replies: list[GeneratedAnswer | Exception] = field(default_factory=list)
+    default: GeneratedAnswer = field(
+        default_factory=lambda: GeneratedAnswer(text="Answer [1].", not_covered="")
+    )
+    delay_seconds: float = 0
+    prompts: list[GroundedPrompt] = field(default_factory=list)
+    cancelled: int = 0
+
+    async def generate(self, prompt: GroundedPrompt) -> GeneratedAnswer:
+        self.prompts.append(prompt)
+        try:
+            await asyncio.sleep(self.delay_seconds)
+        except asyncio.CancelledError:
+            self.cancelled += 1
+            raise
+        reply = self.replies.pop(0) if self.replies else self.default
+        if isinstance(reply, Exception):
+            raise reply
+        return reply
+
+
+class FakeAnswerSlots:
+    """Admits ``capacity`` questions at once and lets ``queue_limit`` more wait."""
+
+    def __init__(self, *, capacity: int = 2, queue_limit: int = 6) -> None:
+        self._places = asyncio.Semaphore(capacity)
+        self.queue_limit = queue_limit
+        self.waiting = 0
+        self.admitted = 0
+        self.rejected = 0
+
+    @asynccontextmanager
+    async def admit(self) -> AsyncGenerator[None]:
+        if self._places.locked() and self.waiting >= self.queue_limit:
+            self.rejected += 1
+            raise AnsweringBusyError()
+        self.waiting += 1
+        try:
+            await self._places.acquire()
+        finally:
+            self.waiting -= 1
+        self.admitted += 1
+        try:
+            yield
+        finally:
+            self._places.release()
+
+
+@dataclass
+class FakeLanguageIdentifier:
+    """Returns the language of the first keyword found in the text, else a fixed one.
+
+    ``keywords`` maps a lowercase word to a language code. A language that is not
+    among the candidates falls back to the first candidate.
+    """
+
+    language: str = "en"
+    keywords: dict[str, str] = field(default_factory=dict)
+
+    def identify(self, text: str, *, candidates: Sequence[str]) -> str:
+        words = _words(text)
+        found = [code for word, code in self.keywords.items() if word in words]
+        language = found[0] if found else self.language
+        return language if language in candidates else candidates[0]

@@ -75,7 +75,50 @@ class CommonSettings(DatabaseSettings):
     max_attempts: PositiveInt = 3
 
 
-class ApiSettings(CommonSettings):
+class ProviderSettings(CommonSettings):
+    """Settings of the external services that the API and the worker both call.
+
+    Attributes:
+        qdrant_url: Base URL of the Qdrant server.
+        qdrant_collection: Collection that stores retrieval units.
+        qdrant_timeout_seconds: Timeout of each call to Qdrant.
+        embedder_url: OpenAI-compatible base URL of the embedding model.
+        embedder_model: Model reference of the embedding model.
+        embedder_timeout_seconds: Timeout of one embedding request.
+        embedder_dimensions: Length of the embedding vectors.
+        embedder_batch_size: Passages sent per embedding request.
+        embedder_query_instruction: Task sentence prepended to questions before
+            they are embedded, as the embedding model expects for retrieval.
+        provider_retry_attempts: Attempts for a transient provider failure.
+        provider_retry_initial_wait_seconds: First backoff wait before jitter.
+        provider_retry_max_wait_seconds: Longest backoff wait.
+        provider_retry_jitter_seconds: Largest random amount added to each wait.
+        provider_retry_timeout_seconds: Total time budget across all attempts.
+    """
+
+    qdrant_url: HttpUrl
+    qdrant_collection: str = "retrieval_units"
+    qdrant_timeout_seconds: PositiveFloat = 10.0
+    embedder_url: HttpUrl
+    embedder_model: str = Field(min_length=1)
+    embedder_timeout_seconds: PositiveFloat = 60.0
+    embedder_dimensions: PositiveInt = 1024
+    embedder_batch_size: PositiveInt = 32
+    embedder_query_instruction: str = Field(
+        default=(
+            "Given a question about a technical manual, "
+            "retrieve the passages that answer it"
+        ),
+        min_length=1,
+    )
+    provider_retry_attempts: PositiveInt = 4
+    provider_retry_initial_wait_seconds: PositiveFloat = 0.5
+    provider_retry_max_wait_seconds: PositiveFloat = 10.0
+    provider_retry_jitter_seconds: float = Field(default=1.0, ge=0)
+    provider_retry_timeout_seconds: PositiveFloat = 300.0
+
+
+class ApiSettings(ProviderSettings):
     """Settings of the REST API process.
 
     Attributes:
@@ -84,6 +127,23 @@ class ApiSettings(CommonSettings):
         api_host: Interface the server listens on inside its container.
         api_port: Port the server listens on inside its container.
         readiness_timeout_seconds: Deadline of each readiness probe.
+        answer_model_url: OpenAI-compatible base URL of the answer model.
+        answer_model: Model reference of the answer model.
+        answer_model_timeout_seconds: Timeout of one answer generation request.
+        answer_max_tokens: Longest answer the model may write, in tokens.
+        answer_temperature: Sampling temperature of the answer model.
+        retrieval_top_k: Retrieval units supplied to the answer model.
+        min_similarity: Lowest dense similarity that lets a unit pass the relevance
+            gate.
+        low_confidence_threshold: Recognition confidence below which a source is
+            flagged as low-confidence recognized text.
+        max_question_chars: Longest question, after trimming.
+        max_filter_documents: Most documents a question may be restricted to.
+        answer_concurrency: Questions answered at the same time.
+        answer_queue_limit: Questions allowed to wait for a free place.
+        answer_deadline_seconds: Total time of a question, waiting included.
+        attribution_min_score: Lowest match that attributes a statement of an answer
+            written without source markers.
     """
 
     max_upload_bytes: PositiveInt = 200 * _MEGABYTE
@@ -92,32 +152,42 @@ class ApiSettings(CommonSettings):
     api_host: str = "0.0.0.0"
     api_port: PositiveInt = 8000
     readiness_timeout_seconds: PositiveFloat = 2.0
+    answer_model_url: HttpUrl
+    answer_model: str = Field(min_length=1)
+    answer_model_timeout_seconds: PositiveFloat = 60.0
+    answer_max_tokens: PositiveInt = 800
+    answer_temperature: float = Field(default=0.0, ge=0, le=2)
+    retrieval_top_k: PositiveInt = 8
+    min_similarity: float = Field(default=0.60, ge=0, le=1)
+    low_confidence_threshold: float = Field(default=0.90, ge=0, le=1)
+    max_question_chars: PositiveInt = 2000
+    max_filter_documents: PositiveInt = 20
+    answer_concurrency: PositiveInt = 2
+    answer_queue_limit: int = Field(default=6, ge=0)
+    answer_deadline_seconds: PositiveFloat = 90.0
+    attribution_min_score: float = Field(default=0.5, ge=0, le=1)
+
+    @pydantic.model_validator(mode="after")
+    def _generation_fits_the_deadline(self) -> Self:
+        if self.answer_model_timeout_seconds >= self.answer_deadline_seconds:
+            raise ValueError(
+                "ANSWER_MODEL_TIMEOUT_SECONDS must be shorter than "
+                "ANSWER_DEADLINE_SECONDS"
+            )
+        return self
 
 
-class WorkerSettings(CommonSettings):
+class WorkerSettings(ProviderSettings):
     """Settings of the ingestion worker process.
 
     Attributes:
-        qdrant_url: Base URL of the Qdrant server.
-        qdrant_collection: Collection that stores retrieval units.
-        qdrant_timeout_seconds: Timeout of each call to Qdrant.
         vlm_url: OpenAI-compatible base URL of the vision model.
         vlm_model: Model reference of the vision model.
         vlm_timeout_seconds: Timeout of one figure description request.
-        embedder_url: OpenAI-compatible base URL of the embedding model.
-        embedder_model: Model reference of the embedding model.
-        embedder_timeout_seconds: Timeout of one embedding request.
         embedder_tokenizer_path: ``tokenizer.json`` of the embedding model, baked
             into the image.
-        embedder_dimensions: Length of the embedding vectors.
-        embedder_batch_size: Passages sent per embedding request.
         embedder_max_input_tokens: Longest input the embedding model accepts, the
             physical batch it runs with.
-        provider_retry_attempts: Attempts for a transient provider failure.
-        provider_retry_initial_wait_seconds: First backoff wait before jitter.
-        provider_retry_max_wait_seconds: Longest backoff wait.
-        provider_retry_jitter_seconds: Largest random amount added to each wait.
-        provider_retry_timeout_seconds: Total time budget across all attempts.
         lease_seconds: Lease granted to a worker for one job.
         heartbeat_seconds: Interval between lease renewals.
         poll_seconds: Fallback polling interval when no notification arrives.
@@ -143,24 +213,11 @@ class WorkerSettings(CommonSettings):
         near_text_max_points: Largest distance, in PDF points, for nearby text.
     """
 
-    qdrant_url: HttpUrl
-    qdrant_collection: str = "retrieval_units"
-    qdrant_timeout_seconds: PositiveFloat = 10.0
     vlm_url: HttpUrl
     vlm_model: str = Field(min_length=1)
     vlm_timeout_seconds: PositiveFloat = 120.0
-    embedder_url: HttpUrl
-    embedder_model: str = Field(min_length=1)
-    embedder_timeout_seconds: PositiveFloat = 60.0
     embedder_tokenizer_path: Path
-    embedder_dimensions: PositiveInt = 1024
-    embedder_batch_size: PositiveInt = 32
     embedder_max_input_tokens: PositiveInt = 2048
-    provider_retry_attempts: PositiveInt = 4
-    provider_retry_initial_wait_seconds: PositiveFloat = 0.5
-    provider_retry_max_wait_seconds: PositiveFloat = 10.0
-    provider_retry_jitter_seconds: float = Field(default=1.0, ge=0)
-    provider_retry_timeout_seconds: PositiveFloat = 300.0
     lease_seconds: PositiveInt = 90
     heartbeat_seconds: PositiveInt = 30
     poll_seconds: PositiveFloat = 2.0

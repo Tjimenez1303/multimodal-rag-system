@@ -84,11 +84,15 @@ class SearchHit:
 
     Attributes:
         unit: The matching unit.
-        score: Fused relevance score, higher is better.
+        score: Fused relevance score, higher is better. It depends only on ranks,
+            so it cannot tell whether the unit is relevant at all.
+        similarity: Dense cosine similarity between the unit and the query, from
+            -1 to 1, comparable across queries.
     """
 
     unit: RetrievalUnit
     score: float
+    similarity: float
 
 
 class Clock(Protocol):
@@ -137,6 +141,18 @@ class DocumentRepository(Protocol):
 
         Returns:
             One page of documents.
+        """
+        ...
+
+    async def get_many(self, document_ids: Sequence[uuid.UUID]) -> tuple[Document, ...]:
+        """Return several documents at once.
+
+        Args:
+            document_ids: Ids of the documents.
+
+        Returns:
+            The stored documents, in no particular order. Unknown ids are skipped,
+            so the caller can tell which ones are missing.
         """
         ...
 
@@ -382,6 +398,19 @@ class ElementRepository(Protocol):
         """
         ...
 
+    async def get_many(
+        self, element_ids: Sequence[uuid.UUID]
+    ) -> tuple[ExtractedElement, ...]:
+        """Return several elements at once, whatever their documents.
+
+        Args:
+            element_ids: Ids of the elements.
+
+        Returns:
+            The stored elements, in no particular order. Unknown ids are skipped.
+        """
+        ...
+
 
 class BlobStorage(Protocol):
     """Storage of original PDFs and figure crops under string keys."""
@@ -563,6 +592,26 @@ class Embedder(Protocol):
         """
         ...
 
+    async def embed_query(self, text: str) -> list[float]:
+        """Return the vector of a search query, such as a question.
+
+        Queries and passages may be embedded differently, for example with a task
+        instruction that only queries carry.
+
+        Args:
+            text: The query.
+
+        Returns:
+            The query vector.
+
+        Raises:
+            ProviderUnavailableError: If the model stays unreachable after retries.
+            ProviderTimeoutError: If the model keeps timing out after retries.
+            ProviderResponseError: If the model rejects the request.
+            DataInconsistencyError: If the vector has an unexpected length.
+        """
+        ...
+
 
 class TokenCounter(Protocol):
     """Tokenizer of the embedding model, used to size retrieval units."""
@@ -640,5 +689,16 @@ class VectorIndex(Protocol):
             query_vector: Dense vector of the query.
             limit: Largest number of hits.
             document_ids: Only units of these documents, when set.
+
+        Returns:
+            The hits, best first, each with its dense similarity to the query. A
+            collection that does not exist yet, because no document was ever
+            indexed, returns no hits.
+
+        Raises:
+            ProviderUnavailableError: If the index stays unreachable after retries.
+            ProviderTimeoutError: If the index keeps timing out after retries.
+            ProviderResponseError: If the index rejects the request.
+            DataInconsistencyError: If the similarity of a hit cannot be found.
         """
         ...

@@ -1,6 +1,7 @@
 """PostgreSQL persistence of documents."""
 
 import uuid
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 
@@ -71,6 +72,22 @@ class PostgresDocumentRepository:
         if row is None:
             raise DocumentNotFoundError(f"Document {document_id} not found")
         return _document(row)
+
+    async def get_many(self, document_ids: Sequence[uuid.UUID]) -> tuple[Document, ...]:
+        """Return several documents with one query.
+
+        Args:
+            document_ids: Ids of the documents.
+
+        Returns:
+            The stored documents, in no particular order. Unknown ids are skipped.
+        """
+        if not document_ids:
+            return ()
+        query = sa.select(documents).where(documents.c.id.in_(document_ids))
+        async with connect(self._engine) as connection:
+            rows = (await connection.execute(query)).mappings().all()
+        return tuple(_document(row) for row in rows)
 
     async def list_page(self, *, limit: int, cursor: str | None) -> Page[Document]:
         """Return documents newest first.

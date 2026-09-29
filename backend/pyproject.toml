@@ -11,6 +11,7 @@ dependencies = [
     "httpx>=0.28.1",
     "huggingface-hub>=1.33.0",
     "onnxruntime>=1.30.0",
+    "py3langid>=0.4.0",
     "pydantic>=2.13.5",
     "pydantic-settings>=2.15.0",
     "pypdfium2>=5.13.0",
@@ -103,6 +104,11 @@ implicit_reexport = true
 module = ["pypdfium2", "pypdfium2.*"]
 ignore_missing_imports = true
 
+# py3langid ships neither type hints nor a py.typed marker.
+[[tool.mypy.overrides]]
+module = ["py3langid", "py3langid.*"]
+ignore_missing_imports = true
+
 [tool.pydantic-mypy]
 init_forbid_extra = true
 init_typed = true
@@ -172,11 +178,47 @@ forbidden_modules = [
 ]
 
 [[tool.importlinter.contracts]]
-name = "Dependencies point inward: bootstrap, adapters, ingestion, shared"
+name = "The answering core depends on no adapter, framework, SDK or provider"
+type = "forbidden"
+source_modules = ["multimodal_rag.answering"]
+forbidden_modules = [
+    "multimodal_rag.adapters",
+    "multimodal_rag.bootstrap",
+    "fastapi",
+    "starlette",
+    "sqlalchemy",
+    "asyncpg",
+    "alembic",
+    "docling",
+    "docling_core",
+    "pypdfium2",
+    "pypdf",
+    "reportlab",
+    "rapidocr",
+    "onnxruntime",
+    "torch",
+    "torchvision",
+    "uvicorn",
+    "httpx",
+    "httpx2",
+    "qdrant_client",
+    "pydantic_settings",
+    "structlog",
+    "stamina",
+    "tokenizers",
+    "huggingface_hub",
+    "PIL",
+    "anyio",
+    "py3langid",
+]
+
+[[tool.importlinter.contracts]]
+name = "Dependencies point inward: bootstrap, adapters, answering, ingestion, shared"
 type = "layers"
 layers = [
     "(multimodal_rag.bootstrap)",
     "multimodal_rag.adapters",
+    "multimodal_rag.answering",
     "multimodal_rag.ingestion",
     "multimodal_rag.shared",
 ]

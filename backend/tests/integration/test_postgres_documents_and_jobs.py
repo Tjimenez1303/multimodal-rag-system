@@ -125,6 +125,18 @@ class TestDocuments:
         assert listed == registered[::-1]
         assert second.next_cursor is None
 
+    async def test_several_documents_are_read_at_once_skipping_unknown_ids(
+        self, documents: PostgresDocumentRepository, clock: FrozenClock
+    ) -> None:
+        first, _ = await documents.register(new_document(clock, "1" * 64))
+        second, _ = await documents.register(new_document(clock, "2" * 64))
+        await documents.register(new_document(clock, "3" * 64))
+
+        found = await documents.get_many([second.id, uuid.uuid4(), first.id])
+
+        assert sorted(found, key=lambda d: d.sha256) == [first, second]
+        assert await documents.get_many([]) == ()
+
 
 class TestJobQueue:
     async def test_concurrent_enqueues_for_one_document_keep_one_active_job(
@@ -477,6 +489,29 @@ class TestElements:
     ) -> None:
         with pytest.raises(ElementNotFoundError):
             await elements.get(document_id=uuid.uuid4(), element_id=uuid.uuid4())
+
+    async def test_several_elements_are_read_at_once_skipping_unknown_ids(
+        self,
+        jobs: PostgresJobQueue,
+        documents: PostgresDocumentRepository,
+        elements: PostgresElementRepository,
+        clock: FrozenClock,
+    ) -> None:
+        job = await claimed(jobs, documents, clock)
+        assert job.lease_token is not None
+        stored = [text_element(job.document_id, n) for n in range(3)]
+        await elements.replace_for_document(
+            job_id=job.id,
+            lease_token=job.lease_token,
+            document_id=job.document_id,
+            elements=stored,
+            relationships=(),
+        )
+
+        found = await elements.get_many([stored[2].id, uuid.uuid4(), stored[0].id])
+
+        assert sorted(found, key=lambda e: e.reading_order) == [stored[0], stored[2]]
+        assert await elements.get_many([]) == ()
 
 
 @pytest.mark.parametrize("cursor", ["bm90LWEtZGF0ZXxub3QtYS11dWlk", "%%%"])

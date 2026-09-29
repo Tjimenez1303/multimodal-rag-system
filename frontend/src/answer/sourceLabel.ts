@@ -1,3 +1,5 @@
+import { nounFor } from "@/lib/plural";
+
 /**
  * Format the pages of a citation, sorted and listed once, with runs of consecutive
  * pages joined by an en dash (data-model section 2.1).
@@ -17,7 +19,7 @@ export function formatPages(pages: readonly number[]): string {
       start = next;
     }
   }
-  return `${sorted.length === 1 ? "page" : "pages"} ${runs.join(", ")}`;
+  return `${nounFor(sorted.length, "page")} ${runs.join(", ")}`;
 }
 
 /**

@@ -2,6 +2,7 @@ import type { DocumentBody, JobStage } from "@/client";
 import { displayStatus, type DisplayStatus } from "@/documents/status";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { counted } from "@/lib/plural";
 import { cn } from "@/lib/utils";
 
 /** Plain words for each processing stage (data-model section 2.2). */
@@ -64,7 +65,9 @@ export function DocumentStatus({ document }: { document: DocumentBody }) {
         <>
           <p className="text-muted-foreground">
             {job.stage ? STAGE_WORDS[job.stage] : "Starting"}
-            {job.pages_total ? `, ${job.pages_done} of ${job.pages_total} pages` : ""}
+            {job.pages_total
+              ? `, ${job.pages_done} of ${counted(job.pages_total, "page")}`
+              : ""}
           </p>
           <Progress
             value={percent ?? 0}
@@ -75,8 +78,11 @@ export function DocumentStatus({ document }: { document: DocumentBody }) {
       )}
       {status === "ready" && job?.summary && (
         <p className="text-muted-foreground">
-          {job.summary.pages} pages, {job.summary.tables} tables, {job.summary.images}{" "}
-          images
+          {[
+            counted(job.summary.pages, "page"),
+            counted(job.summary.tables, "table"),
+            counted(job.summary.images, "image"),
+          ].join(", ")}
         </p>
       )}
       {status === "failed" && job?.failure_reason && (

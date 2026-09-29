@@ -61,6 +61,27 @@ test("a completed document is ready with a summary of what was captured", () => 
   expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
 });
 
+test("counts of one are written in the singular", () => {
+  const onePage: DocumentBody = {
+    ...completedDocument,
+    latest_job: {
+      ...completedDocument.latest_job!,
+      summary: {
+        ...completedDocument.latest_job!.summary!,
+        pages: 1,
+        tables: 1,
+        images: 1,
+      },
+    },
+  };
+  const { rerender } = render(<DocumentStatus document={onePage} />);
+
+  expect(screen.getByText("1 page, 1 table, 1 image")).toBeInTheDocument();
+
+  rerender(<DocumentStatus document={withJob({ pages_done: 0, pages_total: 1 })} />);
+  expect(screen.getByText("0 of 1 page", { exact: false })).toBeInTheDocument();
+});
+
 test("a failed document shows the service's reason", () => {
   render(<DocumentStatus document={failedDocument} />);
 

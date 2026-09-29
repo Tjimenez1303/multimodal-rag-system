@@ -211,7 +211,8 @@ frontend/
 │   │   ├── ui/                   # shadcn/ui components, installed by its CLI
 │   │   └── ai-elements/          # AI Elements components, installed by its CLI
 │   ├── lib/
-│   │   └── utils.ts              # cn(), written by shadcn init
+│   │   ├── utils.ts              # cn(), written by shadcn init
+│   │   └── plural.ts             # counted() and nounFor(), English plurals with Intl.PluralRules
 │   ├── api/
 │   │   ├── http.ts               # client setup: X-Request-ID, problem parsing, ServiceFailure
 │   │   ├── questions.ts          # askQuestion with abort and wait limit

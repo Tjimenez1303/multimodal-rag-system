@@ -592,6 +592,11 @@ constraint is stated. Section numbers are referenced from [plan.md](plan.md) and
   - On success the document is removed from the library cache and the list is read
     again. Earlier turns keep their text and source lines. Their figures and pages show
     "Image unavailable" and "Page unavailable" (FR-017, spec edge cases).
+  - A figure already drawn stays visible until the page is reloaded, because the
+    browser reuses a loaded image for the same address from its memory cache, even in
+    the full-size view. The service answers 404 and sends no caching headers, so a
+    reload shows "Image unavailable". Forcing every image to load again was rejected:
+    it costs a request per figure to hide an image the technician has already seen.
 - **Alternatives considered**:
   - Deleting in the worker through a job, as uploads are processed. It adds a job type,
     a queue path and a state to follow for work that takes well under a second.

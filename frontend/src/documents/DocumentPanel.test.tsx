@@ -40,7 +40,7 @@ function acceptUploads(accepted: Partial<UploadAccepted> = {}) {
   server.use(
     http.post("/api/v1/documents", async () => {
       uploaded += 1;
-      await delay(20);
+      await delay(250);
       return HttpResponse.json(
         {
           document_id: NEW_ID,

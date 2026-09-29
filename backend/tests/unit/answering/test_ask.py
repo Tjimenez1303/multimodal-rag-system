@@ -2,7 +2,13 @@ import logging
 
 import pytest
 
-from multimodal_rag.answering.domain import AnswerStatus, GeneratedAnswer
+from multimodal_rag.answering.domain import (
+    Answer,
+    AnswerStatus,
+    GeneratedAnswer,
+    NotEnoughReason,
+)
+from multimodal_rag.answering.messages import not_enough_message
 from multimodal_rag.ingestion.domain import Document, RetrievalUnit
 from multimodal_rag.shared.errors import DataInconsistencyError
 from tests.library import Library, document, element, unit
@@ -145,3 +151,141 @@ async def test_each_question_is_answered_independently(
     assert QUESTION not in second.user
     assert SERIES in first.user
     assert SERIES not in second.user
+
+
+def assert_not_enough(answer: Answer, reason: NotEnoughReason) -> None:
+    assert answer.status is AnswerStatus.NOT_ENOUGH_INFORMATION
+    assert answer.reason is reason
+    assert answer.citations == ()
+    assert answer.sources == ()
+    assert answer.primary_image is None
+    assert answer.related_images == ()
+
+
+class TestNotEnoughInformation:
+    async def test_without_searchable_documents_the_model_is_not_asked(
+        self, library: Library
+    ) -> None:
+        answer = await library.ask()(QUESTION)
+
+        assert_not_enough(answer, NotEnoughReason.NO_SEARCHABLE_DOCUMENTS)
+        assert answer.text == not_enough_message(
+            NotEnoughReason.NO_SEARCHABLE_DOCUMENTS, language="en"
+        )
+        assert library.generator.prompts == []
+
+    async def test_below_the_relevance_gate_the_model_is_not_asked(
+        self, library: Library, faa: Document
+    ) -> None:
+        library.index.default_similarity = 0.59
+        await add_text(library, faa, SERIES, 12)
+
+        answer = await library.ask(min_similarity=0.60)(QUESTION)
+
+        assert_not_enough(answer, NotEnoughReason.NO_RELEVANT_CONTENT)
+        assert answer.text == not_enough_message(
+            NotEnoughReason.NO_RELEVANT_CONTENT, language="en"
+        )
+        assert library.generator.prompts == []
+
+    async def test_the_fixed_message_is_in_the_language_of_the_question(
+        self, library: Library, faa: Document
+    ) -> None:
+        library.index.default_similarity = 0.27
+        library.languages.keywords = {"receta": "es"}
+        await add_text(library, faa, "Receta de un generador.", 12)
+
+        answer = await library.ask()("¿Cuál es la mejor receta de paella?")
+
+        assert_not_enough(answer, NotEnoughReason.NO_RELEVANT_CONTENT)
+        assert answer.text == not_enough_message(
+            NotEnoughReason.NO_RELEVANT_CONTENT, language="es"
+        )
+        assert library.generator.prompts == []
+
+    async def test_an_empty_model_answer_reports_what_is_not_covered(
+        self, library: Library, faa: Document
+    ) -> None:
+        await add_text(library, faa, SERIES, 12)
+        library.answer(
+            GeneratedAnswer(
+                text="  ", not_covered="The sources do not give the APU torque."
+            )
+        )
+
+        answer = await library.ask()(QUESTION)
+
+        assert_not_enough(answer, NotEnoughReason.NOT_ANSWERED_BY_SOURCES)
+        assert answer.text == "The sources do not give the APU torque."
+
+    async def test_an_empty_model_answer_without_explanation_gets_the_message(
+        self, library: Library, faa: Document
+    ) -> None:
+        await add_text(library, faa, SERIES, 12)
+        library.answer(GeneratedAnswer(text="", not_covered=""))
+
+        answer = await library.ask()(QUESTION)
+
+        assert_not_enough(answer, NotEnoughReason.NOT_ANSWERED_BY_SOURCES)
+        assert answer.text == not_enough_message(
+            NotEnoughReason.NOT_ANSWERED_BY_SOURCES, language="en"
+        )
+
+    async def test_an_answer_citing_only_unsupplied_sources_is_not_shown(
+        self, library: Library, faa: Document
+    ) -> None:
+        await add_text(library, faa, SERIES, 12)
+        library.answer(
+            GeneratedAnswer(text="Invented from page 99 [7] and [0].", not_covered="")
+        )
+
+        answer = await library.ask()(QUESTION)
+
+        assert_not_enough(answer, NotEnoughReason.NO_VALID_CITATIONS)
+        assert answer.text == not_enough_message(
+            NotEnoughReason.NO_VALID_CITATIONS, language="en"
+        )
+        assert "Invented" not in answer.text
+
+    async def test_an_answer_without_markers_is_not_shown(
+        self, library: Library, faa: Document
+    ) -> None:
+        await add_text(library, faa, SERIES, 12)
+        library.answer(
+            GeneratedAnswer(text="An uncited claim.", not_covered="The weight.")
+        )
+
+        answer = await library.ask()(QUESTION)
+
+        assert_not_enough(answer, NotEnoughReason.NO_VALID_CITATIONS)
+        assert answer.text == "The weight."
+
+    async def test_a_partial_answer_stays_answered_and_says_what_is_missing(
+        self, library: Library, faa: Document
+    ) -> None:
+        await add_text(library, faa, SERIES, 12)
+        library.answer(
+            GeneratedAnswer(
+                text="Regula mal la tensión [1].",
+                not_covered="Los documentos no indican cuánto pesa.",
+            )
+        )
+
+        answer = await library.ask()(QUESTION)
+
+        assert answer.status is AnswerStatus.ANSWERED
+        assert answer.reason is None
+        assert answer.not_covered == "Los documentos no indican cuánto pesa."
+        assert [citation.number for citation in answer.citations] == [1]
+
+    async def test_the_outcome_reason_is_logged(
+        self, library: Library, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        with caplog.at_level(logging.INFO, logger=LOGGER):
+            await library.ask()(QUESTION)
+
+        [record] = [r for r in caplog.records if r.name == LOGGER]
+        message = record.getMessage()
+        assert "outcome not_enough_information" in message
+        assert "reason no_searchable_documents" in message
+        assert "units 0" in message

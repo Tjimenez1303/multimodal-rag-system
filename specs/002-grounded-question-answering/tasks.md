@@ -185,24 +185,24 @@ first (quickstart Scenario 3).
 
 ### Tests for User Story 2 (REQUIRED) ⚠️
 
-- [ ] T032 [P] [US2] Write the similarity cases of `backend/tests/unit/answering/test_relevance.py`: a hit at `MIN_SIMILARITY` passes, one just below fails, and the gate passes when any hit passes.
-- [ ] T033 [P] [US2] Write `backend/tests/unit/answering/test_messages.py`: every `NotEnoughReason` has an English and a Spanish message, an unknown language falls back to English, and no message is empty.
-- [ ] T034 [P] [US2] Add the not-enough cases to `backend/tests/unit/answering/test_ask.py`. This is the constitution's required test for insufficient context.
+- [x] T032 [P] [US2] Write the similarity cases of `backend/tests/unit/answering/test_relevance.py`: a hit at `MIN_SIMILARITY` passes, one just below fails, and the gate passes when any hit passes.
+- [x] T033 [P] [US2] Write `backend/tests/unit/answering/test_messages.py`: every `NotEnoughReason` has an English and a Spanish message, an unknown language falls back to English, and no message is empty.
+- [x] T034 [P] [US2] Add the not-enough cases to `backend/tests/unit/answering/test_ask.py`. This is the constitution's required test for insufficient context.
   - **No hits.** Reason `no_searchable_documents`, and the generator is never called.
   - **Gate fails.** Reason `no_relevant_content`, the generator is never called, and the text is the Spanish message for a Spanish question.
   - **Empty model answer.** Reason `not_answered_by_sources`, with the model's `not_covered` as text.
   - **Only invalid markers.** Reason `no_valid_citations`.
   - **Partial answer.** Stays `answered` and carries `not_covered`.
   - **Every not-enough outcome.** No citations, sources or images.
-- [ ] T035 [P] [US2] Write `backend/tests/unit/adapters/test_py3langid_identifier.py`: English and Spanish short questions from quickstart are identified among `["en", "es"]`, and the result is always one of the candidates.
+- [x] T035 [P] [US2] Write `backend/tests/unit/adapters/test_py3langid_identifier.py`: English and Spanish short questions from quickstart are identified among `["en", "es"]`, and the result is always one of the candidates.
 
 ### Implementation for User Story 2
 
-- [ ] T036 [P] [US2] Implement the similarity gate `passes_gate(hits, *, min_similarity) -> bool` in `backend/src/multimodal_rag/answering/relevance.py`.
-- [ ] T037 [P] [US2] Implement the fixed messages per `NotEnoughReason` in English and Spanish in `backend/src/multimodal_rag/answering/messages.py`, with `SUPPORTED_LANGUAGES = ("en", "es")` and an English fallback.
-- [ ] T038 [P] [US2] Implement `Py3LangidIdentifier` in `backend/src/multimodal_rag/adapters/language/py3langid_identifier.py`, restricted to the candidates on each call. Load the model once at construction, not per request.
-- [ ] T039 [US2] Extend `AnswerQuestion` in `backend/src/multimodal_rag/answering/use_cases/ask.py`: no hits, the gate before generation, an empty answer and no valid citation, each building `Answer.not_enough` with the reason and the text of data-model.md. The `LanguageIdentifier` is injected, and the outcome reason is logged.
-- [ ] T040 [US2] Wire `Py3LangidIdentifier` and `MIN_SIMILARITY` into `AnswerQuestion` in `backend/src/multimodal_rag/bootstrap.py`.
+- [x] T036 [P] [US2] Implement the similarity gate `passes_gate(hits, *, min_similarity) -> bool` in `backend/src/multimodal_rag/answering/relevance.py`.
+- [x] T037 [P] [US2] Implement the fixed messages per `NotEnoughReason` in English and Spanish in `backend/src/multimodal_rag/answering/messages.py`, with `SUPPORTED_LANGUAGES = ("en", "es")` and an English fallback.
+- [x] T038 [P] [US2] Implement `Py3LangidIdentifier` in `backend/src/multimodal_rag/adapters/language/py3langid_identifier.py`, restricted to the candidates on each call. Load the model once at construction, not per request.
+- [x] T039 [US2] Extend `AnswerQuestion` in `backend/src/multimodal_rag/answering/use_cases/ask.py`: no hits, the gate before generation, an empty answer and no valid citation, each building `Answer.not_enough` with the reason and the text of data-model.md. The `LanguageIdentifier` is injected, and the outcome reason is logged.
+- [x] T040 [US2] Wire `Py3LangidIdentifier` and `MIN_SIMILARITY` into `AnswerQuestion` in `backend/src/multimodal_rag/bootstrap.py`.
 
 **Checkpoint**: Stories 1 and 2 give the full grounded behavior (quickstart Scenario 3).
 

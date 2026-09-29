@@ -1,4 +1,10 @@
-"""Answering one question from the retrieved units of the completed documents."""
+"""Answering one question from the retrieved units of the completed documents.
+
+The answer model is asked only when a retrieved unit passes the relevance gate. Every
+other outcome where the documents do not support an answer, whether decided before or
+after the model call, is a not-enough-information answer with a reason and no
+citations, sources or images.
+"""
 
 import logging
 import time
@@ -11,10 +17,13 @@ from multimodal_rag.answering.domain import (
     Answer,
     AnswerStatus,
     GeneratedAnswer,
+    NotEnoughReason,
     Question,
 )
-from multimodal_rag.answering.ports import AnswerGenerator
+from multimodal_rag.answering.messages import SUPPORTED_LANGUAGES, not_enough_message
+from multimodal_rag.answering.ports import AnswerGenerator, LanguageIdentifier
 from multimodal_rag.answering.prompting import build_prompt
+from multimodal_rag.answering.relevance import passes_gate
 from multimodal_rag.answering.sources import assemble_sources, elements_of
 from multimodal_rag.ingestion.domain import ExtractedElement
 from multimodal_rag.ingestion.ports import (
@@ -39,12 +48,15 @@ class AnsweringOptions:
         max_filter_documents: Most documents a question may be restricted to.
         low_confidence_threshold: Recognition confidence below which a source is
             flagged as low-confidence recognized text.
+        min_similarity: Lowest dense similarity that lets a unit pass the relevance
+            gate.
     """
 
     top_k: int
     max_question_chars: int
     max_filter_documents: int
     low_confidence_threshold: float
+    min_similarity: float
 
 
 @dataclass
@@ -64,6 +76,7 @@ class AnswerQuestion:
         documents: Document persistence, for the names of cited documents.
         elements: Element persistence, for the flags of each source.
         generator: Answer model.
+        languages: Identifies the question's language for the fixed messages.
         options: Limits and thresholds of the use case.
     """
 
@@ -75,6 +88,7 @@ class AnswerQuestion:
         documents: DocumentRepository,
         elements: ElementRepository,
         generator: AnswerGenerator,
+        languages: LanguageIdentifier,
         options: AnsweringOptions,
     ) -> None:
         self._embedder = embedder
@@ -82,6 +96,7 @@ class AnswerQuestion:
         self._documents = documents
         self._elements = elements
         self._generator = generator
+        self._languages = languages
         self._options = options
 
     async def __call__(
@@ -94,7 +109,8 @@ class AnswerQuestion:
             document_ids: Documents to restrict the answer to, or ``None``.
 
         Returns:
-            The answer with its citations and sources.
+            The answer with its citations and sources, or a not-enough-information
+            outcome with its reason.
 
         Raises:
             InvalidQuestionError: If the question is empty or too long.
@@ -125,12 +141,20 @@ class AnswerQuestion:
         started = time.perf_counter()
         hits = await self._search(question)
         timings.search_ms = (time.perf_counter() - started) * 1000
+        if not hits:
+            return self._not_enough(question, NotEnoughReason.NO_SEARCHABLE_DOCUMENTS)
+        if not passes_gate(hits, min_similarity=self._options.min_similarity):
+            return self._not_enough(question, NotEnoughReason.NO_RELEVANT_CONTENT)
         names = await self._document_names(hits)
         elements = await self._elements_of(hits)
         started = time.perf_counter()
         generated = await self._generator.generate(build_prompt(question, hits))
         timings.generation_ms = (time.perf_counter() - started) * 1000
-        return self._grounded(generated, hits, names, elements)
+        if not generated.text.strip():
+            return self._not_enough(
+                question, NotEnoughReason.NOT_ANSWERED_BY_SOURCES, generated
+            )
+        return self._grounded(question, generated, hits, names, elements)
 
     async def _search(self, question: Question) -> list[SearchHit]:
         vector = await self._embedder.embed_query(question.text)
@@ -159,6 +183,7 @@ class AnswerQuestion:
 
     def _grounded(
         self,
+        question: Question,
         generated: GeneratedAnswer,
         hits: Sequence[SearchHit],
         names: dict[uuid.UUID, str],
@@ -167,6 +192,10 @@ class AnswerQuestion:
         cited = resolve_citations(
             generated.text, [hit.unit for hit in hits], document_names=names
         )
+        if not cited.citations:
+            return self._not_enough(
+                question, NotEnoughReason.NO_VALID_CITATIONS, generated
+            )
         return Answer(
             status=AnswerStatus.ANSWERED,
             reason=None,
@@ -181,3 +210,18 @@ class AnswerQuestion:
                 low_confidence_threshold=self._options.low_confidence_threshold,
             ),
         )
+
+    def _not_enough(
+        self,
+        question: Question,
+        reason: NotEnoughReason,
+        generated: GeneratedAnswer | None = None,
+    ) -> Answer:
+        # The model's own sentence names what is missing, in the question's language.
+        explanation = generated.not_covered.strip() if generated else ""
+        if not explanation:
+            language = self._languages.identify(
+                question.text, candidates=SUPPORTED_LANGUAGES
+            )
+            explanation = not_enough_message(reason, language=language)
+        return Answer.not_enough(reason, explanation)

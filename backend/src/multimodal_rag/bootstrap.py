@@ -34,6 +34,7 @@ from multimodal_rag.adapters.http.request_context import RequestContextMiddlewar
 from multimodal_rag.adapters.http.routes_documents import documents_router
 from multimodal_rag.adapters.http.routes_ingestion import UPLOAD_PATH, ingestion_router
 from multimodal_rag.adapters.http.routes_questions import questions_router
+from multimodal_rag.adapters.language.py3langid_identifier import Py3LangidIdentifier
 from multimodal_rag.adapters.openai_compatible.answerer import (
     OpenAICompatibleAnswerGenerator,
 )
@@ -166,12 +167,12 @@ def _ingestion_state(
 def _answering_state(
     settings: ApiSettings, engine: AsyncEngine, clients: AsyncExitStack
 ) -> AnsweringState:
-    # Nothing here connects at startup, so the API starts and serves uploads while
-    # Qdrant or the models are down. The version check would call Qdrant at once.
+    # No client connects here, so the API starts while Qdrant or the models are down.
     retry = RetryPolicy.for_providers(settings)
     qdrant = AsyncQdrantClient(
         url=str(settings.qdrant_url),
         timeout=math.ceil(settings.qdrant_timeout_seconds),
+        # The version check would call Qdrant from a thread at startup.
         check_compatibility=False,
     )
     embedder_client = httpx.AsyncClient(
@@ -209,11 +210,13 @@ def _answering_state(
                 temperature=settings.answer_temperature,
                 retry=retry,
             ),
+            languages=Py3LangidIdentifier(),
             options=AnsweringOptions(
                 top_k=settings.retrieval_top_k,
                 max_question_chars=settings.max_question_chars,
                 max_filter_documents=settings.max_filter_documents,
                 low_confidence_threshold=settings.low_confidence_threshold,
+                min_similarity=settings.min_similarity,
             ),
         )
     )

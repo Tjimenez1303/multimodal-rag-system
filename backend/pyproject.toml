@@ -104,6 +104,11 @@ implicit_reexport = true
 module = ["pypdfium2", "pypdfium2.*"]
 ignore_missing_imports = true
 
+# py3langid ships neither type hints nor a py.typed marker.
+[[tool.mypy.overrides]]
+module = ["py3langid", "py3langid.*"]
+ignore_missing_imports = true
+
 [tool.pydantic-mypy]
 init_forbid_extra = true
 init_typed = true

@@ -250,18 +250,18 @@ TM manual is supplied and cited (quickstart Scenario 4).
 
 ### Tests for User Story 3 (REQUIRED) ⚠️
 
-- [ ] T041 [P] [US3] Add the identifier cases to `backend/tests/unit/answering/test_relevance.py`:
+- [x] T041 [P] [US3] Add the identifier cases to `backend/tests/unit/answering/test_relevance.py`:
   - Extraction finds `SPL-480`, `ODW-300` and `2-71`, and ignores words without digits and tokens shorter than three characters.
   - Matching ignores case and accents.
   - A hit below `MIN_SIMILARITY` that contains an identifier from the question passes the gate.
   - An identifier absent from every hit does not pass.
-- [ ] T042 [P] [US3] Add to `backend/tests/integration/test_qdrant_index.py`: a unit containing `SPL-480` ranks in the top `RETRIEVAL_TOP_K` for "What is code SPL-480?" through the BM25 side, even when its dense vector is far from the query vector.
-- [ ] T043 [P] [US3] Add to `backend/tests/unit/answering/test_ask.py`: an identifier question whose best similarity is 0.42 reaches the generator, and its answer cites the identifier's unit.
+- [x] T042 [P] [US3] Add to `backend/tests/integration/test_qdrant_index.py`: a unit containing `SPL-480` ranks in the top `RETRIEVAL_TOP_K` for "What is code SPL-480?" through the BM25 side, even when its dense vector is far from the query vector.
+- [x] T043 [P] [US3] Add to `backend/tests/unit/answering/test_ask.py`: an identifier question whose best similarity is 0.42 reaches the generator, and its answer cites the identifier's unit.
 
 ### Implementation for User Story 3
 
-- [ ] T044 [US3] Add `question_identifiers(text)` and the identifier rule to `backend/src/multimodal_rag/answering/relevance.py` (research section 3). It uses `re` and `unicodedata` from the standard library and extends `passes_gate` with a keyword-only `question` argument.
-- [ ] T045 [US3] Pass the question to the gate in `backend/src/multimodal_rag/answering/use_cases/ask.py`.
+- [x] T044 [US3] Add `question_identifiers(text)` and the identifier rule to `backend/src/multimodal_rag/answering/relevance.py` (research section 3). It uses `re` and `unicodedata` from the standard library and extends `passes_gate` with a keyword-only `question` argument.
+- [x] T045 [US3] Pass the question to the gate in `backend/src/multimodal_rag/answering/use_cases/ask.py`.
 
 **Checkpoint**: identifier questions are answered (quickstart Scenario 4).
 

@@ -386,3 +386,21 @@ async def test_the_search_asks_for_twice_the_units_and_drops_identical_ones(
     assert library.index.searches[0]["limit"] == 16
     assert [s.unit_id for s in answer.sources][0] == original.id
     assert len(answer.sources) == 2
+
+
+async def test_an_identifier_question_below_the_gate_reaches_the_model(
+    library: Library,
+) -> None:
+    tm = document("tm-5-3431-201-10.pdf")
+    library.index.default_similarity = 0.42
+    code = await add_text(library, tm, "Code SPL-480 means low oil pressure.", 13)
+    library.answer(
+        GeneratedAnswer(text="SPL-480 means low oil pressure [1].", not_covered="")
+    )
+
+    answer = await library.ask(min_similarity=0.60)("What is code SPL-480?")
+
+    assert len(library.generator.prompts) == 1
+    assert answer.status is AnswerStatus.ANSWERED
+    [citation] = answer.citations
+    assert (citation.unit_ids, citation.pages) == ((code.id,), (13,))

@@ -198,6 +198,28 @@ async def test_a_collection_that_does_not_exist_yet_has_no_hits(
     assert hits == []
 
 
+async def test_an_identifier_reaches_the_top_hits_through_the_keyword_side(
+    index: QdrantVectorIndex,
+) -> None:
+    document_id = uuid.uuid4()
+    fillers = [
+        unit(document_id, f"text:{n}", f"Generators charge the battery, note {n}.")
+        for n in range(11)
+    ]
+    code = unit(document_id, "text:code", "Code SPL-480 means low oil pressure.")
+    # Every filler is closer to the query vector than the unit with the code.
+    await index.upsert_units([*fillers, code], [vector(0)] * len(fillers) + [vector(3)])
+    await index.publish(document_id)
+
+    hits = await index.search_hybrid(
+        query_text="What is code SPL-480?", query_vector=vector(0), limit=8
+    )
+
+    [found] = [hit for hit in hits if hit.unit.id == code.id]
+    assert found.similarity == pytest.approx(0.0, abs=1e-6)
+    assert hits.index(found) < 8
+
+
 async def test_deleting_a_document_removes_all_its_points(
     client: AsyncQdrantClient, index: QdrantVectorIndex
 ) -> None:

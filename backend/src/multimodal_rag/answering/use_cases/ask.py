@@ -156,7 +156,9 @@ class AnswerQuestion:
         timings.search_ms = (time.perf_counter() - started) * 1000
         if not hits:
             return self._not_enough(question, NotEnoughReason.NO_SEARCHABLE_DOCUMENTS)
-        if not passes_gate(hits, min_similarity=self._options.min_similarity):
+        if not passes_gate(
+            hits, min_similarity=self._options.min_similarity, question=question.text
+        ):
             return self._not_enough(question, NotEnoughReason.NO_RELEVANT_CONTENT)
         names = await self._document_names(hits)
         elements = await self._elements_of(hits)

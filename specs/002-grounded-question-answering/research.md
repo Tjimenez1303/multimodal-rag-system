@@ -61,7 +61,8 @@ gate. A unit passes when either:
 - it contains, verbatim, an identifier taken from the question. An identifier is a token
   of at least three characters made of letters, digits, `-`, `.` or `/` that contains at
   least one digit, such as `SPL-480`, `ODW-300` or `2-71`. Matching ignores case and
-  accents, as the BM25 side of the index does.
+  accents, as the BM25 side of the index does, and compares whole tokens, so `SPL-4801`
+  does not match `SPL-480`.
 
 The dense similarity of each fused hit comes from a second Qdrant query with the same
 query vector, restricted with a `HasIdCondition` to the fused ids and run with

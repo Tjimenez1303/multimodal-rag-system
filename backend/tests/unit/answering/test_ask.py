@@ -345,6 +345,17 @@ class TestAttribution:
 
         assert library.embedder.calls == []
 
+    async def test_an_answer_too_short_to_attribute_embeds_nothing(
+        self, library: Library, faa: Document
+    ) -> None:
+        await add_text(library, faa, SERIES, 12)
+        library.answer(GeneratedAnswer(text="Yes.", not_covered=""))
+
+        answer = await library.ask()(QUESTION)
+
+        assert_not_enough(answer, NotEnoughReason.NO_VALID_CITATIONS)
+        assert library.embedder.calls == []
+
     async def test_attribution_logs_how_many_statements_it_cited(
         self, library: Library, faa: Document, caplog: pytest.LogCaptureFixture
     ) -> None:

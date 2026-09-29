@@ -64,6 +64,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/DocumentPage" }
+        "400": { $ref: "#/components/responses/Problem" }
   /api/v1/documents/{document_id}:
     get:
       operationId: getDocument
@@ -259,7 +260,14 @@ components:
         size_bytes: { type: integer }
         page_count: { type: [integer, "null"] }
         created_at: { type: string, format: date-time }
-        latest_job: { $ref: "#/components/schemas/Job" }
+        latest_job:
+          description: >
+            Newest job of the document. Null only while the upload that registered the
+            document has not enqueued its job, or after that enqueue failed. Uploading
+            the same content again enqueues it.
+          oneOf:
+            - $ref: "#/components/schemas/Job"
+            - type: "null"
     DocumentPage:
       type: object
       required: [items]

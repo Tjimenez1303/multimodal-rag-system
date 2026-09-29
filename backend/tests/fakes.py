@@ -5,7 +5,7 @@ import hashlib
 import re
 import tempfile
 import uuid
-from collections.abc import AsyncIterable, Generator, Iterator, Sequence
+from collections.abc import AsyncIterable, Collection, Generator, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
@@ -163,6 +163,15 @@ class InMemoryJobQueue:
     async def latest_for_document(self, document_id: uuid.UUID) -> IngestionJob | None:
         jobs = [job for job in self.jobs.values() if job.document_id == document_id]
         return max(jobs, key=lambda job: (job.created_at, job.id), default=None)
+
+    async def latest_for_documents(
+        self, document_ids: Collection[uuid.UUID]
+    ) -> dict[uuid.UUID, IngestionJob]:
+        latest = {
+            document_id: await self.latest_for_document(document_id)
+            for document_id in document_ids
+        }
+        return {key: job for key, job in latest.items() if job is not None}
 
     async def claim(self, *, worker_id: str, lease_seconds: int) -> IngestionJob | None:
         now = self.clock.now()

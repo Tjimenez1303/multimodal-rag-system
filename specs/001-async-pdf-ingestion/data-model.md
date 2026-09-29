@@ -22,6 +22,9 @@ An uploaded PDF, identified by the fingerprint of its bytes.
 | `created_at` | timestamp with time zone | Set on registration |
 
 A document has many ingestion jobs. Its latest job decides the status shown in the library.
+The upload registers the document and then enqueues its job, so a document has no job
+for a moment, or until the same content is uploaded again when that enqueue failed. The
+library shows such a document with no latest job.
 
 ## IngestionJob
 

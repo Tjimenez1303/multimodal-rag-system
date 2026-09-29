@@ -4,9 +4,11 @@ import uuid
 from dataclasses import dataclass
 
 from multimodal_rag.ingestion.domain import (
+    Document,
     ElementKind,
     ElementRelationship,
     ExtractedElement,
+    IngestionJob,
     JobStatus,
 )
 from multimodal_rag.ingestion.errors import (
@@ -22,6 +24,87 @@ from multimodal_rag.ingestion.ports import (
     Page,
 )
 from multimodal_rag.shared.errors import DataInconsistencyError
+
+
+@dataclass(frozen=True, slots=True)
+class DocumentView:
+    """A document together with its newest job.
+
+    Attributes:
+        document: The document.
+        latest_job: Its newest job, or ``None`` while the upload that registered it
+            has not enqueued the job, or after that enqueue failed.
+    """
+
+    document: Document
+    latest_job: IngestionJob | None
+
+
+class ListDocuments:
+    """Lists the documents the system knows about, newest first.
+
+    Args:
+        documents: Document persistence.
+        jobs: Job store, to find each document's latest job.
+    """
+
+    def __init__(self, *, documents: DocumentRepository, jobs: JobQueue) -> None:
+        self._documents = documents
+        self._jobs = jobs
+
+    async def __call__(
+        self, *, limit: int, cursor: str | None = None
+    ) -> Page[DocumentView]:
+        """Return one page of documents with their latest jobs.
+
+        Args:
+            limit: Largest number of documents to return.
+            cursor: Cursor returned by the previous page, or ``None`` for the first.
+
+        Returns:
+            The documents, newest first, and the cursor of the next page.
+
+        Raises:
+            InvalidCursorError: If the cursor was not issued by the API.
+        """
+        page = await self._documents.list_page(limit=limit, cursor=cursor)
+        latest = await self._jobs.latest_for_documents(
+            [document.id for document in page.items]
+        )
+        views = tuple(
+            DocumentView(document=document, latest_job=latest.get(document.id))
+            for document in page.items
+        )
+        return Page(items=views, next_cursor=page.next_cursor)
+
+
+class GetDocument:
+    """Returns one document with its latest job.
+
+    Args:
+        documents: Document persistence.
+        jobs: Job store, to find the document's latest job.
+    """
+
+    def __init__(self, *, documents: DocumentRepository, jobs: JobQueue) -> None:
+        self._documents = documents
+        self._jobs = jobs
+
+    async def __call__(self, document_id: uuid.UUID) -> DocumentView:
+        """Return a document and its latest job.
+
+        Args:
+            document_id: Id of the document.
+
+        Returns:
+            The document with its newest job.
+
+        Raises:
+            DocumentNotFoundError: If no document has this id.
+        """
+        document = await self._documents.get(document_id)
+        job = await self._jobs.latest_for_document(document_id)
+        return DocumentView(document=document, latest_job=job)
 
 
 @dataclass(frozen=True, slots=True)

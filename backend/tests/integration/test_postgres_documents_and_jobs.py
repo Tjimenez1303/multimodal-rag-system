@@ -313,6 +313,35 @@ class TestJobQueue:
     ) -> None:
         assert await jobs.latest_for_document(uuid.uuid4()) is None
 
+    async def test_latest_jobs_of_several_documents_come_from_one_query(
+        self,
+        jobs: PostgresJobQueue,
+        documents: PostgresDocumentRepository,
+        clock: FrozenClock,
+    ) -> None:
+        failed = await claimed(jobs, documents, clock)
+        assert failed.lease_token is not None
+        await jobs.fail(
+            job_id=failed.id,
+            lease_token=failed.lease_token,
+            code=FailureCode.CORRUPT_DOCUMENT,
+            reason="The PDF is damaged and cannot be read.",
+        )
+        clock.advance(seconds=1)
+        retry, _ = await jobs.enqueue(
+            pending_job(clock, document_id=failed.document_id)
+        )
+        other, _ = await documents.register(new_document(clock, sha256="e" * 64))
+        only, _ = await jobs.enqueue(new_job(clock, other))
+        without_jobs = uuid.uuid4()
+
+        latest = await jobs.latest_for_documents(
+            [failed.document_id, other.id, without_jobs]
+        )
+
+        assert latest == {failed.document_id: retry, other.id: only}
+        assert await jobs.latest_for_documents([]) == {}
+
 
 def text_element(
     document_id: uuid.UUID, order: int, page: int = 1, **values: Any

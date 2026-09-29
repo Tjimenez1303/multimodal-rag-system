@@ -413,13 +413,13 @@ code yet beyond a package skeleton and one smoke test.
 
 ### Tests for User Story 4 (REQUIRED) ⚠️
 
-- [ ] T073 [P] [US4] Unit tests for `ListDocuments` and `GetDocument` in `backend/tests/unit/ingestion/test_library.py`: newest first, cursor pagination, the latest job per document, and `DocumentNotFoundError`.
-- [ ] T074 [P] [US4] Contract tests for `GET /api/v1/documents` and `GET /api/v1/documents/{document_id}` in `backend/tests/contract/test_library_contract.py`.
+- [x] T073 [P] [US4] Unit tests for `ListDocuments` and `GetDocument` in `backend/tests/unit/ingestion/test_library.py`: newest first, cursor pagination, the latest job per document, a document whose job is not enqueued yet, and `DocumentNotFoundError`.
+- [x] T074 [P] [US4] Contract tests for `GET /api/v1/documents` and `GET /api/v1/documents/{document_id}` in `backend/tests/contract/test_library_contract.py`, including invalid cursors and limits (400) and unknown documents (404).
 
 ### Implementation for User Story 4
 
-- [ ] T075 [US4] Implement `ListDocuments` and `GetDocument` in `backend/src/multimodal_rag/ingestion/use_cases/library.py`, plus the repository queries (latest job via `DISTINCT ON`) in `backend/src/multimodal_rag/adapters/postgres/documents.py`.
-- [ ] T076 [US4] Add the library routes to `backend/src/multimodal_rag/adapters/http/routes_documents.py`, with an opaque cursor that encodes `(created_at, id)`.
+- [x] T075 [US4] Implement `ListDocuments` and `GetDocument` in `backend/src/multimodal_rag/ingestion/use_cases/library.py`. The latest job of a page of documents comes from `JobQueue.latest_for_documents`, one `DISTINCT ON` query in `backend/src/multimodal_rag/adapters/postgres/job_queue.py`, next to `latest_for_document`. The documents page reuses the existing keyset query of `PostgresDocumentRepository.list_page`.
+- [x] T076 [US4] Add the library routes to `backend/src/multimodal_rag/adapters/http/routes_documents.py`, with an opaque cursor that encodes `(created_at, id)`.
 
 **Checkpoint**: All four stories work independently.
 

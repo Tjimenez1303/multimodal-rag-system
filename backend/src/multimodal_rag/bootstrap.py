@@ -59,8 +59,10 @@ from multimodal_rag.ingestion.use_cases.intake import (
     UploadLimits,
 )
 from multimodal_rag.ingestion.use_cases.library import (
+    GetDocument,
     GetElementImage,
     ListDocumentElements,
+    ListDocuments,
 )
 from multimodal_rag.ingestion.use_cases.processing import (
     EnrichmentOptions,
@@ -137,6 +139,8 @@ def _ingestion_state(
             documents=documents, jobs=jobs, elements=elements
         ),
         get_element_image=GetElementImage(elements=elements, blobs=storage),
+        list_documents=ListDocuments(documents=documents, jobs=jobs),
+        get_document=GetDocument(documents=documents, jobs=jobs),
     )
 
 

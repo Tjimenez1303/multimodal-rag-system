@@ -16,7 +16,7 @@ from multimodal_rag.ingestion.domain import (
     TextOrigin,
 )
 from multimodal_rag.ingestion.use_cases.intake import Submission
-from multimodal_rag.ingestion.use_cases.library import ElementView
+from multimodal_rag.ingestion.use_cases.library import DocumentView, ElementView
 
 
 class UploadAccepted(BaseModel):
@@ -121,6 +121,59 @@ class JobBody(BaseModel):
     created_at: datetime
     started_at: datetime | None
     finished_at: datetime | None
+
+
+class DocumentBody(BaseModel):
+    """A document of the library with its newest job.
+
+    Attributes:
+        id: Document id.
+        file_name: Name of the uploaded file.
+        size_bytes: Size of the file.
+        page_count: Page count, unknown for encrypted files.
+        created_at: Time the document was registered.
+        latest_job: Newest job, or ``None`` until its job is enqueued.
+    """
+
+    id: uuid.UUID
+    file_name: str
+    size_bytes: int
+    page_count: int | None
+    created_at: datetime
+    latest_job: JobBody | None
+
+    @classmethod
+    def from_view(cls, view: DocumentView) -> Self:
+        """Build the body of a document.
+
+        Args:
+            view: Document and its latest job.
+
+        Returns:
+            The response body.
+        """
+        document = view.document
+        job = view.latest_job
+        return cls(
+            id=document.id,
+            file_name=document.file_name,
+            size_bytes=document.size_bytes,
+            page_count=document.page_count,
+            created_at=document.created_at,
+            latest_job=None if job is None else JobBody.model_validate(job),
+        )
+
+
+class DocumentPageBody(BaseModel):
+    """One page of documents, newest first.
+
+    Attributes:
+        items: Documents of this page.
+        next_cursor: Cursor of the next page, or ``None`` on the last page.
+    """
+
+    items: list[DocumentBody]
+    next_cursor: str | None
 
 
 class BoundingBoxBody(BaseModel):

@@ -6,12 +6,19 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Query, Request, Response
 
 from multimodal_rag.adapters.http.dependencies import (
+    GetDocumentDep,
     GetElementImageDep,
     ListDocumentElementsDep,
+    ListDocumentsDep,
 )
 from multimodal_rag.adapters.http.problems import problem_responses
 from multimodal_rag.adapters.http.routes_ingestion import API_PREFIX
-from multimodal_rag.adapters.http.schemas import ElementBody, ElementPageBody
+from multimodal_rag.adapters.http.schemas import (
+    DocumentBody,
+    DocumentPageBody,
+    ElementBody,
+    ElementPageBody,
+)
 from multimodal_rag.ingestion.domain import ElementKind
 
 PNG_MEDIA_TYPE = "image/png"
@@ -23,6 +30,53 @@ _PNG_RESPONSE: dict[str, Any] = {
 }
 
 documents_router = APIRouter(prefix=API_PREFIX, tags=["documents"])
+
+
+@documents_router.get(
+    "/documents",
+    operation_id="listDocuments",
+    description="Known documents with their latest job status, newest first.",
+    responses=problem_responses(400),
+)
+async def list_documents(
+    list_page: ListDocumentsDep,
+    limit: Annotated[int, Query(ge=1, le=MAX_PAGE_SIZE)] = DEFAULT_PAGE_SIZE,
+    cursor: str | None = None,
+) -> DocumentPageBody:
+    """Return one page of the document library.
+
+    Args:
+        list_page: Library use case.
+        limit: Largest number of documents to return.
+        cursor: Cursor returned by the previous page.
+
+    Returns:
+        The documents with their latest jobs and the cursor of the next page.
+    """
+    result = await list_page(limit=limit, cursor=cursor)
+    return DocumentPageBody(
+        items=[DocumentBody.from_view(view) for view in result.items],
+        next_cursor=result.next_cursor,
+    )
+
+
+@documents_router.get(
+    "/documents/{document_id}",
+    operation_id="getDocument",
+    description="A document and its latest job.",
+    responses=problem_responses(400, 404),
+)
+async def get_document(document_id: uuid.UUID, get_one: GetDocumentDep) -> DocumentBody:
+    """Return a document with its latest job.
+
+    Args:
+        document_id: Id of the document.
+        get_one: Document use case.
+
+    Returns:
+        The document and its newest job.
+    """
+    return DocumentBody.from_view(await get_one(document_id))
 
 
 @documents_router.get(

@@ -13,12 +13,12 @@ skew between replicas cannot expire a lease early or keep a dead one alive.
 import dataclasses
 import logging
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Collection
 from datetime import datetime, timedelta
 from typing import Any
 
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.dialects.postgresql import distinct_on, insert
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from multimodal_rag.adapters.postgres.engine import connect, transaction
@@ -144,6 +144,36 @@ class PostgresJobQueue:
         async with connect(self._engine) as connection:
             row = (await connection.execute(query)).mappings().one_or_none()
         return None if row is None else _job(row)
+
+    async def latest_for_documents(
+        self, document_ids: Collection[uuid.UUID]
+    ) -> dict[uuid.UUID, IngestionJob]:
+        """Return the most recent job of each of several documents at once.
+
+        ``DISTINCT ON`` keeps the first row of each document in the sort order, so one
+        query serves a whole page of the library.
+
+        Args:
+            document_ids: Documents whose jobs are searched.
+
+        Returns:
+            The newest job per document id. Documents without jobs are left out.
+        """
+        if not document_ids:
+            return {}
+        query = (
+            sa.select(ingestion_jobs)
+            .ext(distinct_on(ingestion_jobs.c.document_id))
+            .where(ingestion_jobs.c.document_id.in_(document_ids))
+            .order_by(
+                ingestion_jobs.c.document_id,
+                ingestion_jobs.c.created_at.desc(),
+                ingestion_jobs.c.id.desc(),
+            )
+        )
+        async with connect(self._engine) as connection:
+            rows = (await connection.execute(query)).mappings().all()
+        return {row["document_id"]: _job(row) for row in rows}
 
     async def claim(self, *, worker_id: str, lease_seconds: int) -> IngestionJob | None:
         """Claim the oldest claimable job for this worker.

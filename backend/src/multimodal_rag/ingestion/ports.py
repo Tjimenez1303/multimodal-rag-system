@@ -5,7 +5,7 @@ cases. Every port has a production adapter and an in-memory fake used by the tes
 """
 
 import uuid
-from collections.abc import AsyncIterable, Iterator, Sequence
+from collections.abc import AsyncIterable, Collection, Iterator, Sequence
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -185,6 +185,19 @@ class JobQueue(Protocol):
 
         Returns:
             The newest job, or ``None`` when the document has none.
+        """
+        ...
+
+    async def latest_for_documents(
+        self, document_ids: Collection[uuid.UUID]
+    ) -> dict[uuid.UUID, IngestionJob]:
+        """Return the most recent job of each of several documents at once.
+
+        Args:
+            document_ids: Documents whose jobs are searched.
+
+        Returns:
+            The newest job per document id. Documents without jobs are left out.
         """
         ...
 

@@ -311,7 +311,8 @@ restricted to one of them, and confirm every source and image comes from that ma
   pages, content type (text, table or figure), an excerpt of its content and whether the
   answer cites it. The list is empty when the answer model was not asked to answer.
 - **FR-013**: A source whose content came from text recognition with a confidence below
-  the threshold defined at ingestion MUST be flagged as low-confidence recognized text.
+  a configurable threshold (0.90 by default) MUST be flagged as low-confidence recognized
+  text.
 - **FR-014**: A source whose content came from a generated figure description MUST be
   marked as generated, together with any identifiers flagged as unverified at ingestion.
 - **FR-015**: When an answer relies on a retrieval unit that is a figure or is linked to

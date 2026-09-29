@@ -59,9 +59,8 @@ async def test_uploaded_pdf_is_extracted_described_and_indexed(
     assert job["attempt"] == 1
     summary = job["summary"]
     assert (summary["pages"], summary["tables"], summary["images"]) == (1, 1, 1)
-    # Docling crops the fixture's drawing to its 328 x 45 pt band, 3% of the page,
-    # below the 5% a figure needs to be described.
-    assert (summary["figures_described"], summary["figures_skipped"]) == (0, 1)
+    # The fixture's schematic covers a fifth of the page, so it is described.
+    assert (summary["figures_described"], summary["figures_skipped"]) == (1, 0)
     async with engine.connect() as connection:
         stored = await connection.scalar(
             sa.select(sa.func.count()).select_from(extracted_elements)

@@ -11,8 +11,9 @@ from PIL import Image, ImageDraw, ImageFont
 from pypdf import PdfReader, PdfWriter
 from reportlab import rl_config
 from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER
 from reportlab.lib.pagesizes import LETTER
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
@@ -33,6 +34,9 @@ rl_config.invariant = 1
 FIXTURES = Path(__file__).parent
 STYLES = getSampleStyleSheet()
 HEADER = ["Part", "Code", "Torque (N·m)", "Interval"]
+CAPTION = ParagraphStyle(
+    "Caption", parent=STYLES["Italic"], fontSize=9, leading=11, alignment=TA_CENTER
+)
 TABLE_STYLE = TableStyle(
     [
         ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
@@ -47,15 +51,38 @@ def _font(size: int) -> ImageFont.ImageFont | ImageFont.FreeTypeFont:
 
 
 def _diagram_png() -> bytes:
-    """A raster schematic whose labels exist only as pixels inside the image."""
-    image = Image.new("RGB", (900, 420), "white")
+    """A dense raster schematic whose labels exist only as pixels inside the image.
+
+    The drawing fills its frame with shaded components, wiring and a ground rail, like
+    a figure in a real manual, so layout models classify it as a picture on every
+    platform instead of treating a sparse drawing as decoration.
+    """
+    image = Image.new("RGB", (1200, 640), (246, 246, 240))
     draw = ImageDraw.Draw(image)
-    boxes = {"MAGNETO": (40, 150), "V-12": (380, 150), "P-1": (700, 150)}
-    for label, (x, y) in boxes.items():
-        draw.rectangle((x, y, x + 160, y + 110), outline="black", width=4)
-        draw.text((x + 20, y + 35), label, fill="black", font=_font(34))
-    draw.line((200, 205, 380, 205), fill="black", width=4)
-    draw.line((540, 205, 700, 205), fill="black", width=4)
+    for x in range(0, 1200, 40):
+        draw.line((x, 0, x, 640), fill=(226, 226, 220), width=1)
+    for y in range(0, 640, 40):
+        draw.line((0, y, 1200, y), fill=(226, 226, 220), width=1)
+    draw.rectangle((10, 10, 1190, 630), outline="black", width=6)
+    boxes = {
+        "MAGNETO": ((60, 120), (180, 200, 230)),
+        "V-12": ((470, 120), (240, 210, 170)),
+        "P-1": ((880, 120), (190, 225, 190)),
+        "COIL": ((60, 400), (220, 220, 220)),
+        "PLUG": ((470, 400), (220, 220, 220)),
+        "GND": ((880, 400), (220, 220, 220)),
+    }
+    for label, ((x, y), fill) in boxes.items():
+        draw.rectangle((x, y, x + 260, y + 150), fill=fill, outline="black", width=5)
+        draw.text((x + 30, y + 50), label, fill="black", font=_font(48))
+    for y in (195, 475):
+        draw.line((320, y, 470, y), fill="black", width=6)
+        draw.line((730, y, 880, y), fill="black", width=6)
+    for x in (190, 600, 1010):
+        draw.line((x, 270, x, 400), fill="black", width=6)
+    draw.line((40, 590, 1160, 590), fill="black", width=8)
+    for x in (190, 600, 1010):
+        draw.line((x, 550, x, 590), fill="black", width=6)
     buffer = io.BytesIO()
     image.save(buffer, format="PNG")
     return buffer.getvalue()
@@ -90,10 +117,11 @@ def build_digital(path: Path) -> None:
         Spacer(1, 12),
         _parts_table(_part_rows(1, 4)),
         Spacer(1, 18),
-        FlowImage(io.BytesIO(_diagram_png()), width=5 * inch, height=2.33 * inch),
+        FlowImage(io.BytesIO(_diagram_png()), width=6 * inch, height=3.2 * inch),
+        Spacer(1, 6),
         Paragraph(
             "Figure 1. Magneto primary circuit with valve V-12 and pump P-1.",
-            STYLES["Italic"],
+            CAPTION,
         ),
         Paragraph(
             "Replace any component whose resistance falls outside the limits "

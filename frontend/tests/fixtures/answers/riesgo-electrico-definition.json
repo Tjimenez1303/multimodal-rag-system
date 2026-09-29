@@ -16,6 +16,7 @@
     {
       "unit_id": "ffce5658-2fe8-5e89-84b9-57e9c59c0c54",
       "rank": 1,
+      "relevance": 0.98,
       "similarity": 0.8445178,
       "document_id": "b5d1a952-567c-4f17-9bc7-40b31c8a33f2",
       "document_name": "insst-crash.pdf",
@@ -34,6 +35,7 @@
     {
       "unit_id": "b063153e-577e-58f7-9741-eef6c6e4c7f3",
       "rank": 2,
+      "relevance": 0.91,
       "similarity": 0.5645262,
       "document_id": "b5d1a952-567c-4f17-9bc7-40b31c8a33f2",
       "document_name": "insst-crash.pdf",
@@ -52,6 +54,7 @@
     {
       "unit_id": "de8d45ba-24d0-5ebf-bcc9-727f66fdf3e3",
       "rank": 3,
+      "relevance": 0.84,
       "similarity": 0.5770365,
       "document_id": "b5551573-56ec-4b9d-b4bb-1c46549dcb32",
       "document_name": "insst-guia-riesgo-electrico.pdf",
@@ -98,6 +101,7 @@
     {
       "unit_id": "a8c99d91-9a5e-5981-bc2a-633a2cdd4578",
       "rank": 4,
+      "relevance": 0.77,
       "similarity": 0.73037046,
       "document_id": "b5551573-56ec-4b9d-b4bb-1c46549dcb32",
       "document_name": "insst-guia-riesgo-electrico.pdf",
@@ -116,6 +120,7 @@
     {
       "unit_id": "1d0d7555-a3c3-5801-9d85-d353655012b6",
       "rank": 5,
+      "relevance": 0.7,
       "similarity": 0.7172959,
       "document_id": "30f26a90-3384-4132-897f-3dbcca840082",
       "document_name": "insst-fr026.pdf",

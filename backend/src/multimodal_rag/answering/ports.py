@@ -1,8 +1,9 @@
 """Ports: the interfaces through which the answering core reaches the outside world.
 
 Retrieval reuses the ingestion ports (embedder, vector index and repositories). The
-ports below cover what only answering needs. Every port has a production adapter and
-a fake used by the tests.
+ports below cover what only answering needs: the model that judges each retrieved unit,
+the answer model, admission control and language identification. Every port has a
+production adapter and a fake used by the tests.
 """
 
 from collections.abc import Sequence
@@ -10,6 +11,28 @@ from contextlib import AbstractAsyncContextManager
 from typing import Protocol
 
 from multimodal_rag.answering.domain import GeneratedAnswer, GroundedPrompt
+
+
+class RelevanceJudge(Protocol):
+    """Model that judges whether each retrieved passage answers a question."""
+
+    async def judge(self, question: str, passages: Sequence[str]) -> list[float]:
+        """Return, for each passage, the probability that it answers the question.
+
+        Args:
+            question: The question as the technician asked it.
+            passages: Texts of the retrieved units, headings first.
+
+        Returns:
+            One relevance from 0 to 1 per passage, in the same order.
+
+        Raises:
+            ProviderUnavailableError: If the model stays unreachable after retries.
+            ProviderTimeoutError: If the model keeps timing out after retries.
+            ProviderResponseError: If the model rejects the request or answers
+                without a usable judgement.
+        """
+        ...
 
 
 class AnswerGenerator(Protocol):

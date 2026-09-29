@@ -1654,6 +1654,12 @@
             "type": "integer",
             "title": "Rank"
           },
+          "relevance": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Relevance"
+          },
           "similarity": {
             "type": "number",
             "title": "Similarity"
@@ -1738,6 +1744,7 @@
         "required": [
           "unit_id",
           "rank",
+          "relevance",
           "similarity",
           "document_id",
           "document_name",
@@ -1754,7 +1761,7 @@
           "figure_ids"
         ],
         "title": "SourceBody",
-        "description": "A retrieval unit supplied to the answer model.\n\nAttributes:\n    unit_id: Retrieval unit id.\n    rank: Position in the fused ranking.\n    similarity: Dense cosine similarity to the question.\n    document_id: Document of the unit.\n    document_name: File name of that document.\n    section: Heading path, outermost first.\n    pages: Pages the unit spans.\n    content_type: Text, table or figure unit.\n    excerpt: Beginning of the unit text.\n    cited: Whether the answer cites the unit.\n    citation_number: Citation that cites the unit.\n    low_confidence_text: Part of the content was recognized with low confidence.\n    generated_description: The content includes a figure description written by\n        a model.\n    unverified_identifiers: Identifiers of that description missing from the\n        figure's labels and caption.\n    tables: Rows of each part of a table unit.\n    figure_ids: Non-decorative image elements associated with the unit."
+        "description": "A retrieval unit supplied to the answer model.\n\nAttributes:\n    unit_id: Retrieval unit id.\n    rank: Position in judged order, which is the order supplied to the answer\n        model.\n    relevance: The reranker's probability that the unit contains the\n        information that answers the question.\n    similarity: Dense cosine similarity to the question. Informational, it does\n        not gate.\n    document_id: Document of the unit.\n    document_name: File name of that document.\n    section: Heading path, outermost first.\n    pages: Pages the unit spans.\n    content_type: Text, table or figure unit.\n    excerpt: Beginning of the unit text.\n    cited: Whether the answer cites the unit.\n    citation_number: Citation that cites the unit.\n    low_confidence_text: Part of the content was recognized with low confidence.\n    generated_description: The content includes a figure description written by\n        a model.\n    unverified_identifiers: Identifiers of that description missing from the\n        figure's labels and caption.\n    tables: Rows of each part of a table unit.\n    figure_ids: Non-decorative image elements associated with the unit."
       },
       "TableBody": {
         "properties": {

@@ -26,6 +26,9 @@ from multimodal_rag.answering.errors import (
     AnswerModelResponseError,
     AnswerModelTimeoutError,
     AnswerModelUnavailableError,
+    RerankerResponseError,
+    RerankerTimeoutError,
+    RerankerUnavailableError,
     SearchTimeoutError,
     SearchUnavailableError,
 )
@@ -67,8 +70,10 @@ _STATUS_BY_ERROR: dict[type[MultimodalRagError], int] = {
     ExtractionError: 422,
     SearchTimeoutError: 504,
     AnswerModelTimeoutError: 504,
+    RerankerTimeoutError: 504,
     AnswerDeadlineExceededError: 504,
     AnswerModelResponseError: 502,
+    RerankerResponseError: 502,
     CapacityError: 503,
     ProviderError: 503,
     StorageError: 503,
@@ -84,6 +89,9 @@ _PUBLIC_SERVER_ERRORS: tuple[type[MultimodalRagError], ...] = (
     AnswerModelUnavailableError,
     AnswerModelTimeoutError,
     AnswerModelResponseError,
+    RerankerUnavailableError,
+    RerankerTimeoutError,
+    RerankerResponseError,
     AnswerDeadlineExceededError,
 )
 

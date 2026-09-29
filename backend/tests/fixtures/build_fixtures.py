@@ -150,6 +150,61 @@ def build_split_table(path: Path) -> None:
     SimpleDocTemplate(str(path), pagesize=LETTER).build(story)
 
 
+def build_labeled_total(path: Path) -> None:
+    """A two-page maintenance quote whose total appears only as a label and a value.
+
+    Every name and amount is invented. Page 2 holds a grey terms box and "Total Neto:
+    $880,900.0" and nothing else, so a question made of the label alone must be
+    answered from that page.
+    """
+    items = [
+        ["#", "ÍTEM", "CANTIDAD", "COSTO UNI", "TOTAL"],
+        ["1", "Filtro de aceite", "2.0", "$38,500.0", "$77,000.0"],
+        ["2", "Aceite 15W-40 galón", "3.0", "$92,000.0", "$276,000.0"],
+        ["3", "Filtro de combustible", "1.0", "$64,300.0", "$64,300.0"],
+        ["4", "Correa del alternator", "1.0", "$118,600.0", "$118,600.0"],
+        ["5", "Revisión de batería", "1.0", "$45,000.0", "$45,000.0"],
+        [
+            "6",
+            "Mano de obra mantenimiento prevention",
+            "2.5",
+            "$120,000.0",
+            "$300,000.0",
+        ],
+    ]
+    table = Table(
+        items,
+        colWidths=[0.4 * inch, 2.9 * inch, 0.9 * inch, 1.1 * inch, 1.1 * inch],
+    )
+    table.setStyle(TABLE_STYLE)
+    totals = Table(
+        [["Terminos y Condiciones", "Total Neto:", "$880,900.0"]],
+        colWidths=[3.6 * inch, 1.2 * inch, 1.4 * inch],
+        rowHeights=[1.8 * inch],
+    )
+    totals.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (0, 0), colors.HexColor("#F2F2F2")),
+                ("VALIGN", (0, 0), (0, 0), "TOP"),
+                ("VALIGN", (1, 0), (-1, 0), "MIDDLE"),
+                ("FONTSIZE", (1, 0), (-1, 0), 14),
+            ]
+        )
+    )
+    story = [
+        Paragraph("Cotización mantenimiento de planta eléctrica", STYLES["Title"]),
+        Paragraph("Cliente: Hotel Mirador del Lago", STYLES["BodyText"]),
+        Paragraph("Equipo: planta diésel PE-204", STYLES["BodyText"]),
+        Paragraph("Estado: Pendiente", STYLES["BodyText"]),
+        Spacer(1, 12),
+        table,
+        PageBreak(),
+        totals,
+    ]
+    SimpleDocTemplate(str(path), pagesize=LETTER).build(story)
+
+
 def build_scanned(path: Path) -> None:
     """Two image-only pages with no text layer, like a scanned manual."""
     width, height = int(LETTER[0] * 2), int(LETTER[1] * 2)
@@ -198,6 +253,7 @@ def main() -> None:
     digital = FIXTURES / "digital.pdf"
     build_digital(digital)
     build_split_table(FIXTURES / "split_table.pdf")
+    build_labeled_total(FIXTURES / "labeled_total.pdf")
     build_scanned(FIXTURES / "scanned.pdf")
     build_encrypted(digital, FIXTURES / "encrypted.pdf")
     build_not_a_pdf(FIXTURES / "not_a_pdf.pdf")

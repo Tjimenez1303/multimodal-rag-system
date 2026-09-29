@@ -5,14 +5,17 @@ import pytest
 from multimodal_rag.answering.domain import (
     Answer,
     AnswerStatus,
+    JudgedHit,
     NotEnoughReason,
     Question,
 )
 from multimodal_rag.answering.errors import (
     DocumentsNotReadyError,
     InvalidQuestionError,
+    InvalidRelevanceError,
     UnknownDocumentsError,
 )
+from tests.library import document, element, hit, unit
 
 
 def create(text: str, document_ids: list[uuid.UUID] | None = None) -> Question:
@@ -81,3 +84,22 @@ def test_restriction_errors_name_the_offending_documents(
 
     assert raised.document_ids == tuple(ids)
     assert all(str(document_id) in str(raised) for document_id in ids)
+
+
+@pytest.mark.parametrize("relevance", [0.0, 0.3, 1.0])
+def test_a_judged_hit_holds_a_probability(relevance: float) -> None:
+    owner = document("manual.pdf")
+    judged = JudgedHit(
+        hit=hit(unit(owner, "Total", members=[element(owner)])), relevance=relevance
+    )
+
+    assert judged.relevance == relevance
+
+
+@pytest.mark.parametrize("relevance", [-0.01, 1.01, float("nan")])
+def test_a_judged_hit_rejects_a_relevance_outside_zero_to_one(relevance: float) -> None:
+    owner = document("manual.pdf")
+    searched = hit(unit(owner, "Total", members=[element(owner)]))
+
+    with pytest.raises(InvalidRelevanceError):
+        JudgedHit(hit=searched, relevance=relevance)

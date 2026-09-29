@@ -45,6 +45,9 @@ from multimodal_rag.adapters.openai_compatible.describer import (
 from multimodal_rag.adapters.openai_compatible.embedder import (
     OpenAICompatibleEmbedder,
 )
+from multimodal_rag.adapters.openai_compatible.reranker import (
+    OpenAICompatibleRelevanceJudge,
+)
 from multimodal_rag.adapters.postgres.documents import PostgresDocumentRepository
 from multimodal_rag.adapters.postgres.elements import PostgresElementRepository
 from multimodal_rag.adapters.postgres.engine import check_database, create_engine
@@ -211,6 +214,12 @@ async def _answering_state(
             timeout=settings.answer_model_timeout_seconds,
         )
     )
+    reranker_client = await resources.enter_async_context(
+        httpx.AsyncClient(
+            base_url=str(settings.reranker_url),
+            timeout=settings.reranker_timeout_seconds,
+        )
+    )
     return AnsweringState(
         answer_question=AnswerQuestion(
             embedder=OpenAICompatibleEmbedder(
@@ -222,6 +231,17 @@ async def _answering_state(
                 retry=retry,
             ),
             index=index,
+            judge=OpenAICompatibleRelevanceJudge(
+                reranker_client,
+                model=settings.reranker_model,
+                instruction=settings.reranker_instruction,
+                # The reranker shares the embedding model's tokenizer.
+                tokens=HuggingFaceTokenCounter.from_file(
+                    settings.embedder_tokenizer_path
+                ),
+                max_input_tokens=settings.reranker_max_input_tokens,
+                retry=retry,
+            ),
             documents=PostgresDocumentRepository(engine),
             elements=PostgresElementRepository(engine),
             generator=OpenAICompatibleAnswerGenerator(
@@ -242,7 +262,8 @@ async def _answering_state(
                 max_question_chars=settings.max_question_chars,
                 max_filter_documents=settings.max_filter_documents,
                 low_confidence_threshold=settings.low_confidence_threshold,
-                min_similarity=settings.min_similarity,
+                min_relevance=settings.min_relevance,
+                rerank_candidates=settings.rerank_candidates,
                 attribution_min_score=settings.attribution_min_score,
                 deadline_seconds=settings.answer_deadline_seconds,
             ),

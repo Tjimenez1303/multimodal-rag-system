@@ -105,6 +105,8 @@ def worker_env(
         "EMBEDDER_TOKENIZER_PATH": str(embedder_tokenizer_path),
         "ANSWER_MODEL_URL": MODELS_URL,
         "ANSWER_MODEL": "answerer",
+        "RERANKER_URL": MODELS_URL,
+        "RERANKER_MODEL": "reranker",
         "LIVENESS_FILE": str(tmp_path / "alive"),
         "POLL_SECONDS": "0.2",
         "EXTRACTION_THREADS": "2",

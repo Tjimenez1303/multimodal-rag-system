@@ -120,10 +120,27 @@ Expected: both are 400 with code `invalid_question`, returned at once.
 ## Scenario 8: answer model or search down (US5, FR-022, FR-023, FR-024, SC-008)
 
 Docker Model Runner reloads an unloaded model on demand, so the outage is simulated by
-pointing the API at a port where nothing listens:
+pointing the API at a port where nothing listens. The Compose `models` element sets
+`ANSWER_MODEL_URL` over any `environment` value, so an override file replaces the API's
+models with `!override`, keeping the embedding model and the reranker so the question
+still reaches the answer model, and sets the URL itself:
 
 ```bash
-ANSWER_MODEL_URL=http://127.0.0.1:9/v1 docker compose up -d api --wait
+cat > /tmp/answer-model-down.yaml <<'YAML'
+services:
+  api:
+    models: !override
+      embedder:
+        endpoint_var: EMBEDDER_URL
+        model_var: EMBEDDER_MODEL
+      reranker:
+        endpoint_var: RERANKER_URL
+        model_var: RERANKER_MODEL
+    environment:
+      ANSWER_MODEL_URL: http://127.0.0.1:9/v1/
+      ANSWER_MODEL: ai/qwen3.5:9b
+YAML
+docker compose -f compose.yaml -f /tmp/answer-model-down.yaml up -d api --wait
 time ask '{"question": "What is a shunt generator?"}' | jq '{status, code, detail}'
 curl -s -o /dev/null -w '%{http_code} %{time_total}\n' localhost:8000/api/v1/documents
 docker compose up -d api --wait

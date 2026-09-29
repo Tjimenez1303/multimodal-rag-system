@@ -15,6 +15,7 @@ def client(
     engine: AsyncEngine,
     database_url: str,
     qdrant_url: str,
+    embedder_tokenizer_path: Path,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> TestClient:
@@ -22,10 +23,12 @@ def client(
     monkeypatch.setenv("BLOB_ROOT", str(tmp_path))
     monkeypatch.setenv("LOG_FORMAT", "console")
     monkeypatch.setenv("QDRANT_URL", qdrant_url)
-    for name in ("EMBEDDER_URL", "ANSWER_MODEL_URL"):
+    monkeypatch.setenv("EMBEDDER_TOKENIZER_PATH", str(embedder_tokenizer_path))
+    for name in ("EMBEDDER_URL", "ANSWER_MODEL_URL", "RERANKER_URL"):
         monkeypatch.setenv(name, MODELS_URL)
     monkeypatch.setenv("EMBEDDER_MODEL", "embedder")
     monkeypatch.setenv("ANSWER_MODEL", "answerer")
+    monkeypatch.setenv("RERANKER_MODEL", "reranker")
     return TestClient(bootstrap.create_api_app())
 
 

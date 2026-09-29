@@ -15,6 +15,7 @@ const BBOX = {
 function source(fields: Partial<SourceBody> & Pick<SourceBody, "unit_id">): SourceBody {
   return {
     rank: 1,
+    relevance: 0.9,
     similarity: 0.8,
     document_id: FAA,
     document_name: "faa-powerplant-ch4-ignition-electrical.pdf",

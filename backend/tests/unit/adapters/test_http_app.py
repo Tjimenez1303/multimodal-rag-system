@@ -32,6 +32,9 @@ from multimodal_rag.answering.errors import (
     AnswerModelUnavailableError,
     DocumentsNotReadyError,
     InvalidQuestionError,
+    RerankerResponseError,
+    RerankerTimeoutError,
+    RerankerUnavailableError,
     SearchTimeoutError,
     SearchUnavailableError,
     UnknownDocumentsError,
@@ -444,6 +447,9 @@ ANSWERING_ERRORS: list[tuple[MultimodalRagError, int]] = [
     (AnswerModelUnavailableError(), 503),
     (AnswerModelTimeoutError(), 504),
     (AnswerModelResponseError(), 502),
+    (RerankerUnavailableError(), 503),
+    (RerankerTimeoutError(), 504),
+    (RerankerResponseError(), 502),
     (AnswerDeadlineExceededError(), 504),
 ]
 

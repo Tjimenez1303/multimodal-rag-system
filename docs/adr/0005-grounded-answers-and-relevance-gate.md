@@ -1,6 +1,7 @@
 # 0005. Grounded answers and a relevance gate
 
-- **Status**: Accepted
+- **Status**: Accepted. The relevance gate is superseded by
+  [ADR 0009](0009-reranked-relevance-gate.md)
 - **Date**: 2026-09-29
 - **Deciders**: project maintainer
 
@@ -71,6 +72,9 @@ checked after generation**.
 ## Annex: technical evidence
 
 ### Relevance gate
+
+[ADR 0009](0009-reranked-relevance-gate.md) replaces the cosine threshold below with a
+reranker's judgement. The identifier rule is kept.
 
 The fused score of hybrid search (Reciprocal Rank Fusion) depends only on ranks, so
 every question has a top hit with the same score, however unrelated it is. A second

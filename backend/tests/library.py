@@ -25,6 +25,7 @@ from tests.fakes import (
     FakeAnswerSlots,
     FakeEmbedder,
     FakeLanguageIdentifier,
+    FakeRelevanceJudge,
     FrozenClock,
     InMemoryBlobStorage,
     InMemoryDocumentRepository,
@@ -114,6 +115,7 @@ class Library:
     )
     index: InMemoryVectorIndex = field(default_factory=InMemoryVectorIndex)
     embedder: FakeEmbedder = field(default_factory=FakeEmbedder)
+    judge: FakeRelevanceJudge = field(default_factory=FakeRelevanceJudge)
     generator: FakeAnswerGenerator = field(default_factory=FakeAnswerGenerator)
     languages: FakeLanguageIdentifier = field(default_factory=FakeLanguageIdentifier)
     blobs: InMemoryBlobStorage = field(default_factory=InMemoryBlobStorage)
@@ -160,13 +162,15 @@ class Library:
             "max_question_chars": 2000,
             "max_filter_documents": 20,
             "low_confidence_threshold": 0.90,
-            "min_similarity": 0.60,
+            "min_relevance": 0.30,
+            "rerank_candidates": 16,
             "attribution_min_score": 0.5,
             "deadline_seconds": 90.0,
         }
         return AnswerQuestion(
             embedder=self.embedder,
             index=self.index,
+            judge=self.judge,
             documents=self.documents,
             elements=self.elements,
             generator=self.generator,

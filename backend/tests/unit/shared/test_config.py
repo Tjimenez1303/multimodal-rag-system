@@ -14,21 +14,23 @@ PROVIDER_ENV = {
     "QDRANT_URL": "http://qdrant:6333",
     "EMBEDDER_URL": MODELS_URL,
     "EMBEDDER_MODEL": "ai/qwen3-embedding:0.6b",
+    "EMBEDDER_TOKENIZER_PATH": "/opt/tokenizers/embedder/tokenizer.json",
 }
 API_ENV = PROVIDER_ENV | {
     "ANSWER_MODEL_URL": MODELS_URL,
     "ANSWER_MODEL": "ai/qwen3.5:9b",
+    "RERANKER_URL": MODELS_URL,
+    "RERANKER_MODEL": "ai/qwen3-reranker:0.6B",
 }
 WORKER_ENV = PROVIDER_ENV | {
     "VLM_URL": MODELS_URL,
     "VLM_MODEL": "ai/qwen3.5:9b",
-    "EMBEDDER_TOKENIZER_PATH": "/opt/tokenizers/embedder/tokenizer.json",
 }
 
 
 @pytest.fixture
 def clean_env(monkeypatch: pytest.MonkeyPatch) -> pytest.MonkeyPatch:
-    for name in API_ENV | WORKER_ENV:
+    for name in API_ENV | WORKER_ENV | {"MIN_SIMILARITY": ""}:
         monkeypatch.delenv(name, raising=False)
     return monkeypatch
 
@@ -66,7 +68,7 @@ def test_api_settings_expose_the_documented_answering_defaults(
     assert settings.answer_max_tokens == 800
     assert settings.answer_temperature == 0
     assert settings.retrieval_top_k == 8
-    assert settings.min_similarity == 0.60
+    assert settings.min_relevance == 0.30
     assert settings.low_confidence_threshold == 0.90
     assert settings.max_question_chars == 2000
     assert settings.max_filter_documents == 20
@@ -83,6 +85,38 @@ def test_api_settings_expose_the_documented_answering_defaults(
     assert settings.embedder_batch_size == 32
 
 
+def test_api_settings_expose_the_documented_reranker_defaults(
+    clean_env: pytest.MonkeyPatch,
+) -> None:
+    set_env(clean_env, API_ENV)
+
+    settings = ApiSettings.load()
+
+    assert str(settings.reranker_url) == MODELS_URL
+    assert settings.reranker_model == "ai/qwen3-reranker:0.6B"
+    assert settings.reranker_timeout_seconds == 15
+    assert settings.reranker_instruction == (
+        "Given a question about a document, judge whether the passage contains "
+        "the information that answers it"
+    )
+    assert settings.reranker_max_input_tokens == 2048
+    assert settings.rerank_candidates == 16
+    assert settings.embedder_tokenizer_path == Path(
+        "/opt/tokenizers/embedder/tokenizer.json"
+    )
+
+
+def test_the_similarity_threshold_is_no_longer_a_setting(
+    clean_env: pytest.MonkeyPatch,
+) -> None:
+    set_env(clean_env, API_ENV | {"MIN_SIMILARITY": "0.60"})
+
+    settings = ApiSettings.load()
+
+    assert "min_similarity" not in ApiSettings.model_fields
+    assert settings.min_relevance == 0.30
+
+
 def test_the_api_requires_the_answer_model_and_the_search_services(
     clean_env: pytest.MonkeyPatch,
 ) -> None:
@@ -95,6 +129,9 @@ def test_the_api_requires_the_answer_model_and_the_search_services(
     for name in (
         "ANSWER_MODEL_URL",
         "ANSWER_MODEL",
+        "RERANKER_URL",
+        "RERANKER_MODEL",
+        "EMBEDDER_TOKENIZER_PATH",
         "QDRANT_URL",
         "EMBEDDER_URL",
         "EMBEDDER_MODEL",
@@ -115,10 +152,31 @@ def test_the_answer_model_timeout_must_be_shorter_than_the_deadline(
         ApiSettings.load()
 
 
+def test_the_reranker_timeout_must_be_shorter_than_the_deadline(
+    clean_env: pytest.MonkeyPatch,
+) -> None:
+    set_env(
+        clean_env,
+        API_ENV | {"RERANKER_TIMEOUT_SECONDS": "90", "ANSWER_DEADLINE_SECONDS": "90"},
+    )
+
+    with pytest.raises(ConfigurationError, match="RERANKER_TIMEOUT_SECONDS"):
+        ApiSettings.load()
+
+
+def test_the_reranker_must_judge_at_least_the_supplied_units(
+    clean_env: pytest.MonkeyPatch,
+) -> None:
+    set_env(clean_env, API_ENV | {"RERANK_CANDIDATES": "7", "RETRIEVAL_TOP_K": "8"})
+
+    with pytest.raises(ConfigurationError, match="RERANK_CANDIDATES"):
+        ApiSettings.load()
+
+
 @pytest.mark.parametrize(
     ("name", "value"),
     [
-        ("MIN_SIMILARITY", "1.1"),
+        ("MIN_RELEVANCE", "1.1"),
         ("LOW_CONFIDENCE_THRESHOLD", "-0.1"),
         ("ANSWER_TEMPERATURE", "2.5"),
         ("ANSWER_QUEUE_LIMIT", "-1"),

@@ -10,6 +10,7 @@ from tests.fakes import (
     FakeFigureDescriber,
     FakeLanguageIdentifier,
     FakePdfInspector,
+    FakeRelevanceJudge,
     FrozenClock,
     InMemoryBlobStorage,
     InMemoryDocumentRepository,
@@ -41,6 +42,7 @@ def test_every_fake_satisfies_its_port() -> None:
     generator: answering_ports.AnswerGenerator = FakeAnswerGenerator()
     slots: answering_ports.AnswerSlots = FakeAnswerSlots()
     languages: answering_ports.LanguageIdentifier = FakeLanguageIdentifier()
-    implementations += [generator, slots, languages]
+    judge: answering_ports.RelevanceJudge = FakeRelevanceJudge()
+    implementations += [generator, slots, languages, judge]
 
-    assert len(implementations) == 14
+    assert len(implementations) == 15

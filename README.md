@@ -32,8 +32,12 @@ its sources by document and page and shows the figure it relies on beside the te
 - Questions are answered only from the ingested manuals. Each statement carries a
   numbered citation to the document and page it comes from, and the response lists every
   passage the answer was built from.
-- When the manuals do not contain the answer, the response says so instead of guessing,
-  and a question unrelated to them is answered in under a tenth of a second.
+- A local reranker reads the question next to each retrieved passage and judges whether
+  the passage answers it, so a label typed on its own, such as "Total Neto", finds its
+  page, and the best passages reach the answer model first.
+- When the manuals do not contain the answer, the response says so instead of guessing.
+  A question they do not answer is stopped in about two seconds, before the answer
+  model.
 - An answer that relies on a diagram comes with the figure closest to the cited text,
   its page and its caption. Tables among the sources come with their rows.
 - Questions can be asked in English or Spanish about manuals in either language. Codes
@@ -60,12 +64,14 @@ so the browser only ever talks to one address. The API accepts uploads, answers 
 queries and questions, and serves figures and pages. Heavy work happens in the worker,
 which you can scale out with more replicas. PostgreSQL stores documents and extracted
 elements and also acts as the job queue. Qdrant holds the searchable units, and Docker
-Model Runner serves both models on the host GPU.
+Model Runner serves the vision and answer model, the embedding model and the reranker on
+the host GPU.
 
-A question is embedded, searched by meaning and by keywords, and sent to the answer model
-only when a retrieved passage is relevant enough. The citations in the answer are then
-checked against the passages the model was given, so an answer can never cite a page that
-was not retrieved.
+A question is embedded and searched by meaning and by keywords. The reranker judges how
+likely each of the 16 best passages is to contain the answer, and the 8 best judged go to
+the answer model, which is asked only when one of them is judged likely enough. The
+citations in the answer are then checked against the passages the model was given, so an
+answer can never cite a page that was not retrieved.
 
 The diagram is an editable draw.io file. Open it in [draw.io](https://app.diagrams.net)
 to change it.
@@ -94,7 +100,7 @@ cp .env.example .env
 docker compose up -d --build --wait
 ```
 
-The first start builds the images and downloads the models, about 7.2 GB in total.
+The first start builds the images and downloads the models, about 8.4 GB in total.
 When it finishes, open the chat at http://localhost:3000. Upload a manual from the
 document panel, wait until it shows as ready, and ask a question about it.
 
@@ -204,7 +210,8 @@ Question answering has its own settings, all with defaults:
 | Setting | Default | What it controls |
 |---|---|---|
 | `RETRIEVAL_TOP_K` | 8 | Passages given to the answer model |
-| `MIN_SIMILARITY` | 0.60 | How close a passage must be to the question before the model is asked |
+| `RERANK_CANDIDATES` | 16 | Passages the reranker judges, of which the best go to the answer model |
+| `MIN_RELEVANCE` | 0.30 | How likely a passage must be to answer the question, as the reranker judges it, before the model is asked |
 | `ANSWER_CONCURRENCY` | 2 | Questions answered at the same time |
 | `ANSWER_QUEUE_LIMIT` | 6 | Questions waiting. Further ones get `answering_busy` with `Retry-After` |
 | `ANSWER_DEADLINE_SECONDS` | 90 | Longest time a question may take, waiting included |
@@ -253,6 +260,13 @@ npm --prefix frontend run test:coverage
 npm --prefix frontend run test:e2e
 ```
 
+Measure the relevance gate against labeled questions, on a running system with the
+sample documents and `backend/tests/fixtures/labeled_total.pdf` uploaded:
+
+```bash
+uv run --directory backend python -m tests.evaluation.evaluate_relevance
+```
+
 The pre-commit hooks run ruff, mypy in strict mode, typos and the import boundary checks
 for the backend, and oxlint, Prettier and the TypeScript compiler for the client. The
 backend suite needs Docker running, because the integration tests start PostgreSQL and
@@ -273,15 +287,18 @@ Each major decision has a record in [`docs/adr`](docs/adr):
 6. [A browser chat client served next to the API](docs/adr/0006-chat-client-stack-and-serving.md)
 7. [Page images kept from ingestion](docs/adr/0007-page-images-at-ingestion.md)
 8. [Deleting a document](docs/adr/0008-document-deletion.md)
+9. [A reranker decides whether a question is answered](docs/adr/0009-reranked-relevance-gate.md)
 
 The backend stack is FastAPI, SQLAlchemy with asyncpg, PostgreSQL 18, Qdrant 1.19 with
-server-side BM25, Docling 2.130, and the Qwen3.5 9B and Qwen3 Embedding 0.6B models. The
+server-side BM25, Docling 2.130, and the Qwen3.5 9B, Qwen3 Embedding 0.6B and Qwen3
+Reranker 0.6B models. The
 same Qwen3.5 9B instance describes figures and writes answers. The chat client is React
 19 with Vite, shadcn/ui and Vercel AI Elements, served by nginx. Specifications, research
 notes and validation scenarios are in [`specs`](specs), one folder per feature:
 [ingestion](specs/001-async-pdf-ingestion),
-[question answering](specs/002-grounded-question-answering) and
-[the chat client](specs/003-visual-chat-client).
+[question answering](specs/002-grounded-question-answering),
+[the chat client](specs/003-visual-chat-client) and
+[the reranked relevance gate](specs/004-reranked-relevance-gate).
 
 ## Contributing
 
@@ -296,7 +313,8 @@ Licensed under the [Apache License 2.0](LICENSE).
 
 - Origen de los datos: INSST, for the electrical risk guide used in testing.
 - [Docling](https://github.com/docling-project/docling) for layout-aware PDF extraction.
-- [Qwen](https://github.com/QwenLM) for the vision, answer and embedding models.
+- [Qwen](https://github.com/QwenLM) for the vision, answer, embedding and reranking
+  models.
 - [RAGFlow](https://github.com/infiniflow/ragflow) and [Onyx](https://github.com/onyx-dot-app/onyx), whose
   citation handling shaped how answers are tied to their sources.
 - [shadcn/ui](https://ui.shadcn.com) and [AI Elements](https://ai-sdk.dev/elements) for

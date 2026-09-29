@@ -31,6 +31,7 @@ export const plainAnswer: AnswerBody = {
     {
       unit_id: "0b0e7a3c-1f1a-4c8e-9a51-6a9d1f3e2c01",
       rank: 1,
+      relevance: 0.93,
       similarity: 0.82,
       document_id: libraryPage.items[0]!.id,
       document_name: "faa-powerplant-ch4-ignition-electrical.pdf",

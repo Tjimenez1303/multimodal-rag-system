@@ -10,6 +10,7 @@ import respx
 import stamina
 from PIL import Image
 
+from multimodal_rag.adapters.openai_compatible.chat import ChatCompletion
 from multimodal_rag.adapters.openai_compatible.describer import (
     OpenAICompatibleFigureDescriber,
 )
@@ -323,3 +324,44 @@ class TestEmbedder:
 
         with pytest.raises(DataInconsistencyError):
             await embedder.embed_query("x")
+
+
+class TestChatCompletion:
+    def test_the_first_token_candidates_map_to_their_log_probabilities(self) -> None:
+        body = {
+            "choices": [
+                {
+                    "message": {"role": "assistant", "content": "yes"},
+                    "finish_reason": "length",
+                    "logprobs": {
+                        "content": [
+                            {
+                                "token": "yes",
+                                "logprob": -0.1,
+                                "bytes": [121, 101, 115],
+                                "top_logprobs": [
+                                    {"token": "yes", "logprob": -0.1, "bytes": []},
+                                    {"token": "no", "logprob": -2.4, "bytes": []},
+                                ],
+                            }
+                        ]
+                    },
+                }
+            ]
+        }
+
+        completion = ChatCompletion.model_validate(body)
+
+        assert completion.first_token_logprobs == {"yes": -0.1, "no": -2.4}
+
+    def test_an_answer_without_log_probabilities_has_none(self) -> None:
+        completion = ChatCompletion.model_validate(chat_reply("text"))
+
+        assert completion.first_token_logprobs is None
+        assert completion.content == "text"
+
+    def test_log_probabilities_without_tokens_have_none(self) -> None:
+        body = chat_reply("")
+        body["choices"][0]["logprobs"] = {"content": []}
+
+        assert ChatCompletion.model_validate(body).first_token_logprobs is None

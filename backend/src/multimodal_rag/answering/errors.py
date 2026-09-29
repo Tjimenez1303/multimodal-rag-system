@@ -10,6 +10,7 @@ from collections.abc import Sequence
 from multimodal_rag.shared.errors import (
     CapacityError,
     ConcurrencyError,
+    DataInconsistencyError,
     ProviderResponseError,
     ProviderTimeoutError,
     ProviderUnavailableError,
@@ -105,6 +106,39 @@ class AnswerModelResponseError(ProviderResponseError):
 
     def __init__(self) -> None:
         super().__init__("The answer model returned an answer that cannot be used.")
+
+
+class RerankerUnavailableError(ProviderUnavailableError):
+    """The reranker stayed unreachable after retries."""
+
+    code = "reranker_unavailable"
+
+    def __init__(self) -> None:
+        super().__init__("The reranker is unavailable.")
+
+
+class RerankerTimeoutError(ProviderTimeoutError):
+    """The reranker kept timing out after retries."""
+
+    code = "reranker_timeout"
+
+    def __init__(self) -> None:
+        super().__init__("The reranker did not answer in time.")
+
+
+class RerankerResponseError(ProviderResponseError):
+    """The reranker rejected the request or returned an unusable judgement."""
+
+    code = "reranker_invalid_response"
+
+    def __init__(self) -> None:
+        super().__init__("The reranker returned a judgement that cannot be used.")
+
+
+class InvalidRelevanceError(DataInconsistencyError):
+    """A judged relevance lies outside 0 to 1."""
+
+    code = "invalid_relevance"
 
 
 class AnswerDeadlineExceededError(ProviderTimeoutError):

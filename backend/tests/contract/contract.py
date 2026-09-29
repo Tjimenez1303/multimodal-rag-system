@@ -21,6 +21,7 @@ CONTRACT_FILES = (
     SPECS / "001-async-pdf-ingestion" / "contracts" / "openapi.yaml",
     SPECS / "002-grounded-question-answering" / "contracts" / "openapi.yaml",
     SPECS / "003-visual-chat-client" / "contracts" / "openapi.yaml",
+    SPECS / "004-reranked-relevance-gate" / "contracts" / "openapi.yaml",
 )
 _CONTRACTS: dict[str, dict[str, Any]] = {
     path.as_uri(): yaml.safe_load(path.read_text()) for path in CONTRACT_FILES
@@ -29,7 +30,7 @@ _REGISTRY: Registry[Any] = Registry().with_resources(
     (uri, DRAFT202012.create_resource(contract)) for uri, contract in _CONTRACTS.items()
 )
 # Every operation of every contract, keyed by path template and method. A later
-# feature may add a method to a path an earlier feature declared.
+# feature may add a method to a path an earlier feature declared, or redefine one.
 PATHS: dict[str, dict[str, Any]] = {}
 _URI_BY_OPERATION: dict[tuple[str, str], str] = {}
 for _uri, _contract in _CONTRACTS.items():

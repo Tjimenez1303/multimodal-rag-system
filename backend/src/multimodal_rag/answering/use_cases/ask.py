@@ -1,6 +1,8 @@
 """Answering one question from the retrieved units of the completed documents.
 
-The answer model is asked only when a retrieved unit passes the relevance gate. Every
+The reranker judges every distinct candidate the hybrid search returns, and the units
+with the highest judgement are supplied to the answer model in that order. The answer
+model is asked only when a supplied unit passes the relevance gate. Every
 other outcome where the documents do not support an answer, whether decided before or
 after the model call, is a not-enough-information answer with a reason and no
 citations, sources or images. An answer the model wrote without any source marker is
@@ -10,7 +12,8 @@ use case has checked that every returned figure's crop is stored.
 
 A question waits for a free place before any search, and the whole question, waiting
 included, runs under one deadline. Failures of the embedding model and the vector index
-are reported as search failures, and failures of the answer model under its own name.
+are reported as search failures, and failures of the reranker and the answer model
+under their own names.
 """
 
 import asyncio
@@ -32,6 +35,7 @@ from multimodal_rag.answering.domain import (
     AnswerImage,
     AnswerStatus,
     GeneratedAnswer,
+    JudgedHit,
     NotEnoughReason,
     Question,
 )
@@ -41,6 +45,9 @@ from multimodal_rag.answering.errors import (
     AnswerModelResponseError,
     AnswerModelTimeoutError,
     AnswerModelUnavailableError,
+    RerankerResponseError,
+    RerankerTimeoutError,
+    RerankerUnavailableError,
     SearchTimeoutError,
     SearchUnavailableError,
 )
@@ -50,9 +57,14 @@ from multimodal_rag.answering.ports import (
     AnswerGenerator,
     AnswerSlots,
     LanguageIdentifier,
+    RelevanceJudge,
 )
 from multimodal_rag.answering.prompting import build_prompt
-from multimodal_rag.answering.relevance import distinct_hits, passes_gate
+from multimodal_rag.answering.relevance import (
+    distinct_hits,
+    passes_gate,
+    rank_by_relevance,
+)
 from multimodal_rag.answering.sources import assemble_sources, elements_of
 from multimodal_rag.ingestion.domain import (
     ExtractedElement,
@@ -77,12 +89,17 @@ from multimodal_rag.shared.errors import (
 
 logger = logging.getLogger(__name__)
 
-# Hits searched per supplied unit, so that dropping repeated texts keeps the slots full.
+# Hits searched per judged candidate, so dropping repeated texts keeps the slots full.
 SEARCH_OVERFETCH = 2
 # The embedding model and the vector index both count as search.
 _SEARCH_FAILURES: Mapping[type[ProviderError], type[ProviderError]] = {
     ProviderUnavailableError: SearchUnavailableError,
     ProviderTimeoutError: SearchTimeoutError,
+}
+_RERANKER_FAILURES: Mapping[type[ProviderError], type[ProviderError]] = {
+    ProviderUnavailableError: RerankerUnavailableError,
+    ProviderTimeoutError: RerankerTimeoutError,
+    ProviderResponseError: RerankerResponseError,
 }
 _ANSWER_MODEL_FAILURES: Mapping[type[ProviderError], type[ProviderError]] = {
     ProviderUnavailableError: AnswerModelUnavailableError,
@@ -101,8 +118,9 @@ class AnsweringOptions:
         max_filter_documents: Most documents a question may be restricted to.
         low_confidence_threshold: Recognition confidence below which a source is
             flagged as low-confidence recognized text.
-        min_similarity: Lowest dense similarity that lets a unit pass the relevance
+        min_relevance: Lowest judged relevance that lets a unit pass the relevance
             gate.
+        rerank_candidates: Distinct units the reranker judges per question.
         attribution_min_score: Lowest match that attributes a statement of an answer
             written without markers.
         deadline_seconds: Total time of a question, waiting for a place included.
@@ -112,7 +130,8 @@ class AnsweringOptions:
     max_question_chars: int
     max_filter_documents: int
     low_confidence_threshold: float
-    min_similarity: float
+    min_relevance: float
+    rerank_candidates: int
     attribution_min_score: float
     deadline_seconds: float
 
@@ -120,7 +139,9 @@ class AnsweringOptions:
 @dataclass
 class _Timings:
     search_ms: float = 0.0
+    ranking_ms: float = 0.0
     generation_ms: float = 0.0
+    top_relevance: float = 0.0
 
 
 class AnswerQuestion:
@@ -131,6 +152,7 @@ class AnswerQuestion:
     Args:
         embedder: Embedding model that turns the question into a query vector.
         index: Hybrid index of retrieval units.
+        judge: Reranker that judges whether each candidate answers the question.
         documents: Document persistence, for the names of cited documents.
         elements: Element persistence, for the flags of each source.
         generator: Answer model.
@@ -145,6 +167,7 @@ class AnswerQuestion:
         *,
         embedder: Embedder,
         index: VectorIndex,
+        judge: RelevanceJudge,
         documents: DocumentRepository,
         elements: ElementRepository,
         generator: AnswerGenerator,
@@ -155,6 +178,7 @@ class AnswerQuestion:
     ) -> None:
         self._embedder = embedder
         self._index = index
+        self._judge = judge
         self._documents = documents
         self._elements = elements
         self._generator = generator
@@ -205,26 +229,33 @@ class AnswerQuestion:
             raise AnswerDeadlineExceededError() from error
         logger.info(
             "question answered: outcome %s, reason %s, units %s, cited %s, "
-            "search_ms %.1f, generation_ms %.1f",
+            "top_relevance %.3f, search_ms %.1f, ranking_ms %.1f, generation_ms %.1f",
             answer.status,
             answer.reason,
             len(answer.sources),
             len(answer.citations),
+            timings.top_relevance,
             timings.search_ms,
+            timings.ranking_ms,
             timings.generation_ms,
         )
         return answer
 
     async def _answer(self, question: Question, timings: _Timings) -> Answer:
         started = time.perf_counter()
-        hits = await self._search(question)
+        candidates = await self._search(question)
         timings.search_ms = (time.perf_counter() - started) * 1000
-        if not hits:
+        if not candidates:
             return self._not_enough(question, NotEnoughReason.NO_SEARCHABLE_DOCUMENTS)
+        started = time.perf_counter()
+        judged = await self._judged(question, candidates)
+        timings.ranking_ms = (time.perf_counter() - started) * 1000
+        timings.top_relevance = max(item.relevance for item in judged)
         if not passes_gate(
-            hits, min_similarity=self._options.min_similarity, question=question.text
+            judged, min_relevance=self._options.min_relevance, question=question.text
         ):
             return self._not_enough(question, NotEnoughReason.NO_RELEVANT_CONTENT)
+        hits = [item.hit for item in judged]
         names = await self._document_names(hits)
         elements = await self._elements_of(hits)
         started = time.perf_counter()
@@ -241,7 +272,7 @@ class AnswerQuestion:
             return self._not_enough(
                 question, NotEnoughReason.NO_VALID_CITATIONS, generated
             )
-        return await self._grounded(generated, cited, hits, names, elements)
+        return await self._grounded(generated, cited, judged, names, elements)
 
     async def _search(self, question: Question) -> list[SearchHit]:
         with _named(_SEARCH_FAILURES):
@@ -249,10 +280,21 @@ class AnswerQuestion:
             hits = await self._index.search_hybrid(
                 query_text=question.text,
                 query_vector=vector,
-                limit=self._options.top_k * SEARCH_OVERFETCH,
+                limit=self._options.rerank_candidates * SEARCH_OVERFETCH,
                 document_ids=question.document_ids,
             )
-        return distinct_hits(hits, limit=self._options.top_k)
+        return distinct_hits(hits, limit=self._options.rerank_candidates)
+
+    async def _judged(
+        self, question: Question, candidates: Sequence[SearchHit]
+    ) -> list[JudgedHit]:
+        with _named(_RERANKER_FAILURES):
+            relevances = await self._judge.judge(
+                question.text, [hit.unit.embedding_text for hit in candidates]
+            )
+        return rank_by_relevance(
+            candidates, relevances, limit=self._options.top_k, question=question.text
+        )
 
     async def _document_names(self, hits: Sequence[SearchHit]) -> dict[uuid.UUID, str]:
         wanted = list(dict.fromkeys(hit.unit.document_id for hit in hits))
@@ -307,11 +349,11 @@ class AnswerQuestion:
         self,
         generated: GeneratedAnswer,
         cited: CitedText,
-        hits: Sequence[SearchHit],
+        judged: Sequence[JudgedHit],
         names: dict[uuid.UUID, str],
         elements: dict[uuid.UUID, ExtractedElement],
     ) -> Answer:
-        cited_units = [hit.unit for hit in hits if hit.unit.id in cited.numbers]
+        cited_units = [i.hit.unit for i in judged if i.hit.unit.id in cited.numbers]
         primary, related = await self._images(cited_units, names, elements)
         return Answer(
             status=AnswerStatus.ANSWERED,
@@ -320,7 +362,7 @@ class AnswerQuestion:
             not_covered=generated.not_covered.strip() or None,
             citations=cited.citations,
             sources=assemble_sources(
-                hits,
+                judged,
                 elements=elements,
                 document_names=names,
                 citation_numbers=cited.numbers,

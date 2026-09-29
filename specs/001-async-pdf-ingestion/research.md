@@ -3,7 +3,7 @@
 Every decision below was checked against official documentation, source code, release
 notes or published benchmarks on 2026-09-28. Numbers marked as estimates were not measured
 by their source or by this project. Measurements taken on the reference machine are listed
-in the final section.
+in section 15.
 
 All runtime components run locally. The reference machine is an Apple M4 Pro (12 CPU
 cores, 16 GPU cores, 48 GB) with Docker Desktop limited to 12 CPUs and 20 GB. Containers on
@@ -734,6 +734,46 @@ through Docling. The default models already meet SC-009.
   identifiers.
 - `docling` 2.130 requires an explicit `onnxruntime` dependency for RapidOCR.
 
+**Full pipeline with figure descriptions** (one worker, 2026-09-28 and 2026-09-29):
+
+| Document | Pages | Minutes | Figures described | Retrieval units |
+|---|---|---|---|---|
+| FAA (digital) | 71 | 11.5 | 100 | 309 |
+| INSST (digital) | 86 | 6.5 | 34 | 309 |
+| TM 5-3431 (scanned) | 65 | 8.7 | 31 | 173 |
+
+Three clean runs of byte-distinct INSST copies produced 309 units and 1,806 elements
+each.
+
+**Crash recovery (scenario 5, 2026-09-29)**: a byte-distinct INSST copy, worker killed
+with SIGKILL during `indexing` before any unit was written. The replacement worker
+claimed the job 78 s after the kill, within the 90 s lease, as attempt 2 while it
+stayed `processing`. It completed with 309 units, 309 visible points, no hidden points
+and 1,806 elements, the same as the clean runs.
+
+**Load with 100 documents queued (scenario 7, SC-006, 2026-09-29)**: FAA copies
+(24.5 MB), one worker processing with descriptions, separate Compose project.
+
+| Phase | Requests | p50 s | p95 s | Max s | Timeouts |
+|---|---|---|---|---|---|
+| Uploads, before the backlog | 10 | 0.412 | 0.715 | 0.868 | 0 |
+| Uploads, backlog with 4 in flight | 100 | 0.616 | 1.339 | 1.807 | 0 |
+| Uploads, 110 jobs queued | 20 | 0.163 | 0.268 | 0.491 | 0 |
+| Status checks, 110 jobs queued | 50,290 | 0.004 | 0.010 | 0.068 | 0 |
+
+**Replicas (scenario 7, FR-020, 2026-09-29)**: 4 FAA copies without descriptions.
+
+| Workers | Total | Per job | Speed-up |
+|---|---|---|---|
+| 1 | 8 min 26 s | 2 min 2 s to 2 min 9 s | 1.00 |
+| 2 | 7 min 1 s | 3 min 22 s to 3 min 38 s | 1.20 |
+
+Two workers run the batch in parallel, but each job takes 1.65 times longer, because
+two extractions saturate the 12 CPUs of the Docker VM: Docling uses more threads than
+`EXTRACTION_THREADS`. The gain therefore depends on free CPUs, and a second replica on
+the reference machine adds 20% throughput. More gain needs more CPUs or replicas on
+separate hosts, with the models still shared.
+
 **Resulting targets**:
 
 | Criterion | Measured or projected | Status |
@@ -742,3 +782,107 @@ through Docling. The default models already meet SC-009.
 | SC-010 | About 5.5 min | Met |
 | SC-011 | 6.0 s effective on digital pages, about 10 s on scanned pages | Met (8 s target) |
 | SC-009 | 97.5% word recall | Met |
+
+## 16. Crash and load validation
+
+**Decision**: The crash test (T068) runs the real worker in a subprocess and kills it
+with SIGKILL at the point of an attempt that leaves the most partial state. The load
+script (T069) measures API latency with a backlog queued, and measures the gain of a
+second replica separately, on the stage that can scale.
+
+**Crash test**:
+
+- **The worker is a real process.** SIGKILL cannot be caught, so no `finally` block or
+  signal handler runs, which is what a crashed container does. Cancelling an in-process
+  task would run cleanup code and prove less. Reference projects test crashes the same
+  way. procrastinate starts its real worker command in a subprocess, with the app it runs
+  defined inside the test package, and kills it on teardown. Prefect kills a flow's
+  subprocess with SIGKILL and checks that its run stays `running` for recovery. Celery's
+  smoke tests kill a worker container and check that another worker finishes the task.
+- **Models stay faked.** respx patches the HTTP transport of its own process only. The
+  subprocess therefore runs a small test module that installs the same model routes as
+  the in-process end-to-end test and then calls `bootstrap.run_worker()`. Docker Model
+  Runner does not exist on the CI runners, and a fake model server in a thread, as
+  httpx's own test suite runs, could only hold model calls, which come before any unit
+  is indexed.
+- **The crash point.** An attempt deletes the document's points, extracts, embeds,
+  upserts hidden points, stores the elements and then publishes. The first worker's
+  publish request to Qdrant never gets an answer, so the kill lands after the points and
+  elements exist. The test waits for that state through the job's stage and the stored
+  elements, not for a timer.
+- **Short leases.** `LEASE_SECONDS=5` and `HEARTBEAT_SECONDS=1` keep the settings
+  validation (heartbeat shorter than lease) and make the job reclaimable seconds after
+  the kill.
+- **The clean run.** A byte-distinct copy of the same fixture, processed by the second
+  worker, is the reference. Comparing only `summary.retrieval_units` would not detect
+  leftover points, because the summary counts the units built in memory. The test also
+  counts the document's visible and hidden points in Qdrant and its stored elements.
+  Each test gets its own Qdrant collection and filters by document, so it never depends
+  on other tests or on the Compose stack.
+- **Evidence that the test detects a regression.** With the reclaim of expired leases
+  removed from the claim query, the test fails because attempt 2 never starts. Removing
+  the point deletion at the start of an attempt would not fail it: unit ids are
+  deterministic, so attempt 2 overwrites the same points. The deletion protects against
+  units that disappear between attempts.
+
+**Load measurement**:
+
+- **Two questions, two runs.** SC-006 asks whether uploads and status checks stay fast
+  while 100 documents are queued, which needs a full queue but not a drained one.
+  "More replicas finish sooner" needs drained batches. Draining 100 copies of the FAA
+  sample would take about 19 hours with descriptions.
+- **Isolation.** Both runs use a separate Compose project (`-p multimodal-rag-load`, API
+  on port 8001), removed with `down -v` afterwards. Compose uses the project name to
+  isolate environments, including several copies of one environment on a host, and
+  prefixes the project's named volumes with it. The development stack keeps its data
+  and no load documents remain.
+- **Distinct copies.** A PDF comment (`%`, ISO 32000-1 §7.2.3) appended after the
+  end-of-file marker changes the fingerprint without changing what readers parse. The
+  comment carries a run id, so repeated runs are never answered as already ingested.
+- **Concurrency and timing.** An `asyncio.Semaphore` bounds requests in flight, and each
+  latency is measured with `time.perf_counter` after a slot is taken. httpx's
+  `Response.elapsed` would include the wait for a pooled connection.
+- **Percentiles.** `statistics.quantiles(n=100, method="inclusive")`, whose linear
+  interpolation between samples is also NumPy's default percentile method.
+- **Total time.** The last job's `finished_at` minus the first job's `created_at`, both
+  from the server, so polling does not add error. Workers are started and healthy
+  before the upload, so their start-up is not counted.
+
+**What a second replica can gain**: a worker runs extraction on CPU and both models on
+the one host GPU that Docker Model Runner serves to every replica.
+
+- Extraction scales only with free CPUs, and Docling uses more threads than
+  `EXTRACTION_THREADS`.
+- Figure description does not scale. Section 15 measured 6.0 s per figure with 2
+  requests in flight and 7.0 s with 4, so two workers with `FIGURE_CONCURRENCY=2`
+  saturate the GPU. With descriptions, the gain is bounded by the overlap of one job's
+  extraction with another job's descriptions. The FAA sample spends about 1.6 minutes
+  extracting and 9.5 minutes describing, so the bound is about 1.15 times.
+- Without descriptions the gain is bounded by free CPUs. On the reference machine two
+  extractions saturate the Docker VM, and a second replica added 20% throughput
+  (section 15). With `N` replicas, `FIGURE_CONCURRENCY` near `2 / N` keeps the GPU at
+  its best throughput.
+
+Sources:
+
+- Subprocess crash tests:
+  - https://github.com/procrastinate-org/procrastinate/blob/main/tests/acceptance/test_nominal.py
+    (`running_worker`, lines 37 to 60)
+  - https://github.com/procrastinate-org/procrastinate/blob/main/tests/acceptance/conftest.py
+    (`process_env`, lines 12 to 26)
+  - https://github.com/PrefectHQ/prefect/blob/main/tests/test_flow_engine.py
+    (`test_flow_process_is_killed`, lines 5702 to 5724)
+  - https://github.com/celery/celery/blob/main/t/smoke/tests/failover/test_worker_failover.py
+    (lines 21 to 40)
+  - https://docs.python.org/3/library/asyncio-subprocess.html#asyncio.subprocess.Process.kill
+- Fake server in a thread (rejected): https://github.com/encode/httpx/blob/master/tests/conftest.py
+  (lines 224 to 287)
+- respx asynchronous side effects: `respx/router.py`, `aresolve`, in respx 0.23.1
+- Load measurement:
+  - https://docs.python.org/3/library/statistics.html#statistics.quantiles
+  - https://numpy.org/doc/stable/reference/generated/numpy.percentile.html
+  - https://www.python-httpx.org/async/
+  - https://docs.python.org/3/library/asyncio-sync.html#asyncio.Semaphore
+- Compose:
+  - https://docs.docker.com/compose/how-tos/project-name/
+  - https://docs.docker.com/reference/cli/docker/compose/up/ (`--scale`, `--wait`)

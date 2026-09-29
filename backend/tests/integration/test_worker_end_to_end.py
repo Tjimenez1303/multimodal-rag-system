@@ -1,7 +1,4 @@
 import asyncio
-import json
-import logging
-import os
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -16,43 +13,10 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from multimodal_rag import bootstrap
 from multimodal_rag.adapters.postgres.tables import extracted_elements
+from tests.integration.model_apis import route_model_apis
+from tests.integration.polling import poll
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
-# The models are replaced by respx routes, so these hosts are never contacted.
-MODELS_URL = "http://models.test/v1/"
-COLLECTION = "end_to_end_units"
-
-
-@pytest.fixture
-def worker_env(
-    database_url: str,
-    qdrant_url: str,
-    embedder_tokenizer_path: Path,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> Iterator[None]:
-    values = {
-        "DATABASE_URL": database_url,
-        "BLOB_ROOT": str(tmp_path / "blobs"),
-        "QDRANT_URL": qdrant_url,
-        "QDRANT_COLLECTION": COLLECTION,
-        "VLM_URL": MODELS_URL,
-        "VLM_MODEL": "vision",
-        "EMBEDDER_URL": MODELS_URL,
-        "EMBEDDER_MODEL": "embedder",
-        "EMBEDDER_TOKENIZER_PATH": str(embedder_tokenizer_path),
-        "LIVENESS_FILE": str(tmp_path / "alive"),
-        "POLL_SECONDS": "0.2",
-        "EXTRACTION_THREADS": "2",
-        "LOG_FORMAT": "console",
-    }
-    artifacts = os.environ.get("DOCLING_ARTIFACTS_PATH")
-    if artifacts:
-        values["DOCLING_ARTIFACTS_PATH"] = artifacts
-    for name, value in values.items():
-        monkeypatch.setenv(name, value)
-    yield
-    logging.getLogger().handlers = []
 
 
 @pytest.fixture
@@ -62,20 +26,8 @@ def models() -> Iterator[respx.MockRouter]:
     Routes match in order, so the last one passes Qdrant calls and, without
     DOCLING_ARTIFACTS_PATH, Docling's model downloads to the network.
     """
-
-    def embeddings(request: httpx.Request) -> httpx.Response:
-        texts = json.loads(request.content)["input"]
-        data = [
-            {"index": n, "embedding": [float(len(text) % 7 + 1)] * 1024}
-            for n, text in enumerate(texts)
-        ]
-        return httpx.Response(200, json={"data": data})
-
     with respx.mock(assert_all_called=False) as router:
-        router.post(f"{MODELS_URL}embeddings").mock(side_effect=embeddings)
-        router.post(f"{MODELS_URL}chat/completions").respond(
-            json={"choices": [{"message": {"content": "A magneto wired to V-12."}}]}
-        )
+        route_model_apis(router)
         router.route().pass_through()
         yield router
 
@@ -83,7 +35,7 @@ def models() -> Iterator[respx.MockRouter]:
 @pytest.mark.slow
 @pytest.mark.usefixtures("models")
 async def test_uploaded_pdf_is_extracted_described_and_indexed(
-    worker_env: None, engine: AsyncEngine, qdrant_url: str, tmp_path: Path
+    worker_env: dict[str, str], engine: AsyncEngine, qdrant_url: str, tmp_path: Path
 ) -> None:
     stop = asyncio.Event()
     # AsyncClient over ASGITransport, with LifespanManager because the app builds
@@ -118,16 +70,16 @@ async def test_uploaded_pdf_is_extracted_described_and_indexed(
     assert stored == summary["text_elements"] + summary["tables"] + summary["images"]
     assert list((tmp_path / "blobs" / "figures").rglob("*.png"))
     qdrant = AsyncQdrantClient(url=qdrant_url)
-    points, _ = await qdrant.scroll(COLLECTION, limit=100)
+    points, _ = await qdrant.scroll(worker_env["QDRANT_COLLECTION"], limit=100)
     await qdrant.close()
     assert len(points) == summary["retrieval_units"] > 0
     assert all(point.payload and point.payload["visible"] for point in points)
 
 
 async def _until_finished(api: httpx.AsyncClient, job_url: str) -> dict[str, Any]:
+    async def finished() -> dict[str, Any] | None:
+        job: dict[str, Any] = (await api.get(job_url)).json()
+        return job if job["status"] in {"completed", "failed"} else None
+
     async with asyncio.timeout(120):
-        while True:
-            job: dict[str, Any] = (await api.get(job_url)).json()
-            if job["status"] in {"completed", "failed"}:
-                return job
-            await asyncio.sleep(0.2)
+        return await poll(finished)

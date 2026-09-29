@@ -384,8 +384,13 @@ code yet beyond a package skeleton and one smoke test.
   - The heartbeat task renews every `HEARTBEAT_SECONDS`, and a transient renewal failure does not stop the job.
   - A lost lease stops processing.
   - The process exits after `WORKER_MAX_JOBS` so compose restarts it.
-- [ ] T068 [P] [US3] End-to-end crash test in `backend/tests/integration/test_crash_recovery.py`, marked `slow`: it kills a worker subprocess with SIGKILL mid-job and asserts the job completes on attempt 2 with the same retrieval unit count as a clean run (SC-008).
-- [ ] T069 [P] [US3] Load script `backend/tests/load/upload_backlog.py`, runnable manually and not part of CI. It creates 100 byte-distinct copies of a sample, uploads them, polls status, and prints p50 and p95 latency for uploads and status checks (SC-006).
+- [x] T068 [P] [US3] End-to-end crash test in `backend/tests/integration/test_crash_recovery.py`, marked `slow` (research §16):
+  - The worker runs as a subprocess, `python -m tests.integration.worker_process`, which installs the respx routes of `tests/integration/model_apis.py` before calling `bootstrap.run_worker()`, because respx only intercepts requests in its own process.
+  - The first worker holds Qdrant's publish request, so its attempt stops after storing units and elements. The test kills it with SIGKILL there, with `LEASE_SECONDS=5` and `HEARTBEAT_SECONDS=1`.
+  - A second worker must finish the job on attempt 2. A byte-distinct copy of the same fixture is the clean run: both report the same `retrieval_units`, the crashed document has exactly that many visible points and no hidden ones, and both store the same number of elements. Counts are filtered by document in a Qdrant collection unique to the test.
+- [x] T069 [P] [US3] Load script `backend/tests/load/upload_backlog.py`, runnable manually and not part of CI, with unit tests of its pure helpers in `backend/tests/load/test_upload_backlog.py` (research §16):
+  - It uploads byte-distinct copies of a sample (a PDF comment with a run id), in a baseline, a concurrent backlog and a probe phase, then checks every job's status in rounds, and prints p50, p95, maximum, timeouts and failures per phase (SC-006).
+  - With `--wait` it waits for every job and prints the total processing time, from the first job created to the last finished, for the replica comparison of scenario 7.
 
 ### Implementation for User Story 3
 

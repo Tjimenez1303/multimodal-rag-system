@@ -118,18 +118,45 @@ Expected:
 
 ## Scenario 5: crash recovery (US3, FR-025, SC-008)
 
-While the Spanish guide is processing, kill the worker hard:
+A clean run of the Spanish guide is the reference: note its `summary.retrieval_units`.
+Upload a byte-distinct copy, so it is a new document, and follow its job:
 
 ```bash
-docker compose kill -s SIGKILL worker && docker compose up -d worker
+cp docs/samples/insst-guia-riesgo-electrico.pdf /tmp/insst-crash.pdf
+printf '\n%%crash-test\n' >> /tmp/insst-crash.pdf
+curl -s -F file=@/tmp/insst-crash.pdf http://localhost:8000/api/v1/documents
+```
+
+While the job is in `stage: describing_figures`, which lasts minutes, kill the worker
+hard and count the document's points:
+
+```bash
+docker compose kill -s SIGKILL worker
+docker compose exec -T -e DOC=<document_id> api python -c '
+import os
+from qdrant_client import QdrantClient, models
+client = QdrantClient(url="http://qdrant:6333")
+for visible in (False, True):
+    match = [models.FieldCondition(key=k, match=models.MatchValue(value=v))
+             for k, v in (("document_id", os.environ["DOC"]), ("visible", visible))]
+    count = client.count("retrieval_units", count_filter=models.Filter(must=match))
+    print("visible" if visible else "hidden", count.count)
+'
+docker compose up -d worker
 ```
 
 Expected:
 
-- Within the lease duration plus the polling interval, the job is processing again with
-  `attempt: 2`.
-- It then completes, and its retrieval unit count equals the count from a clean run
-  (no duplicates).
+- Right after the kill, the document has no visible points.
+- Once the lease expires (up to `LEASE_SECONDS`, 90 s, after the last heartbeat), the
+  new worker claims the job, which stays `processing` with `attempt: 2`.
+- The job completes with the same `retrieval_units` as the clean run. Counting again
+  gives exactly that many visible points and no hidden ones.
+
+Indexing lasts under a second, too short to hit by hand, so this scenario kills the
+worker before any unit is written. The automated version,
+`backend/tests/integration/test_crash_recovery.py`, kills it after the units and
+elements are stored, the most partial state an attempt can leave.
 
 ## Scenario 6: vision model unavailable (FR-027)
 
@@ -145,19 +172,50 @@ Expected:
 - Figures show `description_status: not_described`.
 - The summary reports how many figures lack a description.
 
-## Scenario 7: bulk load (US3, SC-006)
+## Scenario 7: bulk load (US3, SC-006, FR-020)
 
-Upload 100 copies with distinct bytes, for example by appending a PDF comment with a
-counter to each copy, while measuring upload and status latency.
+Both measurements run in a separate Compose project on port 8001 and remove it at the
+end, so the development stack keeps its data. The load script uploads byte-distinct
+copies of a sample and prints p50, p95, maximum, timeouts and failures per phase.
 
-Expected:
+**Latency with 100 documents queued (SC-006).** The FAA chapter is the largest sample,
+so it is the slowest upload:
 
-- p95 latency stays under 2 seconds for uploads and status checks.
-- Adding worker replicas shortens the total time:
+```bash
+API_PUBLISHED_PORT=8001 docker compose -p multimodal-rag-load up -d --wait
+uv run --directory backend python -m tests.load.upload_backlog \
+  ../docs/samples/faa-powerplant-ch4-ignition-electrical.pdf \
+  --base-url http://127.0.0.1:8001 --copies 100
+docker compose -p multimodal-rag-load down -v
+```
 
-  ```bash
-  docker compose up -d --scale worker=2
-  ```
+Expected: every phase reports p95 under 2 seconds and no timeouts, and the probe
+uploads, made with the backlog queued, stay close to the baseline uploads.
+
+**Replicas.** Extraction runs on CPU and scales with replicas, while both models share
+the host GPU (research §16). Figure descriptions are disabled so the comparison
+measures the stage that scales. Run the same batch with one worker and then with two:
+
+```bash
+export API_PUBLISHED_PORT=8001 FIGURE_DESCRIPTION_ENABLED=false
+docker compose -p multimodal-rag-load up -d --wait
+uv run --directory backend python -m tests.load.upload_backlog \
+  ../docs/samples/faa-powerplant-ch4-ignition-electrical.pdf \
+  --base-url http://127.0.0.1:8001 --copies 4 --baseline 0 --probe-uploads 0 \
+  --status-seconds 0 --wait
+docker compose -p multimodal-rag-load up -d --wait --scale worker=2
+uv run --directory backend python -m tests.load.upload_backlog \
+  ../docs/samples/faa-powerplant-ch4-ignition-electrical.pdf \
+  --base-url http://127.0.0.1:8001 --copies 4 --baseline 0 --probe-uploads 0 \
+  --status-seconds 0 --wait
+docker compose -p multimodal-rag-load down -v
+unset API_PUBLISHED_PORT FIGURE_DESCRIPTION_ENABLED
+```
+
+Expected: the total processing time with two workers is shorter than with one. On the
+reference machine it drops from 8 min 26 s to 7 min 1 s, because two extractions
+saturate the Docker VM's CPUs (research §15). A later `docker compose up` without
+`--scale` returns to one worker.
 
 ## Automated checks
 

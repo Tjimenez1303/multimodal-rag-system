@@ -5,8 +5,10 @@ each service per session. The database is migrated with Alembic exactly as in
 production, so the tests also prove that the migrations apply cleanly.
 """
 
+import logging
 import os
 import shlex
+import uuid
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 
@@ -20,6 +22,7 @@ from testcontainers.community.postgres import PostgresContainer
 from testcontainers.community.qdrant import QdrantContainer
 
 from multimodal_rag.adapters.postgres.tables import metadata
+from tests.integration.model_apis import MODELS_URL
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 POSTGRES_IMAGE = "postgres:18"
@@ -74,3 +77,42 @@ def embedder_tokenizer_path() -> Path:
         (BACKEND_ROOT / "embedder_tokenizer.txt").read_text()
     )
     return Path(hf_hub_download(repo, filename, revision=revision))
+
+
+@pytest.fixture
+def worker_env(
+    database_url: str,
+    qdrant_url: str,
+    embedder_tokenizer_path: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> Iterator[dict[str, str]]:
+    """Set the worker's environment and yield the values set.
+
+    The models point at ``MODELS_URL``, answered by respx, and the Qdrant collection
+    is new for each test, so tests never see each other's points. Worker
+    subprocesses inherit the same environment.
+    """
+    values = {
+        "DATABASE_URL": database_url,
+        "BLOB_ROOT": str(tmp_path / "blobs"),
+        "QDRANT_URL": qdrant_url,
+        "QDRANT_COLLECTION": f"units_{uuid.uuid4().hex}",
+        "VLM_URL": MODELS_URL,
+        "VLM_MODEL": "vision",
+        "EMBEDDER_URL": MODELS_URL,
+        "EMBEDDER_MODEL": "embedder",
+        "EMBEDDER_TOKENIZER_PATH": str(embedder_tokenizer_path),
+        "LIVENESS_FILE": str(tmp_path / "alive"),
+        "POLL_SECONDS": "0.2",
+        "EXTRACTION_THREADS": "2",
+        "LOG_FORMAT": "console",
+    }
+    artifacts = os.environ.get("DOCLING_ARTIFACTS_PATH")
+    if artifacts:
+        values["DOCLING_ARTIFACTS_PATH"] = artifacts
+    for name, value in values.items():
+        monkeypatch.setenv(name, value)
+    yield values
+    # An in-process worker configures logging, which must not leak into later tests.
+    logging.getLogger().handlers = []

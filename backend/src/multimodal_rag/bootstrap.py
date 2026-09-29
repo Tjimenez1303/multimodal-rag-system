@@ -80,9 +80,6 @@ from multimodal_rag.shared.resilience import RetryPolicy
 
 logger = logging.getLogger(__name__)
 
-# The API embeds one question per request.
-QUERY_BATCH_SIZE = 1
-
 
 class ApiState(IngestionState, AnsweringState):
     """Lifespan state of the API: every use case its routes serve."""
@@ -101,20 +98,15 @@ def create_api_app() -> ASGIApp:
     configure_logging(log_format=settings.log_format, level=settings.log_level)
     engine = create_engine(settings)
     storage = FilesystemBlobStorage(settings.blob_root)
-    clients = AsyncExitStack()
-    state = ApiState(
-        **_ingestion_state(settings, engine, storage),
-        **_answering_state(settings, engine, clients),
-    )
+    ingestion = _ingestion_state(settings, engine, storage)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncGenerator[ApiState]:
-        logger.info("api ready, version %s", __version__)
-        try:
-            yield state
-        finally:
-            await clients.aclose()
-            await engine.dispose()
+        async with AsyncExitStack() as resources:
+            resources.push_async_callback(engine.dispose)
+            answering = await _answering_state(settings, engine, resources)
+            logger.info("api ready, version %s", __version__)
+            yield ApiState(**ingestion, **answering)
 
     app = create_app(
         readiness_checks={
@@ -164,8 +156,8 @@ def _ingestion_state(
     )
 
 
-def _answering_state(
-    settings: ApiSettings, engine: AsyncEngine, clients: AsyncExitStack
+async def _answering_state(
+    settings: ApiSettings, engine: AsyncEngine, resources: AsyncExitStack
 ) -> AnsweringState:
     # No client connects here, so the API starts while Qdrant or the models are down.
     retry = RetryPolicy.for_providers(settings)
@@ -175,23 +167,26 @@ def _answering_state(
         # The version check would call Qdrant from a thread at startup.
         check_compatibility=False,
     )
-    embedder_client = httpx.AsyncClient(
-        base_url=str(settings.embedder_url), timeout=settings.embedder_timeout_seconds
+    resources.push_async_callback(qdrant.close)
+    embedder_client = await resources.enter_async_context(
+        httpx.AsyncClient(
+            base_url=str(settings.embedder_url),
+            timeout=settings.embedder_timeout_seconds,
+        )
     )
-    answer_client = httpx.AsyncClient(
-        base_url=str(settings.answer_model_url),
-        timeout=settings.answer_model_timeout_seconds,
+    answer_client = await resources.enter_async_context(
+        httpx.AsyncClient(
+            base_url=str(settings.answer_model_url),
+            timeout=settings.answer_model_timeout_seconds,
+        )
     )
-    clients.push_async_callback(qdrant.close)
-    clients.push_async_callback(embedder_client.aclose)
-    clients.push_async_callback(answer_client.aclose)
     return AnsweringState(
         answer_question=AnswerQuestion(
             embedder=OpenAICompatibleEmbedder(
                 embedder_client,
                 model=settings.embedder_model,
                 dimensions=settings.embedder_dimensions,
-                batch_size=QUERY_BATCH_SIZE,
+                batch_size=settings.embedder_batch_size,
                 query_instruction=settings.embedder_query_instruction,
                 retry=retry,
             ),
@@ -217,6 +212,7 @@ def _answering_state(
                 max_filter_documents=settings.max_filter_documents,
                 low_confidence_threshold=settings.low_confidence_threshold,
                 min_similarity=settings.min_similarity,
+                attribution_min_score=settings.attribution_min_score,
             ),
         )
     )

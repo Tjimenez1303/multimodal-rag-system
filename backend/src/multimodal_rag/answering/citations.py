@@ -3,7 +3,9 @@
 A marker is kept only when ``n`` is the number of a supplied source, so an answer can
 never cite a page that was not retrieved. Sources that share a document and pages
 become one citation, and citations are renumbered in order of first appearance, with
-the markers in the text rewritten to match.
+the markers in the text rewritten to match. The variants models also write, such as
+``[1, 3]``, ``[1-3]``, ``[[1]]`` and ``【1】``, are first rewritten to separate markers,
+as Onyx, RAGFlow and Open WebUI accept them.
 """
 
 import re
@@ -16,6 +18,12 @@ from multimodal_rag.ingestion.domain import RetrievalUnit
 
 # A marker and the spaces before it, which go away with a removed marker.
 _MARKER = re.compile(r"(?P<space>[ \t]*)\[(?P<number>\d+)\]")
+# Doubled or wide brackets, and lists or ranges of numbers inside one pair of brackets.
+_VARIANT = re.compile(
+    r"\[\[(?P<doubled>\d+)\]\]|【(?P<wide>\d+)】"
+    r"|\[(?P<group>\d+(?:\s*[,\-–]\s*\d+)+)\]"
+)
+_RANGE = re.compile(r"(?P<first>\d+)\s*[\-–]\s*(?P<last>\d+)")
 # The same marker written twice in a row once merged sources share a number.
 _REPEATED_MARKER = re.compile(r"(\[\d+\])(?:\1)+")
 
@@ -53,6 +61,7 @@ def resolve_citations(
         The rewritten text, its citations and the citation number of each cited
         unit. A text without a valid marker has no citations.
     """
+    text = _separate_variants(text, sources=len(units))
     numbers: dict[tuple[uuid.UUID, tuple[int, ...]], int] = {}
     members: dict[int, list[RetrievalUnit]] = {}
 
@@ -84,3 +93,33 @@ def resolve_citations(
             unit.id: number for number, cited in members.items() for unit in cited
         },
     )
+
+
+def has_markers(text: str) -> bool:
+    """Return whether a text holds a source marker in any accepted form.
+
+    Args:
+        text: Answer text written by the model.
+
+    Returns:
+        ``True`` when the text holds at least one marker, valid or not.
+    """
+    return bool(_MARKER.search(text) or _VARIANT.search(text))
+
+
+def _separate_variants(text: str, *, sources: int) -> str:
+    def separate(variant: re.Match[str]) -> str:
+        single = variant["doubled"] or variant["wide"]
+        if single is not None:
+            return f"[{single}]"
+        numbers: list[int] = []
+        for part in re.split(r"\s*,\s*", variant["group"]):
+            if (span := _RANGE.fullmatch(part)) is not None:
+                # A range never expands past the supplied sources.
+                last = min(int(span["last"]), sources)
+                numbers += range(int(span["first"]), last + 1)
+            else:
+                numbers.append(int(part))
+        return "".join(f"[{number}]" for number in numbers)
+
+    return _VARIANT.sub(separate, text)

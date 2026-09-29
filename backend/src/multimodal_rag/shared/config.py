@@ -86,6 +86,7 @@ class ProviderSettings(CommonSettings):
         embedder_model: Model reference of the embedding model.
         embedder_timeout_seconds: Timeout of one embedding request.
         embedder_dimensions: Length of the embedding vectors.
+        embedder_batch_size: Passages sent per embedding request.
         embedder_query_instruction: Task sentence prepended to questions before
             they are embedded, as the embedding model expects for retrieval.
         provider_retry_attempts: Attempts for a transient provider failure.
@@ -102,6 +103,7 @@ class ProviderSettings(CommonSettings):
     embedder_model: str = Field(min_length=1)
     embedder_timeout_seconds: PositiveFloat = 60.0
     embedder_dimensions: PositiveInt = 1024
+    embedder_batch_size: PositiveInt = 32
     embedder_query_instruction: str = Field(
         default=(
             "Given a question about a technical manual, "
@@ -140,6 +142,8 @@ class ApiSettings(ProviderSettings):
         answer_concurrency: Questions answered at the same time.
         answer_queue_limit: Questions allowed to wait for a free place.
         answer_deadline_seconds: Total time of a question, waiting included.
+        attribution_min_score: Lowest match that attributes a statement of an answer
+            written without source markers.
     """
 
     max_upload_bytes: PositiveInt = 200 * _MEGABYTE
@@ -161,6 +165,7 @@ class ApiSettings(ProviderSettings):
     answer_concurrency: PositiveInt = 2
     answer_queue_limit: int = Field(default=10, ge=0)
     answer_deadline_seconds: PositiveFloat = 90.0
+    attribution_min_score: float = Field(default=0.5, ge=0, le=1)
 
     @pydantic.model_validator(mode="after")
     def _generation_fits_the_deadline(self) -> Self:
@@ -181,7 +186,6 @@ class WorkerSettings(ProviderSettings):
         vlm_timeout_seconds: Timeout of one figure description request.
         embedder_tokenizer_path: ``tokenizer.json`` of the embedding model, baked
             into the image.
-        embedder_batch_size: Passages sent per embedding request.
         embedder_max_input_tokens: Longest input the embedding model accepts, the
             physical batch it runs with.
         lease_seconds: Lease granted to a worker for one job.
@@ -213,7 +217,6 @@ class WorkerSettings(ProviderSettings):
     vlm_model: str = Field(min_length=1)
     vlm_timeout_seconds: PositiveFloat = 120.0
     embedder_tokenizer_path: Path
-    embedder_batch_size: PositiveInt = 32
     embedder_max_input_tokens: PositiveInt = 2048
     lease_seconds: PositiveInt = 90
     heartbeat_seconds: PositiveInt = 30

@@ -1,4 +1,5 @@
 import json
+import logging
 from collections.abc import AsyncIterator, Iterator
 from typing import Any
 
@@ -125,3 +126,34 @@ async def test_an_unavailable_model_is_retried_then_reported(
         await generator.generate(PROMPT)
 
     assert route.call_count == 3
+
+
+@respx.mock
+async def test_an_answer_cut_by_the_token_limit_is_an_invalid_response(
+    generator: OpenAICompatibleAnswerGenerator, caplog: pytest.LogCaptureFixture
+) -> None:
+    cut = {"answer": "It regulates poorly [1].", "not_covered": ""}
+    body = reply(json.dumps(cut))
+    body["choices"][0]["finish_reason"] = "length"
+    respx.post(COMPLETIONS).respond(json=body)
+
+    with (
+        caplog.at_level(logging.WARNING),
+        pytest.raises(AnswerModelResponseError),
+    ):
+        await generator.generate(PROMPT)
+
+    assert "token limit" in caplog.text
+
+
+@respx.mock
+async def test_a_complete_answer_may_report_that_it_stopped(
+    generator: OpenAICompatibleAnswerGenerator,
+) -> None:
+    body = reply(json.dumps({"answer": "Poor regulation [1].", "not_covered": ""}))
+    body["choices"][0]["finish_reason"] = "stop"
+    respx.post(COMPLETIONS).respond(json=body)
+
+    answer = await generator.generate(PROMPT)
+
+    assert answer.text == "Poor regulation [1]."

@@ -13,6 +13,7 @@ class _Message(pydantic.BaseModel):
 
 class _Choice(pydantic.BaseModel):
     message: _Message
+    finish_reason: str | None = None
 
 
 class ChatCompletion(pydantic.BaseModel):
@@ -28,3 +29,8 @@ class ChatCompletion(pydantic.BaseModel):
     def content(self) -> str:
         """Text of the first generated message, empty when it has none."""
         return self.choices[0].message.content or ""
+
+    @property
+    def reached_token_limit(self) -> bool:
+        """Whether the first message was cut by the ``max_tokens`` limit."""
+        return self.choices[0].finish_reason == "length"

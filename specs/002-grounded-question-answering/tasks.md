@@ -219,20 +219,20 @@ still pass.
 
 ### Tests (REQUIRED) ⚠️
 
-- [ ] T074 [P] Add to `backend/tests/unit/answering/test_citations.py`: `[1, 3]`, `[1-3]`, `[[1]]` and `【1】` become separate markers, a range expands to at most the supplied sources, and an invalid number inside a variant is dropped.
-- [ ] T075 [P] Write `backend/tests/unit/answering/test_attribution.py`: statements are split by line and sentence, statements under three words get no marker, the marker goes before the final punctuation, the best unit by the 0.7 word share and 0.3 cosine score wins, a score below the minimum adds nothing, and word matching ignores accents and case.
-- [ ] T076 [P] Update `backend/tests/unit/answering/test_prompting.py` for `<sources>`, `<source id pages section document>`, `<question>`, the escaped closing tags and the abstention rule.
-- [ ] T077 [P] Add to `backend/tests/unit/adapters/test_openai_answerer.py`: `finish_reason` `length` raises `AnswerModelResponseError` and logs a warning.
-- [ ] T078 [P] Add to `backend/tests/unit/answering/test_relevance.py` and `backend/tests/unit/answering/test_ask.py`: identical unit texts keep only the best ranked one, the search asks for twice `RETRIEVAL_TOP_K`, an answer without markers is attributed and stays `answered`, and an answer that only cites unsupplied sources stays `no_valid_citations`.
+- [x] T074 [P] Add to `backend/tests/unit/answering/test_citations.py`: `[1, 3]`, `[1-3]`, `[[1]]` and `【1】` become separate markers, a range expands to at most the supplied sources, and an invalid number inside a variant is dropped.
+- [x] T075 [P] Write `backend/tests/unit/answering/test_attribution.py`: statements are split by line and sentence, statements under three words get no marker, the marker goes before the final punctuation, the best unit by the 0.7 word share and 0.3 cosine score wins, a score below the minimum adds nothing, and word matching ignores accents and case.
+- [x] T076 [P] Update `backend/tests/unit/answering/test_prompting.py` for `<sources>`, `<source id pages section document>`, `<question>`, the escaped closing tags and the abstention rule.
+- [x] T077 [P] Add to `backend/tests/unit/adapters/test_openai_answerer.py`: `finish_reason` `length` raises `AnswerModelResponseError` and logs a warning.
+- [x] T078 [P] Add to `backend/tests/unit/answering/test_relevance.py` and `backend/tests/unit/answering/test_ask.py`: identical unit texts keep only the best ranked one, the search asks for twice `RETRIEVAL_TOP_K`, an answer without markers is attributed and stays `answered`, and an answer that only cites unsupplied sources stays `no_valid_citations`.
 
 ### Implementation
 
-- [ ] T079 Rewrite marker variants in `backend/src/multimodal_rag/answering/citations.py` (research section 6).
-- [ ] T080 Implement `backend/src/multimodal_rag/answering/attribution.py`, reusing the sentence pattern of `backend/src/multimodal_rag/ingestion/retrieval_units.py`, and call it from `AnswerQuestion` when the answer has no marker. Add `ATTRIBUTION_MIN_SCORE` to `ApiSettings`, move `EMBEDDER_BATCH_SIZE` to `ProviderSettings`, and document both in `.env.example`.
-- [ ] T081 Build the XML source tags with document names and escaping in `backend/src/multimodal_rag/answering/prompting.py` (research section 5).
-- [ ] T082 Read `finish_reason` in `backend/src/multimodal_rag/adapters/openai_compatible/chat.py` and `answerer.py`.
-- [ ] T083 Add `distinct_hits` to `backend/src/multimodal_rag/answering/relevance.py` and use it in `AnswerQuestion` (research section 3).
-- [ ] T084 Build the answering clients inside the lifespan in `backend/src/multimodal_rag/bootstrap.py`, as Starlette's lifespan state documentation and Polar do.
+- [x] T079 Rewrite marker variants in `backend/src/multimodal_rag/answering/citations.py` (research section 6).
+- [x] T080 Implement `backend/src/multimodal_rag/answering/attribution.py`, reusing the sentence pattern of `backend/src/multimodal_rag/ingestion/retrieval_units.py`, and call it from `AnswerQuestion` when the answer has no marker. Add `ATTRIBUTION_MIN_SCORE` to `ApiSettings`, move `EMBEDDER_BATCH_SIZE` to `ProviderSettings`, and document both in `.env.example`.
+- [x] T081 Build the XML source tags with document names and escaping in `backend/src/multimodal_rag/answering/prompting.py` (research section 5).
+- [x] T082 Read `finish_reason` in `backend/src/multimodal_rag/adapters/openai_compatible/chat.py` and `answerer.py`.
+- [x] T083 Add `distinct_hits` to `backend/src/multimodal_rag/answering/relevance.py` and use it in `AnswerQuestion` (research section 3).
+- [x] T084 Build the answering clients inside the lifespan in `backend/src/multimodal_rag/bootstrap.py`, as Starlette's lifespan state documentation and Polar do.
 - [ ] T085 Rebuild the API and re-run quickstart Scenarios 1 to 3 and the 12 audit questions against the running system.
 
 **Checkpoint**: the MVP keeps correct answers whose markers the model forgot, with every

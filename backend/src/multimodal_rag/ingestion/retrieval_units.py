@@ -23,28 +23,14 @@ from multimodal_rag.ingestion.domain import (
 )
 from multimodal_rag.ingestion.ports import TokenCounter
 from multimodal_rag.ingestion.relationships import repeats_header
+from multimodal_rag.shared.text import split_sentences
 
 _FLOWING_KINDS = frozenset(
     {ElementKind.PARAGRAPH, ElementKind.LIST_ITEM, ElementKind.CAPTION}
 )
 _CAPTION_LINKS = frozenset({RelationshipKind.CAPTION_OF, RelationshipKind.TITLE_OF})
-# A sentence ends at a period, question mark or exclamation mark followed by
-# whitespace.
-_SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
 # The line under a Markdown table header, such as |---|:--:|.
 _HEADER_SEPARATOR = re.compile(r"^\|?\s*:?-{3,}")
-
-
-def split_sentences(text: str) -> list[str]:
-    """Split text into sentences at a terminator followed by whitespace.
-
-    Args:
-        text: Paragraph to split.
-
-    Returns:
-        The sentences in order, without surrounding whitespace.
-    """
-    return [sentence for sentence in _SENTENCE_END.split(text.strip()) if sentence]
 
 
 def build_units(

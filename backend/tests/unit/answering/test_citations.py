@@ -1,4 +1,6 @@
-from multimodal_rag.answering.citations import resolve_citations
+import pytest
+
+from multimodal_rag.answering.citations import has_markers, resolve_citations
 from multimodal_rag.answering.domain import Citation
 from multimodal_rag.ingestion.domain import Document, RetrievalUnit
 from tests.library import document, element, unit
@@ -98,3 +100,46 @@ def test_a_text_without_valid_markers_yields_no_citations() -> None:
     assert cited.text == "Nothing supports this."
     assert cited.citations == ()
     assert cited.numbers == {}
+
+
+@pytest.mark.parametrize(
+    ("written", "rewritten"),
+    [
+        ("Both apply [1, 3].", "Both apply [1][2]."),
+        ("Both apply [1,3].", "Both apply [1][2]."),
+        ("A range [1-3].", "A range [1][2][3]."),
+        ("Doubled [[3]].", "Doubled [1]."),
+        ("Wide brackets 【3】.", "Wide brackets [1]."),
+        ("Invalid inside [3, 9].", "Invalid inside [1]."),
+    ],
+)
+def test_marker_variants_become_separate_markers(written: str, rewritten: str) -> None:
+    units = [on(FAA, 1), on(FAA, 2), on(TM, 3)]
+
+    cited = resolve_citations(written, units, document_names=NAMES)
+
+    assert cited.text == rewritten
+
+
+def test_a_range_expands_only_up_to_the_supplied_sources() -> None:
+    units = [on(FAA, 1), on(FAA, 2)]
+
+    cited = resolve_citations("Everything [1-99999999].", units, document_names=NAMES)
+
+    assert cited.text == "Everything [1][2]."
+    assert [c.number for c in cited.citations] == [1, 2]
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("Cited [1].", True),
+        ("Cited [1, 2].", True),
+        ("Cited 【2】.", True),
+        ("Cited [[2]].", True),
+        ("Not cited at all.", False),
+        ("A footnote-like [a] is not a marker.", False),
+    ],
+)
+def test_markers_are_detected_in_every_accepted_form(text: str, expected: bool) -> None:
+    assert has_markers(text) is expected

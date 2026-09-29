@@ -3,9 +3,11 @@
 The adapter only transports the prompt the core built. The output is constrained with a
 ``json_schema`` response format, which llama-server turns into a grammar, and is then
 validated again, because the server generates unconstrained text when it cannot compile
-a grammar. Thinking is disabled per request, as for figure descriptions.
+a grammar. Thinking is disabled per request, as for figure descriptions. An answer cut
+by the token limit is rejected, because its JSON is incomplete or its text unfinished.
 """
 
+import logging
 from typing import Any
 
 import httpx
@@ -16,6 +18,8 @@ from multimodal_rag.adapters.openai_compatible.transport import post_json
 from multimodal_rag.answering.domain import GeneratedAnswer, GroundedPrompt
 from multimodal_rag.answering.errors import AnswerModelResponseError
 from multimodal_rag.shared.resilience import RetryPolicy
+
+logger = logging.getLogger(__name__)
 
 SERVICE = "answer model"
 ANSWER_SCHEMA: dict[str, Any] = {
@@ -75,7 +79,8 @@ class OpenAICompatibleAnswerGenerator:
             ProviderUnavailableError: If the model stays unreachable after retries.
             ProviderTimeoutError: If the model keeps timing out after retries.
             ProviderResponseError: If the model rejects the request.
-            AnswerModelResponseError: If the answer does not follow the schema.
+            AnswerModelResponseError: If the answer does not follow the schema or was
+                cut by the token limit.
         """
         payload = {
             "model": self._model,
@@ -103,6 +108,11 @@ class OpenAICompatibleAnswerGenerator:
             service=SERVICE,
             retry=self._retry,
         )
+        if completion.reached_token_limit:
+            logger.warning(
+                "%s stopped at the token limit of %s", SERVICE, self._max_tokens
+            )
+            raise AnswerModelResponseError()
         try:
             content = _AnswerContent.model_validate_json(completion.content)
         except pydantic.ValidationError as error:

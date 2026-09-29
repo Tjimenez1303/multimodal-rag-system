@@ -3,7 +3,9 @@
 The answer model is asked only when a retrieved unit passes the relevance gate. Every
 other outcome where the documents do not support an answer, whether decided before or
 after the model call, is a not-enough-information answer with a reason and no
-citations, sources or images.
+citations, sources or images. An answer the model wrote without any source marker is
+attributed to the supplied units statement by statement before its citations are
+checked.
 """
 
 import logging
@@ -12,7 +14,12 @@ import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from multimodal_rag.answering.citations import resolve_citations
+from multimodal_rag.answering.attribution import attribute, find_statements
+from multimodal_rag.answering.citations import (
+    CitedText,
+    has_markers,
+    resolve_citations,
+)
 from multimodal_rag.answering.domain import (
     Answer,
     AnswerStatus,
@@ -23,7 +30,7 @@ from multimodal_rag.answering.domain import (
 from multimodal_rag.answering.messages import SUPPORTED_LANGUAGES, not_enough_message
 from multimodal_rag.answering.ports import AnswerGenerator, LanguageIdentifier
 from multimodal_rag.answering.prompting import build_prompt
-from multimodal_rag.answering.relevance import passes_gate
+from multimodal_rag.answering.relevance import distinct_hits, passes_gate
 from multimodal_rag.answering.sources import assemble_sources, elements_of
 from multimodal_rag.ingestion.domain import ExtractedElement
 from multimodal_rag.ingestion.ports import (
@@ -36,6 +43,9 @@ from multimodal_rag.ingestion.ports import (
 from multimodal_rag.shared.errors import DataInconsistencyError
 
 logger = logging.getLogger(__name__)
+
+# Hits searched per supplied unit, so that dropping repeated texts keeps the slots full.
+SEARCH_OVERFETCH = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,6 +60,8 @@ class AnsweringOptions:
             flagged as low-confidence recognized text.
         min_similarity: Lowest dense similarity that lets a unit pass the relevance
             gate.
+        attribution_min_score: Lowest match that attributes a statement of an answer
+            written without markers.
     """
 
     top_k: int
@@ -57,6 +69,7 @@ class AnsweringOptions:
     max_filter_documents: int
     low_confidence_threshold: float
     min_similarity: float
+    attribution_min_score: float
 
 
 @dataclass
@@ -148,22 +161,29 @@ class AnswerQuestion:
         names = await self._document_names(hits)
         elements = await self._elements_of(hits)
         started = time.perf_counter()
-        generated = await self._generator.generate(build_prompt(question, hits))
+        prompt = build_prompt(question, hits, document_names=names)
+        generated = await self._generator.generate(prompt)
         timings.generation_ms = (time.perf_counter() - started) * 1000
         if not generated.text.strip():
             return self._not_enough(
                 question, NotEnoughReason.NOT_ANSWERED_BY_SOURCES, generated
             )
-        return self._grounded(question, generated, hits, names, elements)
+        cited = await self._cited(generated.text, hits, names)
+        if not cited.citations:
+            return self._not_enough(
+                question, NotEnoughReason.NO_VALID_CITATIONS, generated
+            )
+        return self._grounded(generated, cited, hits, names, elements)
 
     async def _search(self, question: Question) -> list[SearchHit]:
         vector = await self._embedder.embed_query(question.text)
-        return await self._index.search_hybrid(
+        hits = await self._index.search_hybrid(
             query_text=question.text,
             query_vector=vector,
-            limit=self._options.top_k,
+            limit=self._options.top_k * SEARCH_OVERFETCH,
             document_ids=question.document_ids,
         )
+        return distinct_hits(hits, limit=self._options.top_k)
 
     async def _document_names(self, hits: Sequence[SearchHit]) -> dict[uuid.UUID, str]:
         wanted = list(dict.fromkeys(hit.unit.document_id for hit in hits))
@@ -181,21 +201,46 @@ class AnswerQuestion:
         wanted = list(dict.fromkeys(i for hit in hits for i in elements_of(hit.unit)))
         return {e.id: e for e in await self._elements.get_many(wanted)}
 
+    async def _cited(
+        self, text: str, hits: Sequence[SearchHit], names: dict[uuid.UUID, str]
+    ) -> CitedText:
+        units = [hit.unit for hit in hits]
+        # An answer that cites only unsupplied sources invented them, so it is kept.
+        if not has_markers(text):
+            text = await self._attributed(text, hits)
+        return resolve_citations(text, units, document_names=names)
+
+    async def _attributed(self, text: str, hits: Sequence[SearchHit]) -> str:
+        statements = find_statements(text)
+        if not statements:
+            return text
+        units = [hit.unit for hit in hits]
+        vectors = await self._embedder.embed(
+            [s.text for s in statements] + [unit.embedding_text for unit in units]
+        )
+        attribution = attribute(
+            text,
+            statements,
+            units=units,
+            statement_vectors=vectors[: len(statements)],
+            unit_vectors=vectors[len(statements) :],
+            min_score=self._options.attribution_min_score,
+        )
+        logger.info(
+            "answer without markers: attributed %s of %s statements",
+            attribution.attributed,
+            len(statements),
+        )
+        return attribution.text
+
     def _grounded(
         self,
-        question: Question,
         generated: GeneratedAnswer,
+        cited: CitedText,
         hits: Sequence[SearchHit],
         names: dict[uuid.UUID, str],
         elements: dict[uuid.UUID, ExtractedElement],
     ) -> Answer:
-        cited = resolve_citations(
-            generated.text, [hit.unit for hit in hits], document_names=names
-        )
-        if not cited.citations:
-            return self._not_enough(
-                question, NotEnoughReason.NO_VALID_CITATIONS, generated
-            )
         return Answer(
             status=AnswerStatus.ANSWERED,
             reason=None,

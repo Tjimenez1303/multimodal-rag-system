@@ -1,6 +1,6 @@
 import pytest
 
-from multimodal_rag.answering.relevance import passes_gate
+from multimodal_rag.answering.relevance import distinct_hits, passes_gate
 from multimodal_rag.ingestion.ports import SearchHit
 from tests.library import document, element, hit, unit
 
@@ -31,3 +31,26 @@ def test_the_gate_passes_when_any_hit_passes() -> None:
 
 def test_no_hits_never_pass() -> None:
     assert not passes_gate([], min_similarity=0.0)
+
+
+def test_units_with_identical_text_keep_only_the_best_ranked() -> None:
+    other = document("insst-copy.pdf")
+    first = hit(
+        unit(MANUAL, "Riesgo eléctrico.\nDefinición.", members=[element(MANUAL)])
+    )
+    copy = hit(
+        unit(other, "  riesgo ELÉCTRICO. definición. ", members=[element(other)])
+    )
+    different = hit(unit(MANUAL, "Otra cosa.", members=[element(MANUAL)]))
+
+    kept = distinct_hits([first, copy, different], limit=8)
+
+    assert kept == [first, different]
+
+
+def test_distinct_hits_stop_at_the_limit() -> None:
+    hits = [
+        hit(unit(MANUAL, f"Text {n}.", members=[element(MANUAL)])) for n in range(3)
+    ]
+
+    assert distinct_hits(hits, limit=2) == hits[:2]

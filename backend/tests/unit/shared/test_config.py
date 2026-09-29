@@ -79,6 +79,8 @@ def test_api_settings_expose_the_documented_answering_defaults(
     )
     assert settings.qdrant_collection == "retrieval_units"
     assert settings.provider_retry_attempts == 4
+    assert settings.attribution_min_score == 0.5
+    assert settings.embedder_batch_size == 32
 
 
 def test_the_api_requires_the_answer_model_and_the_search_services(
@@ -120,6 +122,7 @@ def test_the_answer_model_timeout_must_be_shorter_than_the_deadline(
         ("LOW_CONFIDENCE_THRESHOLD", "-0.1"),
         ("ANSWER_TEMPERATURE", "2.5"),
         ("ANSWER_QUEUE_LIMIT", "-1"),
+        ("ATTRIBUTION_MIN_SCORE", "1.5"),
     ],
 )
 def test_answering_bounds_are_enforced(

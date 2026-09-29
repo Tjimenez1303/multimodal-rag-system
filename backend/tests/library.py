@@ -148,6 +148,7 @@ class Library:
             "max_filter_documents": 20,
             "low_confidence_threshold": 0.90,
             "min_similarity": 0.60,
+            "attribution_min_score": 0.5,
         }
         return AnswerQuestion(
             embedder=self.embedder,

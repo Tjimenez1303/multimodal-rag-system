@@ -6,9 +6,11 @@ import os
 import time
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
+import httpx
 import pytest
+from asgi_lifespan import LifespanManager
 from fastapi.testclient import TestClient
 
 from multimodal_rag import bootstrap
@@ -88,6 +90,32 @@ def test_api_answers_503_while_the_database_is_unreachable(
 
     assert response.status_code == 503
     assert response.json()["code"] == "storage_unavailable"
+
+
+class RecordingClient(httpx.AsyncClient):
+    """An httpx client that records every instance created."""
+
+    created: ClassVar[list[httpx.AsyncClient]] = []
+
+    def __init__(self, **options: Any) -> None:
+        super().__init__(**options)
+        RecordingClient.created.append(self)
+
+
+async def test_answering_clients_live_only_inside_the_lifespan(
+    api_env: pytest.MonkeyPatch,
+) -> None:
+    RecordingClient.created = []
+    api_env.setattr(httpx, "AsyncClient", RecordingClient)
+    app = bootstrap.create_api_app()
+    assert RecordingClient.created == []
+
+    async with LifespanManager(app):
+        opened = list(RecordingClient.created)
+        assert len(opened) == 2
+        assert not any(client.is_closed for client in opened)
+
+    assert all(client.is_closed for client in opened)
 
 
 def test_questions_are_served_and_fail_while_search_is_unreachable(

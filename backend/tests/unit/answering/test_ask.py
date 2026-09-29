@@ -247,7 +247,7 @@ class TestNotEnoughInformation:
         )
         assert "Invented" not in answer.text
 
-    async def test_an_answer_without_markers_is_not_shown(
+    async def test_an_answer_without_markers_matching_no_source_is_not_shown(
         self, library: Library, faa: Document
     ) -> None:
         await add_text(library, faa, SERIES, 12)
@@ -289,3 +289,89 @@ class TestNotEnoughInformation:
         assert "outcome not_enough_information" in message
         assert "reason no_searchable_documents" in message
         assert "units 0" in message
+
+
+class TestAttribution:
+    async def test_an_answer_without_markers_is_attributed_to_its_sources(
+        self, library: Library, faa: Document
+    ) -> None:
+        series = await add_text(library, faa, SERIES, 12)
+        table = await add_text(library, faa, TABLE, 3, 4)
+        library.answer(
+            GeneratedAnswer(
+                text=(
+                    "A series wound generator has poor voltage regulation.\n"
+                    "- Generator ratings table continues on the next page"
+                ),
+                not_covered="",
+            )
+        )
+
+        answer = await library.ask()(QUESTION)
+
+        assert answer.status is AnswerStatus.ANSWERED
+        assert answer.text == (
+            "A series wound generator has poor voltage regulation [1].\n"
+            "- Generator ratings table continues on the next page [2]"
+        )
+        assert [c.unit_ids for c in answer.citations] == [(series.id,), (table.id,)]
+
+    async def test_statements_and_units_are_embedded_as_passages_in_one_request(
+        self, library: Library, faa: Document
+    ) -> None:
+        await add_text(library, faa, SERIES, 12)
+        library.answer(
+            GeneratedAnswer(
+                text="A series wound generator has poor voltage regulation.",
+                not_covered="",
+            )
+        )
+
+        await library.ask()(QUESTION)
+
+        [request] = library.embedder.calls
+        assert request == [
+            "A series wound generator has poor voltage regulation.",
+            f"Generators\n{SERIES}",
+        ]
+
+    async def test_an_answer_with_markers_is_not_attributed_again(
+        self, library: Library, faa: Document
+    ) -> None:
+        await add_text(library, faa, SERIES, 12)
+        library.answer(GeneratedAnswer(text="Poor regulation [1].", not_covered=""))
+
+        await library.ask()(QUESTION)
+
+        assert library.embedder.calls == []
+
+    async def test_attribution_logs_how_many_statements_it_cited(
+        self, library: Library, faa: Document, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        await add_text(library, faa, SERIES, 12)
+        library.answer(
+            GeneratedAnswer(
+                text="A series wound generator has poor voltage regulation.",
+                not_covered="",
+            )
+        )
+
+        with caplog.at_level(logging.INFO, logger=LOGGER):
+            await library.ask()(QUESTION)
+
+        assert "attributed 1 of 1 statements" in caplog.text
+
+
+async def test_the_search_asks_for_twice_the_units_and_drops_identical_ones(
+    library: Library, faa: Document
+) -> None:
+    copy = document("faa-powerplant-copy.pdf")
+    original = await add_text(library, faa, SERIES, 12)
+    await add_text(library, copy, SERIES, 12)
+    await add_text(library, faa, TABLE, 3, 4)
+
+    answer = await library.ask(top_k=8)(QUESTION)
+
+    assert library.index.searches[0]["limit"] == 16
+    assert [s.unit_id for s in answer.sources][0] == original.id
+    assert len(answer.sources) == 2

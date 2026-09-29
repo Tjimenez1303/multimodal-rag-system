@@ -292,8 +292,9 @@ client does not offer it.
 5. **Given** a deletion the service refuses or cannot complete, **When** it ends, **Then**
    the client shows the reason with its reference and the document stays listed.
 6. **Given** earlier turns that cite a deleted document, **When** the technician opens one
-   of its figures or pages, **Then** the view says the image or page is unavailable, and
-   the answer text and its source lines stay as they were.
+   of its pages, or reloads the conversation, **Then** the page view and the figures say
+   they are unavailable, and the answer text and its source lines stay as they were. A
+   figure already on screen may stay visible until the reload.
 
 ---
 

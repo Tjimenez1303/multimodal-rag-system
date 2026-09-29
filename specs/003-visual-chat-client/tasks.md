@@ -517,7 +517,7 @@ longer cited (quickstart scenario 10).
 - [X] T112 [US5] Let `frontend/src/images/PageDialog.tsx` open over a whole document, with the "Page {n} of {count}" counter, and add "View document" to ready rows in `frontend/src/documents/DocumentList.tsx`.
 - [X] T113 [US5] Implement `frontend/src/documents/DeleteDocumentDialog.tsx` (shadcn/ui `AlertDialog`, `deleteDocument` through `callService`, the failure messages of contracts/client.md section 3 with `FailureNotice`), add "Delete" to ready and failed rows, and remove the document from the library cache on success in `frontend/src/documents/useLibrary.ts`.
 - [X] T114 [US5] Write ADR `docs/adr/0008-document-deletion.md` from research section 18, and update the README's API and usage sections.
-- [ ] T115 [US5] Run the backend and frontend unit, contract, integration and e2e suites, then quickstart scenario 10 against the running system.
+- [X] T115 [US5] Run the backend and frontend unit, contract, integration and e2e suites, then quickstart scenario 10 against the running system.
 
 **Checkpoint**: documents can be read in full and removed from the client
 

@@ -1,0 +1,74 @@
+"""Validation of HTTP responses against the OpenAPI contract of the feature.
+
+OpenAPI 3.1 schemas are JSON Schema 2020-12, so each response body is validated with
+``Draft202012Validator`` through a registry that holds the whole contract.
+"""
+
+from collections.abc import Mapping
+from pathlib import Path
+from typing import Any, Protocol
+
+import yaml
+from jsonschema import Draft202012Validator
+from referencing import Registry
+from referencing.jsonschema import DRAFT202012
+
+CONTRACT_PATH = (
+    Path(__file__).resolve().parents[3]
+    / "specs"
+    / "001-async-pdf-ingestion"
+    / "contracts"
+    / "openapi.yaml"
+)
+CONTRACT: dict[str, Any] = yaml.safe_load(CONTRACT_PATH.read_text())
+_URI = "urn:multimodal-rag:openapi"
+_REGISTRY: Registry[Any] = Registry().with_resource(
+    _URI, DRAFT202012.create_resource(CONTRACT)
+)
+
+
+class HttpResponse(Protocol):
+    """What the contract check reads from a test client response."""
+
+    @property
+    def status_code(self) -> int: ...
+
+    @property
+    def headers(self) -> Mapping[str, str]: ...
+
+    def json(self) -> Any: ...
+
+
+def resolve(node: dict[str, Any]) -> dict[str, Any]:
+    """Follow local ``$ref`` pointers until a concrete object is reached."""
+    resolver = _REGISTRY.resolver(_URI)
+    while "$ref" in node:
+        node = resolver.lookup(node["$ref"]).contents
+    return node
+
+
+def assert_matches_contract(response: HttpResponse, *, path: str, method: str) -> None:
+    """Fail unless the status, media type and body are declared by the contract.
+
+    Args:
+        response: Response returned by the test client.
+        path: Path template of the operation, as written in the contract.
+        method: HTTP method in lowercase.
+    """
+    operation = CONTRACT["paths"][path][method]
+    declared = operation["responses"]
+    status = str(response.status_code)
+    assert status in declared, f"{method.upper()} {path} does not declare {status}"
+    content = resolve(declared[status]).get("content", {})
+    media_type = response.headers["content-type"].split(";")[0]
+    assert media_type in content, f"{status} is not declared as {media_type}"
+    schema = content[media_type]["schema"]
+    pointer = schema["$ref"] if "$ref" in schema else None
+    assert pointer is not None, "contract bodies are named components"
+    validator = Draft202012Validator(
+        {"$ref": f"{_URI}{pointer}"},
+        registry=_REGISTRY,
+        format_checker=Draft202012Validator.FORMAT_CHECKER,
+    )
+    validator.validate(response.json())
+    assert response.headers["x-request-id"]

@@ -51,6 +51,15 @@ Run these from the repository root. The backend is a uv project in `backend/`.
 | Run the tests with the 90% coverage gate | `uv run --directory backend pytest --cov` |
 | Check the import contracts only | `uv run --directory backend lint-imports` |
 | Audit the GitHub Actions workflows | `uvx zizmor --persona=pedantic .github/workflows/` |
+| Start the whole system (after `cp .env.example .env`) | `docker compose up -d --build --wait` |
+| Stop it, keeping data | `docker compose down` |
+| Run the API or the worker outside Docker | `uv run --directory backend python -m multimodal_rag {api,worker}` |
+| Create a migration after changing `tables.py` | `uv run --directory backend alembic revision --autogenerate -m "<change>"` |
+| Regenerate the test PDFs | `uv run --directory backend python tests/fixtures/build_fixtures.py` |
+
+Integration tests start PostgreSQL and Qdrant with testcontainers, so Docker must be
+running. Docker Model Runner must be enabled once with
+`docker desktop enable model-runner --tcp 12434 --cors none` before `docker compose up`.
 
 CI runs the same pre-commit hooks and the same test command, so a clean local run means
 a clean CI run.
@@ -125,6 +134,27 @@ are these:
   Technical decision and AI assistance.
 - GitHub Actions are pinned by full commit SHA and audited with zizmor. Secrets are
   never committed.
+
+## Choosing patterns
+
+- Never reimplement logic that already exists. Before writing any helper, class or
+  utility, check in this order and report the result:
+  1. The project's own modules.
+  2. The dependencies already installed, by reading their source in
+     `backend/.venv/lib/python3.14/site-packages` or their official documentation.
+  3. The Python standard library.
+
+  New code is written only when all three come up empty, and the pull request states
+  why. Retries, for example, go through `shared/resilience.py`, which wraps stamina.
+- Before introducing a usage pattern (an entry point, a startup command, a settings
+  layout, middleware, error handling, a project layout), check how the official
+  documentation of the framework or library does it. For FastAPI that is
+  fastapi.tiangolo.com, and for the server that is uvicorn.dev.
+- When the documentation does not cover the case, follow a widely used reference
+  codebase (for example the official full-stack-fastapi-template, Apache Airflow,
+  Prefect or Polar) and name it in the pull request's Technical decision section.
+- A pattern chosen from habit, with no documentation or reference behind it, is
+  proposed to the maintainer before it is written.
 
 ## Agent boundaries
 

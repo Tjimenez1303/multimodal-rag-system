@@ -43,5 +43,33 @@ jobs:
           version: "0.12.19"
       - name: Install dependencies
         run: uv sync --locked
+      # Docling's model prefetching for offline use, cached like Docling's own CI:
+      # the models change only with the locked Docling version or the model list.
+      - name: Restore extraction models
+        id: models
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ${{ runner.temp }}/docling-models
+          key: docling-models-${{ runner.os }}-${{ hashFiles('backend/uv.lock', 'backend/docling_models.txt') }}
+      - name: Download extraction models
+        if: steps.models.outputs.cache-hit != 'true'
+        run: uv run docling-tools models download $(cat docling_models.txt) --output-dir "$DOCLING_ARTIFACTS_PATH"
+        env:
+          DOCLING_ARTIFACTS_PATH: ${{ runner.temp }}/docling-models
+      # The embedding tokenizer at the revision pinned for the image, cached the same way.
+      - name: Restore embedding tokenizer
+        id: tokenizer
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ${{ runner.temp }}/embedder-tokenizer
+          key: embedder-tokenizer-${{ hashFiles('backend/embedder_tokenizer.txt') }}
+      - name: Download embedding tokenizer
+        if: steps.tokenizer.outputs.cache-hit != 'true'
+        run: uv run hf download $(cat embedder_tokenizer.txt) --local-dir "$TOKENIZER_DIR"
+        env:
+          TOKENIZER_DIR: ${{ runner.temp }}/embedder-tokenizer
       - name: Run tests
         run: uv run pytest --cov --cov-report=term-missing
+        env:
+          DOCLING_ARTIFACTS_PATH: ${{ runner.temp }}/docling-models
+          EMBEDDER_TOKENIZER_PATH: ${{ runner.temp }}/embedder-tokenizer/tokenizer.json

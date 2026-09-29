@@ -1,0 +1,1 @@
+layout tableformer picture_classifier rapidocr --rapidocr-backend-lang onnxruntime:ch

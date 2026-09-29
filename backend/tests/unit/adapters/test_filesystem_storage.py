@@ -71,6 +71,29 @@ async def test_delete_is_idempotent(storage: FilesystemBlobStorage) -> None:
     assert not await storage.exists("figures/a.png")
 
 
+async def test_delete_tree_removes_every_object_under_a_prefix_only(
+    storage: FilesystemBlobStorage,
+) -> None:
+    for key in ("pages/a/1.png", "pages/a/2.png", "pages/ab/1.png", "figures/a/x.png"):
+        await storage.save_bytes(key, b"png")
+
+    await storage.delete_tree("pages/a")
+    await storage.delete_tree("pages/a")
+    await storage.delete_tree("pages/never")
+
+    assert not await storage.exists("pages/a/1.png")
+    assert not await storage.exists("pages/a/2.png")
+    assert await storage.exists("pages/ab/1.png")
+    assert await storage.exists("figures/a/x.png")
+
+
+async def test_delete_tree_rejects_unsafe_prefixes(
+    storage: FilesystemBlobStorage,
+) -> None:
+    with pytest.raises(InvalidBlobKeyError):
+        await storage.delete_tree("../outside")
+
+
 async def test_materialize_yields_the_stored_file(
     storage: FilesystemBlobStorage,
 ) -> None:

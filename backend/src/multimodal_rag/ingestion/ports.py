@@ -159,6 +159,22 @@ class DocumentRepository(Protocol):
         """
         ...
 
+    async def delete(self, document_id: uuid.UUID) -> None:
+        """Delete a document with its jobs, elements and relationships.
+
+        The check for an active job and the deletion are one atomic step, so a job
+        enqueued meanwhile keeps the document.
+
+        Args:
+            document_id: Id of the document.
+
+        Raises:
+            DocumentNotFoundError: If no document has this id.
+            IngestionInProgressError: If a job of the document is pending or
+                processing.
+        """
+        ...
+
 
 class JobQueue(Protocol):
     """Durable queue and store of ingestion jobs with leases and fencing.
@@ -470,6 +486,14 @@ class BlobStorage(Protocol):
 
         Args:
             key: Key of the object.
+        """
+        ...
+
+    async def delete_tree(self, prefix: str) -> None:
+        """Remove every object stored under a key prefix, if any.
+
+        Args:
+            prefix: Leading path segments of the keys, such as ``pages/{id}``.
         """
         ...
 

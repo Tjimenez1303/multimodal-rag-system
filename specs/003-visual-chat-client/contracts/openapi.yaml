@@ -1,15 +1,48 @@
 openapi: 3.1.0
 info:
-  title: Multimodal RAG page image API
+  title: Multimodal RAG page image and document deletion API
   version: 0.1.0
   description: >
     Rendered pages of completed documents, so a client can show the original page
-    behind a citation or a figure. Pages are rendered at ingestion, never on request.
-    Errors use RFC 9457 problem details, defined in the ingestion contract. Every
-    response carries an X-Request-ID header.
+    behind a citation or a figure, and the deletion of a document. Pages are rendered
+    at ingestion, never on request. Errors use RFC 9457 problem details, defined in the
+    ingestion contract. Every response carries an X-Request-ID header.
 servers:
   - url: http://localhost:8000
 paths:
+  /api/v1/documents/{document_id}:
+    delete:
+      operationId: deleteDocument
+      summary: Delete a document
+      description: >
+        Removes the document, its jobs, everything captured from it, its page images
+        and its original file, so it is no longer listed, searched or cited. Refused
+        while the document's latest job is pending or processing.
+      parameters:
+        - $ref: "../../001-async-pdf-ingestion/contracts/openapi.yaml#/components/parameters/DocumentId"
+      responses:
+        "204":
+          description: The document was deleted
+        "400":
+          $ref: "../../001-async-pdf-ingestion/contracts/openapi.yaml#/components/responses/Problem"
+        "404":
+          description: document_not_found
+          content:
+            application/problem+json:
+              schema:
+                $ref: "../../001-async-pdf-ingestion/contracts/openapi.yaml#/components/schemas/Problem"
+        "409":
+          description: ingestion_in_progress (the document is pending or processing)
+          content:
+            application/problem+json:
+              schema:
+                $ref: "../../001-async-pdf-ingestion/contracts/openapi.yaml#/components/schemas/Problem"
+        "503":
+          description: The vector index or the file storage is unavailable
+          content:
+            application/problem+json:
+              schema:
+                $ref: "../../001-async-pdf-ingestion/contracts/openapi.yaml#/components/schemas/Problem"
   /api/v1/documents/{document_id}/pages/{page_number}/image:
     get:
       operationId: getDocumentPageImage

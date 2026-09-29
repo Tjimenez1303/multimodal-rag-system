@@ -218,3 +218,29 @@ fake extractor fills it with a tiny PNG per page.
 | Read the blob | Missing | `DataInconsistencyError` | 500 `data_inconsistency` |
 
 It returns the PNG bytes. The route answers `image/png`.
+
+### 4.4 DeleteDocument use case
+
+`DeleteDocument(documents, jobs, index, blobs)` in `ingestion/use_cases/library.py`
+(research section 18):
+
+| Step | Failure | Error | HTTP |
+|---|---|---|---|
+| Load the document | Unknown id | `DocumentNotFoundError` | 404 `document_not_found` |
+| Check the latest job | `pending` or `processing` | `IngestionInProgressError` (new, a `ConcurrencyError`) | 409 `ingestion_in_progress` |
+| Remove the index points | Index unavailable | `ProviderError` | 503 |
+| Remove `figures/{document_id}`, `pages/{document_id}` and the original PDF | Disk unavailable | `StorageError` or `OSError` | 503 or 500 |
+| Lock the row, check its jobs again and delete it | Job became active | `IngestionInProgressError` | 409 `ingestion_in_progress` |
+
+The route answers 204 with no body.
+
+New port members:
+
+- `DocumentRepository.delete(document_id)`: deletes the row with its jobs, elements and
+  relationships. It raises `DocumentNotFoundError` for an unknown id and
+  `IngestionInProgressError` when a job of the document is pending or processing.
+- `BlobStorage.delete_tree(prefix)`: removes every object stored under a key prefix, and
+  does nothing when there is none.
+- `ExtractedElement.figures_prefix_for(document_id)` and
+  `ExtractedElement.pages_prefix_for(document_id)`: the prefixes the crop and page keys
+  are built under.

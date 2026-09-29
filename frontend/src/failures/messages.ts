@@ -63,6 +63,7 @@ const PROBLEM_MESSAGES: Record<string, { kind: FailureKind; message: string }> =
 const RESTRICTION_CODES = new Set(["unknown_documents", "documents_not_ready"]);
 const UNREACHABLE = "The service could not be reached.";
 const UNREADABLE = "The service sent a response that could not be read.";
+const TIMED_OUT = "The service did not answer in time.";
 
 /**
  * Translate a failed question into its plain-English message and action (FR-024).
@@ -92,11 +93,7 @@ function describe(failure: ServiceFailure): Omit<
     case "unreachable":
       return { kind: "unreachable", message: UNREACHABLE, action: "retry" };
     case "timed_out":
-      return {
-        kind: "timed_out",
-        message: "The service did not answer in time.",
-        action: "retry",
-      };
+      return { kind: "timed_out", message: TIMED_OUT, action: "retry" };
     case "unreadable":
       return { kind: "unreadable", message: UNREADABLE, action: "retry" };
     case "problem":
@@ -139,6 +136,49 @@ function describeProblem(
     message: "Something went wrong on the service.",
     action: "retry",
   };
+}
+
+/** A failed deletion as shown in its confirmation (FR-049). */
+export interface DeletionFailure {
+  message: string;
+  reference: string;
+  /** Whether "Delete document" is offered again. */
+  retryable: boolean;
+}
+
+/**
+ * Translate a failed deletion into its message (contracts/client.md section 3).
+ *
+ * @param failure - The failure of the deletion.
+ * @returns The message and whether the deletion can be asked for again, or `null`
+ *   when the document no longer exists, which is what the user asked for.
+ */
+export function toDeletionFailure(failure: ServiceFailure): DeletionFailure | null {
+  const reference = failure.requestId;
+  switch (failure.kind) {
+    case "unreachable":
+      return { message: UNREACHABLE, reference, retryable: true };
+    case "timed_out":
+      return { message: TIMED_OUT, reference, retryable: true };
+    case "unreadable":
+      return { message: UNREADABLE, reference, retryable: true };
+    case "problem":
+      break;
+  }
+  if (failure.code === "document_not_found") return null;
+  if (failure.code === "ingestion_in_progress") {
+    return {
+      message:
+        "This document is being processed. It can be deleted once processing ends.",
+      reference,
+      retryable: false,
+    };
+  }
+  const detail = failure.status < 500 ? failure.detail : null;
+  const message = ["The document could not be deleted.", detail]
+    .filter(Boolean)
+    .join(" ");
+  return { message, reference, retryable: true };
 }
 
 /** The client's own refusal of a file that is not a PDF (FR-032). */

@@ -62,6 +62,7 @@ export function DocumentPanel() {
           hasMore={library.hasMore}
           onLoadMore={() => void library.loadMore()}
           onUploadAgain={() => upload.current?.openFilePicker()}
+          onDeleted={(documentId) => void library.remove(documentId)}
         />
       </SidebarContent>
     </Sidebar>

@@ -5,28 +5,37 @@ from dataclasses import dataclass, field
 import pytest
 
 from multimodal_rag.ingestion.domain import (
+    BoundingBox,
     Document,
     ElementKind,
     ExtractedElement,
     JobStatus,
     JobSummary,
+    PagedBox,
     RelationshipKind,
+    RetrievalUnit,
+    UnitType,
 )
 from multimodal_rag.ingestion.errors import (
     DocumentNotFoundError,
     ElementNotFoundError,
     ImageNotFoundError,
+    IngestionInProgressError,
     IngestionNotCompletedError,
     PageNotFoundError,
 )
 from multimodal_rag.ingestion.use_cases.library import (
+    DeleteDocument,
     GetDocument,
     GetElementImage,
     GetPageImage,
     ListDocumentElements,
     ListDocuments,
 )
-from multimodal_rag.shared.errors import DataInconsistencyError
+from multimodal_rag.shared.errors import (
+    DataInconsistencyError,
+    ProviderUnavailableError,
+)
 from tests.builders import DOCUMENT_ID, SHA, link, make
 from tests.fakes import (
     FrozenClock,
@@ -34,6 +43,7 @@ from tests.fakes import (
     InMemoryDocumentRepository,
     InMemoryElementRepository,
     InMemoryJobQueue,
+    InMemoryVectorIndex,
     claim_next,
     finish_next,
     pending_job,
@@ -45,13 +55,12 @@ PNG = b"\x89PNG\r\n\x1a\n-figure"
 @dataclass
 class Library:
     clock: FrozenClock = field(default_factory=FrozenClock)
-    documents: InMemoryDocumentRepository = field(
-        default_factory=InMemoryDocumentRepository
-    )
     blobs: InMemoryBlobStorage = field(default_factory=InMemoryBlobStorage)
+    index: InMemoryVectorIndex = field(default_factory=InMemoryVectorIndex)
 
     def __post_init__(self) -> None:
         self.jobs = InMemoryJobQueue(self.clock)
+        self.documents = InMemoryDocumentRepository(jobs=self.jobs)
         self.elements = InMemoryElementRepository(self.jobs)
         self.list_elements = ListDocumentElements(
             documents=self.documents, jobs=self.jobs, elements=self.elements
@@ -61,6 +70,9 @@ class Library:
         self.get_document = GetDocument(documents=self.documents, jobs=self.jobs)
         self.get_page = GetPageImage(
             documents=self.documents, jobs=self.jobs, blobs=self.blobs
+        )
+        self.delete = DeleteDocument(
+            documents=self.documents, jobs=self.jobs, index=self.index, blobs=self.blobs
         )
 
     async def registered(self, name: str) -> Document:
@@ -339,3 +351,115 @@ async def test_a_missing_page_image_of_a_completed_document_is_an_inconsistency(
 
     with pytest.raises(DataInconsistencyError):
         await library.get_page(DOCUMENT_ID, 1)
+
+
+async def stored_files(library: Library, document: Document) -> list[str]:
+    """Store an original, a figure crop and two page images of a document."""
+    keys = [
+        document.blob_key,
+        ExtractedElement.image_key_for(
+            document_id=document.id, element_id=uuid.uuid4()
+        ),
+        *(
+            ExtractedElement.page_image_key_for(document_id=document.id, page_number=n)
+            for n in (1, 2)
+        ),
+    ]
+    for key in keys:
+        await library.blobs.save_bytes(key, PNG)
+    return keys
+
+
+async def indexed(library: Library, document: Document) -> None:
+    await library.index.upsert_units([unit_of(document)], [[0.0]])
+    await library.index.publish(document.id)
+
+
+def unit_of(document: Document) -> RetrievalUnit:
+    return RetrievalUnit(
+        id=uuid.uuid4(),
+        document_id=document.id,
+        unit_type=UnitType.TEXT,
+        text="pump",
+        heading_path=(),
+        pages=(1,),
+        element_ids=(uuid.uuid4(),),
+        boxes=(PagedBox(page=1, bbox=BoundingBox(left=0, top=0, right=1, bottom=1)),),
+    )
+
+
+@pytest.mark.parametrize("succeed", [True, False], ids=["completed", "failed"])
+async def test_deleting_a_finished_document_removes_everything_it_left(
+    library: Library, succeed: bool
+) -> None:
+    kept = await library.uploaded("kept.pdf")
+    await finish_next(library.jobs, succeed=True)
+    removed = await library.uploaded("removed.pdf")
+    await finish_next(library.jobs, succeed=succeed)
+    kept_files = await stored_files(library, kept)
+    await stored_files(library, removed)
+    await indexed(library, kept)
+    await indexed(library, removed)
+
+    await library.delete(removed.id)
+
+    with pytest.raises(DocumentNotFoundError):
+        await library.get_document(removed.id)
+    assert await library.jobs.latest_for_document(removed.id) is None
+    assert sorted(library.blobs.blobs) == sorted(kept_files)
+    assert {point.unit.document_id for point in library.index.points.values()} == {
+        kept.id
+    }
+    assert (await library.get_document(kept.id)).document == kept
+
+
+async def test_a_document_without_a_job_can_be_deleted(library: Library) -> None:
+    document = await library.registered("no-job.pdf")
+
+    await library.delete(document.id)
+
+    with pytest.raises(DocumentNotFoundError):
+        await library.get_document(document.id)
+
+
+@pytest.mark.parametrize("claimed", [False, True], ids=["pending", "processing"])
+async def test_a_document_being_ingested_is_not_deleted(
+    library: Library, claimed: bool
+) -> None:
+    document = await library.uploaded("busy.pdf")
+    if claimed:
+        await claim_next(library.jobs)
+    files = await stored_files(library, document)
+    await indexed(library, document)
+
+    with pytest.raises(IngestionInProgressError):
+        await library.delete(document.id)
+
+    assert (await library.get_document(document.id)).document == document
+    assert sorted(library.blobs.blobs) == sorted(files)
+    assert len(library.index.points) == 1
+
+
+async def test_deleting_an_unknown_document_is_not_found(library: Library) -> None:
+    with pytest.raises(DocumentNotFoundError):
+        await library.delete(uuid.uuid4())
+
+
+async def test_a_deletion_the_index_interrupts_can_be_asked_for_again(
+    library: Library,
+) -> None:
+    document = await library.uploaded("manual.pdf")
+    await finish_next(library.jobs, succeed=True)
+    await stored_files(library, document)
+    library.index.failures["delete_document"] = ProviderUnavailableError("down")
+
+    with pytest.raises(ProviderUnavailableError):
+        await library.delete(document.id)
+    assert (await library.get_document(document.id)).document == document
+
+    del library.index.failures["delete_document"]
+    await library.delete(document.id)
+
+    with pytest.raises(DocumentNotFoundError):
+        await library.get_document(document.id)
+    assert library.blobs.blobs == {}

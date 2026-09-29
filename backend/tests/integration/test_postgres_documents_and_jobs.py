@@ -29,6 +29,7 @@ from multimodal_rag.ingestion.domain import (
 from multimodal_rag.ingestion.errors import (
     DocumentNotFoundError,
     ElementNotFoundError,
+    IngestionInProgressError,
     InvalidCursorError,
     JobNotFoundError,
     LeaseLostError,
@@ -703,3 +704,87 @@ async def test_stored_summaries_survive_added_and_removed_fields(
     stored = await jobs.get(job.id)
 
     assert stored.summary == JobSummary(pages=3)
+
+
+class TestDocumentDeletion:
+    async def test_a_finished_document_goes_with_its_jobs_elements_and_links(
+        self,
+        jobs: PostgresJobQueue,
+        documents: PostgresDocumentRepository,
+        elements: PostgresElementRepository,
+        clock: FrozenClock,
+    ) -> None:
+        job = await claimed(jobs, documents, clock)
+        assert job.lease_token is not None
+        stored = [text_element(job.document_id, order) for order in range(2)]
+        link = ElementRelationship(
+            source_id=stored[1].id,
+            target_id=stored[0].id,
+            kind=RelationshipKind.CAPTION_OF,
+            score=None,
+        )
+        await elements.replace_for_document(
+            job_id=job.id,
+            lease_token=job.lease_token,
+            document_id=job.document_id,
+            elements=stored,
+            relationships=[link],
+        )
+        await jobs.complete(
+            job_id=job.id, lease_token=job.lease_token, summary=JobSummary(pages=1)
+        )
+        kept, _ = await documents.register(new_document(clock, "e" * 64))
+
+        await documents.delete(job.document_id)
+
+        with pytest.raises(DocumentNotFoundError):
+            await documents.get(job.document_id)
+        with pytest.raises(JobNotFoundError):
+            await jobs.get(job.id)
+        assert await elements.get_many([element.id for element in stored]) == ()
+        assert await elements.relationships_for([stored[0].id]) == ()
+        assert await documents.get(kept.id) == kept
+
+    @pytest.mark.parametrize("claim", [False, True], ids=["pending", "processing"])
+    async def test_a_document_being_ingested_is_kept(
+        self,
+        jobs: PostgresJobQueue,
+        documents: PostgresDocumentRepository,
+        clock: FrozenClock,
+        claim: bool,
+    ) -> None:
+        document, _ = await documents.register(new_document(clock))
+        await jobs.enqueue(new_job(clock, document))
+        if claim:
+            assert await jobs.claim(worker_id="worker-1", lease_seconds=90)
+
+        with pytest.raises(IngestionInProgressError):
+            await documents.delete(document.id)
+
+        assert await documents.get(document.id) == document
+
+    async def test_a_failed_document_is_deleted(
+        self,
+        jobs: PostgresJobQueue,
+        documents: PostgresDocumentRepository,
+        clock: FrozenClock,
+    ) -> None:
+        job = await claimed(jobs, documents, clock)
+        assert job.lease_token is not None
+        await jobs.fail(
+            job_id=job.id,
+            lease_token=job.lease_token,
+            code=FailureCode.ENCRYPTED_DOCUMENT,
+            reason="The PDF is password protected or encrypted.",
+        )
+
+        await documents.delete(job.document_id)
+
+        with pytest.raises(DocumentNotFoundError):
+            await documents.get(job.document_id)
+
+    async def test_deleting_an_unknown_document_is_not_found(
+        self, documents: PostgresDocumentRepository
+    ) -> None:
+        with pytest.raises(DocumentNotFoundError):
+            await documents.delete(uuid.uuid4())

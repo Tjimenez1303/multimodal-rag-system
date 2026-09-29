@@ -1,5 +1,6 @@
-"""Reading what ingestion captured, served by the REST API."""
+"""Reading what ingestion captured, served by the REST API, and deleting it."""
 
+import logging
 import uuid
 from dataclasses import dataclass
 
@@ -14,6 +15,7 @@ from multimodal_rag.ingestion.domain import (
 from multimodal_rag.ingestion.errors import (
     BlobNotFoundError,
     ImageNotFoundError,
+    IngestionInProgressError,
     IngestionNotCompletedError,
     PageNotFoundError,
 )
@@ -23,8 +25,13 @@ from multimodal_rag.ingestion.ports import (
     ElementRepository,
     JobQueue,
     Page,
+    VectorIndex,
 )
 from multimodal_rag.shared.errors import DataInconsistencyError
+
+logger = logging.getLogger(__name__)
+
+_ACTIVE_STATUSES = frozenset({JobStatus.PENDING, JobStatus.PROCESSING})
 
 
 @dataclass(frozen=True, slots=True)
@@ -294,3 +301,56 @@ class GetPageImage:
             raise DataInconsistencyError(
                 f"The image of page {page_number} of document {document_id} is missing"
             ) from error
+
+
+class DeleteDocument:
+    """Deletes a document that is not being ingested, with everything it left.
+
+    The pieces go from the most visible to the least: the index points, so no answer
+    cites the document any more, then the stored files, then the rows. Each step
+    tolerates what is already gone, so an interrupted deletion is completed by asking
+    for it again.
+
+    Args:
+        documents: Document persistence, whose rows cascade to jobs and elements.
+        jobs: Job store, to find the document's latest job.
+        index: Search index holding the document's retrieval units.
+        blobs: Storage of the original PDF, figure crops and page images.
+    """
+
+    def __init__(
+        self,
+        *,
+        documents: DocumentRepository,
+        jobs: JobQueue,
+        index: VectorIndex,
+        blobs: BlobStorage,
+    ) -> None:
+        self._documents = documents
+        self._jobs = jobs
+        self._index = index
+        self._blobs = blobs
+
+    async def __call__(self, document_id: uuid.UUID) -> None:
+        """Delete a document.
+
+        Args:
+            document_id: Id of the document.
+
+        Raises:
+            DocumentNotFoundError: If no document has this id.
+            IngestionInProgressError: If the document's latest job is pending or
+                processing, before or during the deletion.
+            ProviderError: If the index stays unavailable, leaving the document
+                listed.
+        """
+        document = await self._documents.get(document_id)
+        job = await self._jobs.latest_for_document(document_id)
+        if job is not None and job.status in _ACTIVE_STATUSES:
+            raise IngestionInProgressError(f"Document {document_id} is being ingested")
+        await self._index.delete_document(document_id)
+        await self._blobs.delete_tree(ExtractedElement.figures_prefix_for(document_id))
+        await self._blobs.delete_tree(ExtractedElement.pages_prefix_for(document_id))
+        await self._blobs.delete(document.blob_key)
+        await self._documents.delete(document_id)
+        logger.info("document %s deleted", document_id)

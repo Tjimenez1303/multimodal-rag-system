@@ -23,11 +23,16 @@ export interface PageDialogProps {
   pages: readonly number[];
   /** The page shown first, the lowest page by default. */
   initialPage?: number;
+  /**
+   * Whether the pages are those of a source or figure, or every page of the document
+   * (FR-047), which only changes the counter under the page.
+   */
+  scope?: "source" | "document";
 }
 
 /**
  * The rendered page of the original PDF at full size, stepping only between the pages
- * of the source it was opened from (FR-018).
+ * of the source it was opened from (FR-018), or through a whole document (FR-047).
  */
 export function PageDialog({ trigger, ...page }: PageDialogProps) {
   const [open, setOpen] = useState(false);
@@ -45,6 +50,7 @@ function PageView({
   documentName,
   pages,
   initialPage,
+  scope = "source",
 }: Omit<PageDialogProps, "trigger">) {
   const sorted = [...new Set(pages)].sort((a, b) => a - b);
   const [index, setIndex] = useState(() =>
@@ -91,7 +97,9 @@ function PageView({
             Previous page
           </Button>
           <span className="text-xs text-muted-foreground tabular-nums">
-            {index + 1} of {sorted.length} pages in this source
+            {scope === "document"
+              ? `Page ${page} of ${sorted.length}`
+              : `${index + 1} of ${sorted.length} pages in this source`}
           </span>
           <Button
             variant="outline"

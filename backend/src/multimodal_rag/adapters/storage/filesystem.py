@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 import logging
 import os
+import shutil
 import uuid
 from collections.abc import AsyncIterable, Generator
 from pathlib import Path, PurePosixPath
@@ -118,6 +119,19 @@ class FilesystemBlobStorage:
             key: Key of the object.
         """
         await asyncio.to_thread(self._path(key).unlink, missing_ok=True)
+
+    async def delete_tree(self, prefix: str) -> None:
+        """Remove every object stored under a key prefix, if any.
+
+        Args:
+            prefix: Leading path segments of the keys, such as ``pages/{id}``.
+
+        Raises:
+            InvalidBlobKeyError: If the prefix is not a safe relative path.
+        """
+        path = self._path(prefix)
+        if await asyncio.to_thread(path.is_dir):
+            await asyncio.to_thread(shutil.rmtree, path)
 
     async def exists(self, key: str) -> bool:
         """Return whether an object is stored under a key.

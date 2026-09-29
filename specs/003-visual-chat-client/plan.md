@@ -37,7 +37,12 @@ returned.
 - **Page images.** The worker keeps the page renders Docling already produces during
   extraction and stores them as PNG. A new route,
   `GET /api/v1/documents/{document_id}/pages/{page_number}/image`, serves them, so no PDF
-  is processed inside a request. This is the feature's only backend change.
+  is processed inside a request. A ready document also opens in the same page view from
+  the panel, stepping through all its pages.
+- **Deletion.** `DELETE /api/v1/documents/{document_id}` removes a document that is not
+  being processed: its index points first, then its stored files, then its database
+  rows. The panel offers it on ready and failed documents behind a confirmation. With
+  the page images, these are the feature's only backend changes.
 - **Delivery.** A `frontend` service joins `compose.yaml`, so `docker compose up` starts
   the whole system. This closes the Principle IX deviation carried by features 001 and
   002.
@@ -138,12 +143,12 @@ the existing `backend/` service.
 
 | Principle | How this plan complies | Status |
 |---|---|---|
-| I. Hexagonal architecture | Backend: `GetPageImage` lives in `ingestion/use_cases/library.py` and uses only ports. The route only translates HTTP. Frontend: the service is reached only through `src/client/` (generated) and `src/api/` (request id, problem parsing, upload), and components never call `fetch` directly | Pass |
-| II. Ports and adapters | No new backend port. `DocumentExtractor` gains page images through `ExtractionBatch`, which the Docling adapter and the fake extractor both fill, and `BlobStorage` is reused. Wiring stays in `bootstrap.py` | Pass |
-| III. Asynchronous ingestion | Page images are produced by the worker during extraction, under stable keys that a retried job overwrites. The API only reads stored files, and no PDF is opened in a request | Pass |
+| I. Hexagonal architecture | Backend: `GetPageImage` and `DeleteDocument` live in `ingestion/use_cases/library.py` and uses only ports. The route only translates HTTP. Frontend: the service is reached only through `src/client/` (generated) and `src/api/` (request id, problem parsing, upload), and components never call `fetch` directly | Pass |
+| II. Ports and adapters | No new backend port. `DocumentExtractor` gains page images through `ExtractionBatch`, which the Docling adapter and the fake extractor both fill. `DocumentRepository` gains `delete` and `BlobStorage` gains `delete_tree`, each implemented by its adapter and its fake. Wiring stays in `bootstrap.py` | Pass |
+| III. Asynchronous ingestion | Page images are produced by the worker during extraction, under stable keys that a retried job overwrites. The API only reads stored files, and no PDF is opened in a request. Deletion removes stored files and rows without opening a PDF, and is refused while a job is pending or processing | Pass |
 | IV. Multimodal fidelity | Page images keep the 1-based page numbering of every element. Figure positions and captions are displayed as stored | Pass |
 | V. Grounded answers | The client keeps the history (tab `sessionStorage`), renders Markdown, and shows citations as document and page with the related image next to the answer. It adds no answering logic (FR-022) | Pass |
-| VI. Resilience | Every browser call has a timeout. Questions: an abortable wait limit above the service deadline. Configuration, library and status calls: a 10 s timeout and TanStack Query retries with backoff. Uploads: a 60 s stall timeout. Service errors are mapped by code in one table ([contracts/client.md](contracts/client.md)). Backend: the new `PageNotFoundError` is a `NotFoundError`, a missing blob is a `DataInconsistencyError`, and both go through the existing single mapping | Pass |
+| VI. Resilience | Every browser call has a timeout. Questions: an abortable wait limit above the service deadline. Configuration, library and status calls: a 10 s timeout and TanStack Query retries with backoff. Uploads: a 60 s stall timeout. Service errors are mapped by code in one table ([contracts/client.md](contracts/client.md)). Backend: the new `PageNotFoundError` is a `NotFoundError`, the new `IngestionInProgressError` is a `ConcurrencyError`, a missing blob is a `DataInconsistencyError`, and all go through the existing single mapping. Every deletion step tolerates what is already gone, so an interrupted deletion is retried by asking again | Pass |
 | VII. Observability | The browser-generated `X-Request-ID` reaches the API logs and is shown as the failure reference. nginx writes JSON access logs with the time, method, path without query string, status, duration and `X-Request-ID`, and never the client address. The client sends no telemetry. Backend page image requests get the existing per-request log line | Pass |
 | VIII. Test discipline | Frontend: MSW and route fakes over contract fixtures, no module mocks, citation and image rendering tests, a 90% gate. Backend: fakes, contract tests and the 90% gate | Pass |
 | IX. Configuration and delivery | `docker compose up` now starts the frontend with a healthcheck. Runtime values come from environment variables rendered into `/config.json`, and `.env.example` documents them | Pass (closes the deviation of features 001 and 002) |
@@ -154,7 +159,8 @@ the existing `backend/` service.
 **Post-design re-check (after Phase 1)**: all gates still pass. The design adds one
 backend route and one extractor option, both inside existing ports. The frontend reaches
 the service through one module and keeps no answering logic. There is no deviation to
-record in Complexity Tracking.
+record in Complexity Tracking. The later addition of document viewing and deletion
+(research section 18) adds one route and two port members and keeps every gate.
 
 ## Project Structure
 
@@ -167,7 +173,7 @@ specs/003-visual-chat-client/
 ├── data-model.md        # Phase 1: browser state, displayed service data, page images
 ├── quickstart.md        # Phase 1: end-to-end validation guide
 ├── contracts/
-│   ├── openapi.yaml     # Phase 1: getDocumentPageImage
+│   ├── openapi.yaml     # Phase 1: getDocumentPageImage, deleteDocument
 │   └── client.md        # Phase 1: frontend routes, runtime config, failure messages
 ├── checklists/
 │   └── requirements.md
@@ -227,10 +233,11 @@ frontend/
 │   │   ├── ImageColumn.tsx       # primary figure and related group
 │   │   ├── FigureCard.tsx
 │   │   ├── ImageDialog.tsx       # shadcn/ui Dialog, full size
-│   │   └── PageDialog.tsx        # rendered page, previous and next within a source
+│   │   └── PageDialog.tsx        # rendered page, previous and next within a source or a document
 │   ├── documents/
 │   │   ├── DocumentPanel.tsx     # shadcn/ui Sidebar, processing badge when collapsed
-│   │   ├── DocumentList.tsx      # infinite list, filter by name, selection
+│   │   ├── DocumentList.tsx      # infinite list, view, delete, filter by name, selection
+│   │   ├── DeleteDocumentDialog.tsx  # confirmation, deletion and its failure
 │   │   ├── DocumentStatus.tsx    # stage, pages, retrying, summary, reason
 │   │   ├── UploadControl.tsx     # file picker and tracked uploads
 │   │   ├── useLibrary.ts         # TanStack queries and polling of unfinished documents
@@ -249,18 +256,21 @@ backend/
 ├── scripts/export_openapi.py     # writes frontend/openapi.json from the app's routers
 ├── src/multimodal_rag/
 │   ├── ingestion/
-│   │   ├── domain.py             # + ExtractedElement.page_image_key_for
-│   │   ├── errors.py             # + PageNotFoundError
-│   │   ├── ports.py              # + ExtractionBatch.page_images
+│   │   ├── domain.py             # + ExtractedElement.page_image_key_for, figures and pages prefixes
+│   │   ├── errors.py             # + PageNotFoundError, IngestionInProgressError
+│   │   ├── ports.py              # + ExtractionBatch.page_images, DocumentRepository.delete, BlobStorage.delete_tree
 │   │   └── use_cases/
 │   │       ├── processing.py     # stores page images during extraction
-│   │       └── library.py        # + GetPageImage
+│   │       └── library.py        # + GetPageImage, DeleteDocument
 │   ├── adapters/
 │   │   ├── docling/extractor.py  # generate_page_images=True, PNG per page
+│   │   ├── postgres/documents.py # + delete, refused while a job is active
+│   │   ├── qdrant/index.py       # delete_document tolerates a missing collection
+│   │   ├── storage/filesystem.py # + delete_tree
 │   │   └── http/
-│   │       ├── routes_documents.py   # + getDocumentPageImage
-│   │       └── dependencies.py       # + GetPageImageDep
-│   └── bootstrap.py              # wires GetPageImage
+│   │       ├── routes_documents.py   # + getDocumentPageImage, deleteDocument
+│   │       └── dependencies.py       # + GetPageImageDep, DeleteDocumentDep
+│   └── bootstrap.py              # wires GetPageImage and DeleteDocument
 └── tests/
     ├── fakes.py                  # fake extractor yields page images
     ├── contract/contract.py      # + 003 contract file
@@ -274,6 +284,7 @@ compose.yaml                      # + frontend service, published on 127.0.0.1:$
 _typos.toml                       # excludes the generated client
 docs/adr/0006-chat-client-stack-and-serving.md
 docs/adr/0007-page-images-at-ingestion.md
+docs/adr/0008-document-deletion.md
 docs/images/architecture.drawio.svg   # frontend and nginx added
 README.md                         # usage through the client, frontend development
 AGENTS.md                         # frontend commands

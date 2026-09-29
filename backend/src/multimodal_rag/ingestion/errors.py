@@ -130,6 +130,12 @@ class IngestionNotCompletedError(ConcurrencyError):
     code = "ingestion_not_completed"
 
 
+class IngestionInProgressError(ConcurrencyError):
+    """The document has a job that is pending or processing."""
+
+    code = "ingestion_in_progress"
+
+
 class JobNotLeasedError(DataInconsistencyError):
     """A job was handed to processing without the lease of a claim."""
 

@@ -482,7 +482,48 @@ selection, and the next question uses all documents (quickstart scenario 7).
 
 ---
 
-## Phase 7: Polish & Cross-Cutting Concerns
+## Phase 7: User Story 5 - Read a whole manual and remove one that is no longer needed (Priority: P2)
+
+**Goal**: a ready document opens from the panel in the page view over all its pages, and
+a ready or failed document can be deleted after a confirmation, leaving no trace in the
+list, the search index or storage (research section 18, data-model section 4.4).
+
+**Independent Test**: open a ready document and step to its last page. Delete it,
+confirm it leaves the list, and ask a question it used to answer to confirm it is no
+longer cited (quickstart scenario 10).
+
+### Tests for User Story 5 (REQUIRED) ⚠️
+
+- [X] T100 [P] [US5] Extend `backend/tests/unit/ingestion/test_library.py` for `DeleteDocument`:
+  - A completed document loses its index points, its figure crops, its page images, its original PDF and its row, while another document keeps all of them.
+  - A failed document is deleted the same way.
+  - A pending or processing document raises `IngestionInProgressError` and keeps everything.
+  - An unknown id raises `DocumentNotFoundError`.
+  - An index failure raises the provider error and leaves the row, so asking again completes the deletion.
+- [X] T101 [P] [US5] Write `backend/tests/contract/test_delete_document_contract.py`: 204 with no body, 404 `document_not_found`, 409 `ingestion_in_progress` and 400 for a malformed id, each checked against the contract. Extend `backend/tests/contract/contract.py` so operations of one path may come from several contract files.
+- [X] T102 [P] [US5] Extend `backend/tests/unit/adapters/test_filesystem_storage.py` (`delete_tree` removes every file under the prefix, leaves siblings, and does nothing for a missing prefix) and `backend/tests/unit/adapters/test_qdrant_http.py` (`delete_document` treats a 404 for a missing collection as nothing to delete).
+- [X] T103 [P] [US5] Extend `backend/tests/integration/test_postgres_documents_and_jobs.py`: `delete` removes the row with its jobs, elements and relationships, refuses with `IngestionInProgressError` while a job is pending or processing, and raises `DocumentNotFoundError` for an unknown id.
+- [X] T104 [P] [US5] Extend `frontend/src/images/PageDialog.test.tsx`: opened over a whole document, the counter reads "Page {n} of {count}" and Next reaches the last page.
+- [X] T105 [P] [US5] Write `frontend/src/documents/DeleteDocumentDialog.test.tsx` with MSW: the confirmation names the document, a 204 calls `onDeleted`, 409 and 5xx show the messages of contracts/client.md section 3 with their reference, and Cancel sends nothing.
+- [X] T106 [P] [US5] Extend `frontend/src/documents/DocumentPanel.test.tsx`: ready rows offer "View document" and "Delete", failed rows offer "Delete", pending and processing rows offer neither, and a deleted document leaves the list.
+- [X] T107 [P] [US5] Extend `frontend/tests/e2e/documents.spec.ts` with US5 scenarios 1 to 5, with axe checks of the delete confirmation and of its failure.
+
+### Implementation for User Story 5
+
+- [X] T108 [US5] Add `IngestionInProgressError` (code `ingestion_in_progress`, a `ConcurrencyError`) to `backend/src/multimodal_rag/ingestion/errors.py`, and `figures_prefix_for` and `pages_prefix_for` to `ExtractedElement` in `backend/src/multimodal_rag/ingestion/domain.py`, reused by the existing key builders.
+- [X] T109 [US5] Add `DocumentRepository.delete` and `BlobStorage.delete_tree` to `backend/src/multimodal_rag/ingestion/ports.py`, and implement them in `backend/tests/fakes.py`, `backend/src/multimodal_rag/adapters/postgres/documents.py` (the row locked `FOR UPDATE`, its jobs checked and the row deleted in one transaction) and `backend/src/multimodal_rag/adapters/storage/filesystem.py` (`shutil.rmtree` in a worker thread).
+- [X] T110 [US5] Make `QdrantVectorIndex.delete_document` in `backend/src/multimodal_rag/adapters/qdrant/index.py` treat a missing collection as nothing to delete.
+- [X] T111 [US5] Implement `DeleteDocument` in `backend/src/multimodal_rag/ingestion/use_cases/library.py`, the `DELETE /api/v1/documents/{document_id}` route (`deleteDocument`, 204) in `backend/src/multimodal_rag/adapters/http/routes_documents.py`, its dependency in `dependencies.py` and its wiring in `backend/src/multimodal_rag/bootstrap.py`. Regenerate `frontend/openapi.json` and `frontend/src/client/`.
+- [X] T112 [US5] Let `frontend/src/images/PageDialog.tsx` open over a whole document, with the "Page {n} of {count}" counter, and add "View document" to ready rows in `frontend/src/documents/DocumentList.tsx`.
+- [X] T113 [US5] Implement `frontend/src/documents/DeleteDocumentDialog.tsx` (shadcn/ui `AlertDialog`, `deleteDocument` through `callService`, the failure messages of contracts/client.md section 3 with `FailureNotice`), add "Delete" to ready and failed rows, and remove the document from the library cache on success in `frontend/src/documents/useLibrary.ts`.
+- [X] T114 [US5] Write ADR `docs/adr/0008-document-deletion.md` from research section 18, and update the README's API and usage sections.
+- [ ] T115 [US5] Run the backend and frontend unit, contract, integration and e2e suites, then quickstart scenario 10 against the running system.
+
+**Checkpoint**: documents can be read in full and removed from the client
+
+---
+
+## Phase 8: Polish & Cross-Cutting Concerns
 
 **Purpose**: CI, performance, accessibility, documentation and final validation
 
@@ -525,14 +566,15 @@ selection, and the next question uses all documents (quickstart scenario 7).
 
 - **Setup (Phase 1)**: no dependencies. T006 needs the backend installed with `uv sync --project backend`.
 - **Foundational (Phase 2)**: depends on Setup and blocks every user story.
-- **User stories (Phases 3 to 6)**: each depends on Foundational only. They can proceed in parallel or in priority order (US1 → US2 → US3 → US4).
-- **Polish (Phase 7)**: depends on the stories being delivered. T090 can start as soon as the test scripts exist.
+- **User stories (Phases 3 to 7)**: each depends on Foundational only. They can proceed in parallel or in priority order (US1 → US2 → US3 → US5 → US4).
+- **Polish (Phase 8)**: depends on the stories being delivered. T090 can start as soon as the test scripts exist.
 
 ### User Story Dependencies
 
 - **US1 (P1)**: independent. It carries the backend page image route, which only US1 displays.
 - **US2 (P1)**: independent of US1 for its tests, which build turns directly with the reducer. It extends the files US1 creates (`state.ts`, `useQuestionQueue.ts`, `TurnView.tsx` and `QuestionInput.tsx`), so run it after US1 when one person works on both.
 - **US3 (P2)**: independent. T079 wires a prop that US2 defines, and it is skipped if US2 is not delivered.
+- **US5 (P2)**: needs the document list of US3 and the page view of US1.
 - **US4 (P3)**: needs the document list of US3 (`DocumentList.tsx` and `useLibrary.ts`) for selection. Its turn and queue changes are independent.
 
 ### Within Each User Story
@@ -586,8 +628,9 @@ Task: "NotCoveredNote in frontend/src/answer/NotCoveredNote.tsx"
 2. **US2**: clear waiting, no-information and failure states, with stop, hold, retry and
    reload.
 3. **US3**: upload and processing from the client.
-4. **US4**: restricting questions to selected documents.
-5. **Polish**: CI, performance and accessibility checks, ADRs, README, and the full
+4. **US5**: reading a whole document and deleting one.
+5. **US4**: restricting questions to selected documents.
+6. **Polish**: CI, performance and accessibility checks, ADRs, README, and the full
    quickstart.
 
 ---

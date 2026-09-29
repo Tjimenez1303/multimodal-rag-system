@@ -537,3 +537,64 @@ constraint is stated. Section numbers are referenced from [plan.md](plan.md) and
   - The facilitator records the times and the outcome of each task.
 - **Rationale**: these criteria are about people, not code. A fixed script keeps the
   measurement repeatable.
+
+## 18. Viewing a whole document and deleting a document
+
+- **Viewing (FR-047)**: a "View document" button on every ready row of the document
+  list opens the existing `PageDialog` over pages 1 to the document's page count. The
+  count is the document's `page_count`, or the completed job's `summary.pages` when the
+  upload could not read it, as in `GetPageImage`. No backend change is needed, because
+  every page of a completed document is already stored (section 12). The counter under
+  the page reads "Page {n} of {count}" for a whole document and keeps "{n} of {m} pages
+  in this source" for a source.
+- **Deleting (FR-048, FR-049)**: `DELETE /api/v1/documents/{document_id}` answers 204.
+  - Unknown document: 404 `document_not_found`.
+  - Latest job pending or processing: 409 `ingestion_in_progress`, a new
+    `IngestionInProgressError` next to `IngestionNotCompletedError`.
+  - Vector index or storage unavailable: 503, as every other `ProviderError` and
+    `StorageError`.
+- **Order of removal**: `DeleteDocument` in `ingestion/use_cases/library.py` removes the
+  pieces from the most visible to the least.
+  1. The document's points in the vector index, with the existing
+     `VectorIndex.delete_document`. From then on no answer can cite it.
+  2. Its figure crops and page images, with a new `BlobStorage.delete_tree(prefix)` over
+     `figures/{document_id}` and `pages/{document_id}`, and its original PDF.
+  3. The document row, whose jobs, elements and relationships go with it through the
+     existing `ON DELETE CASCADE` foreign keys.
+
+  Every step tolerates what is already gone, so a deletion interrupted by an unavailable
+  index or disk leaves the document listed and can simply be asked for again. Deleting
+  the row first was rejected: an index failure after it would leave searchable points of
+  a document that no longer exists, with no way to retry from the API.
+- **Concurrency**: the repository locks the document row with `SELECT … FOR UPDATE`,
+  then checks that no job of the document is pending or processing, and deletes it, in
+  one transaction. A new upload of the same file that enqueued a job after the first
+  check is therefore still refused with 409: it either committed first and is seen, or
+  its job insert waits on the lock and then finds no document. A single
+  `DELETE … WHERE NOT EXISTS` was rejected, because under READ COMMITTED its subquery
+  does not see a job committed while it waits, and the cascade would remove that job.
+  In the race the index points and stored files may already be gone. The new job
+  extracts the file the upload has just stored again, and fails with a readable reason
+  if the file was removed after it.
+- **Storage**: `FilesystemBlobStorage.delete_tree` removes the directory with
+  `shutil.rmtree` in a worker thread and does nothing when it does not exist. The
+  standard library covers it, so no helper is written.
+- **Missing collection**: Qdrant answers 404 when no document was ever indexed.
+  `delete_document` now treats that as nothing to delete, as searches already do, so a
+  library with only failed documents can still be cleaned.
+- **Client**:
+  - Ready and failed rows show "Delete" next to "View document" or "Upload again". It
+    opens a shadcn/ui `AlertDialog` naming the document, which stays open while the call
+    runs and shows the failure with its reference when it fails (contract section 3).
+    A 404 means the document is already gone, so it is treated as deleted.
+  - `callService` accepts a 204 with no body as a success, where it used to require a
+    JSON body.
+  - On success the document is removed from the library cache and the list is read
+    again. Earlier turns keep their text and source lines. Their figures and pages show
+    "Image unavailable" and "Page unavailable" (FR-017, spec edge cases).
+- **Alternatives considered**:
+  - Deleting in the worker through a job, as uploads are processed. It adds a job type,
+    a queue path and a state to follow for work that takes well under a second.
+  - Deleting a document while it is processing, by cancelling its job first. The job
+    would need cancellation fencing across every stage, for a case the technician can
+    wait out.

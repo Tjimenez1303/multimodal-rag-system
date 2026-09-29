@@ -41,6 +41,8 @@ started together with the rest of the system by the one-step startup."
 - Q: Where does the primary image appear relative to the answer text? → A: To the right of the answer text, in a column of its own within the turn, with its caption and "document, page n" below it. The source lines sit under the answer text.
 - Q: Where do uploading, the document list and document selection live relative to the conversation? → A: In a collapsible panel on the left of the chat view, open by default. When collapsed, it leaves an indicator of how many documents are still processing.
 - Q: Does an error message show a reference that locates the request in the service's logs? → A: Yes, discreetly. Below the plain-English message the client shows a copyable "Reference: <id>" equal to the request's correlation identifier.
+- Q: Can the technician read a whole document, not only the pages behind a source? → A: Yes. A ready document opens from the document panel in the page view, which then steps through every page of the document.
+- Q: Can a document be deleted, and what does deleting remove? → A: Yes, from the document panel after a confirmation. Deleting removes the document, everything captured from it, its page images and the original file, so it can no longer be found or asked about. A document that is pending or processing cannot be deleted until its processing ends.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -261,6 +263,40 @@ question is asked across all documents.
 
 ---
 
+### User Story 5 - Read a whole manual and remove one that is no longer needed (Priority: P2)
+
+A technician opens a ready manual from the document panel and pages through it, to check
+what it contains before asking about it. When a manual is obsolete or was uploaded by
+mistake, the technician deletes it from the panel, after confirming, and it is no longer
+listed, searched or cited.
+
+**Why this priority**: reading a manual and keeping the library clean are part of
+managing documents, next to uploading them. Questions work without either.
+
+**Independent Test**: open a ready document from the panel and step to its last page.
+Delete it, confirm it leaves the list, and ask a question it used to answer to confirm
+it is no longer cited. Try to delete a document while it is processing and confirm the
+client does not offer it.
+
+**Acceptance Scenarios**:
+
+1. **Given** a ready document, **When** the technician chooses to view it, **Then** its
+   first page opens in the page view, labeled with the document name and page, and the
+   technician can step through every page of the document.
+2. **Given** a ready or failed document, **When** the technician chooses to delete it,
+   **Then** the client asks for confirmation, naming the document, before deleting it.
+3. **Given** a confirmed deletion, **When** it succeeds, **Then** the document leaves the
+   document list, and later questions never cite it.
+4. **Given** a document that is pending or processing, **When** the technician looks at
+   it, **Then** no delete action is offered until its processing ends.
+5. **Given** a deletion the service refuses or cannot complete, **When** it ends, **Then**
+   the client shows the reason with its reference and the document stays listed.
+6. **Given** earlier turns that cite a deleted document, **When** the technician opens one
+   of its figures or pages, **Then** the view says the image or page is unavailable, and
+   the answer text and its source lines stay as they were.
+
+---
+
 ### Edge Cases
 
 - The service is unreachable when the client opens. The client shows a clear connection
@@ -295,6 +331,12 @@ question is asked across all documents.
   understandable error with a retry action instead of a blank or partial answer.
 - The same file is uploaded twice at the same time. Both uploads end showing the same
   document, not two copies.
+- A document is deleted from another tab or tool while it is listed. The next refresh of
+  the list drops it, and a deletion attempted from this tab simply removes it from the
+  list.
+- A document starts processing again, because its file was uploaded anew, between the
+  confirmation and the deletion. The service refuses the deletion and the client shows
+  why.
 
 ## Requirements *(mandatory)*
 
@@ -457,12 +499,27 @@ question is asked across all documents.
   NOT load resources from, or send questions, documents or usage data to, any external
   service.
 
+#### Document viewing and deletion
+
+- **FR-047**: Users MUST be able to open any ready document from the document panel in
+  the page view of FR-018, starting at its first page and stepping through every page of
+  the document.
+- **FR-048**: Users MUST be able to delete a ready or failed document from the document
+  panel after confirming, in a confirmation that names the document. Deleting MUST remove
+  the document, everything captured from it, its page images and its original file, so
+  it is no longer listed, searched or cited.
+- **FR-049**: A pending or processing document MUST NOT offer deletion, and the service
+  MUST refuse to delete it. A failed deletion MUST show the reason with its reference
+  and leave the document listed.
+
 ### Key Entities
 
 This feature displays the Document and Job entities of the ingestion feature
 (`specs/001-async-pdf-ingestion/spec.md`) and the Answer, Citation, Retrieved Source and
 Answer Image entities of the question answering feature
-(`specs/002-grounded-question-answering/spec.md`). It never modifies them.
+(`specs/002-grounded-question-answering/spec.md`). The only change it makes to them is
+deleting a document, with its jobs and captured content, when the user asks for it
+(FR-048).
 
 - **Conversation**: the ordered list of turns of the current browser tab. It lives only in
   the browser, survives a reload of that tab and is cleared when the tab is closed or a
@@ -519,6 +576,8 @@ and every failure the service can report.
   reference local environment.
 - **SC-012**: After the one-step startup completes on the reference local environment,
   the client is reachable at its documented address with no additional step.
+- **SC-013**: After a document is deleted, 100% of the questions it used to answer, asked
+  again, return no source from it, and it no longer appears in the document list.
 
 ## Assumptions
 
@@ -528,13 +587,13 @@ and every failure the service can report.
 - The client relies on the programmatic interfaces of the ingestion feature (upload,
   document list, job status and stored images) and of the question answering feature
   (questions, cancellation and their error reports) as specified in those features. The
-  only addition this feature makes to them is the page image of FR-019, which reads the
-  PDF already stored by the ingestion feature.
+  only additions this feature makes to them are the page image of FR-019, rendered while
+  the ingestion feature extracts the PDF, and the document deletion of FR-048.
 - Exporting, sharing or reopening past conversations is out of scope.
 - Answers arrive complete, as specified by the question answering feature, so progressive
   display of an answer while it is written is out of scope.
 - Follow-up questions that depend on earlier turns, rating or giving feedback on answers,
-  copying or exporting answers, usage analytics and deleting documents are out of scope.
+  copying or exporting answers and usage analytics are out of scope.
 - The mobile layout is out of scope. Desktop windows of 1280 by 720 pixels or larger are
   the supported target.
 - The document list reflects what the service reports. Documents uploaded from other

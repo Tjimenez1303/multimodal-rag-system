@@ -28,15 +28,14 @@ _CONTRACTS: dict[str, dict[str, Any]] = {
 _REGISTRY: Registry[Any] = Registry().with_resources(
     (uri, DRAFT202012.create_resource(contract)) for uri, contract in _CONTRACTS.items()
 )
-# Every operation of every contract, keyed by path template.
-PATHS: dict[str, dict[str, Any]] = {
-    path: item
-    for contract in _CONTRACTS.values()
-    for path, item in contract["paths"].items()
-}
-_URI_BY_PATH = {
-    path: uri for uri, contract in _CONTRACTS.items() for path in contract["paths"]
-}
+# Every operation of every contract, keyed by path template and method. A later
+# feature may add a method to a path an earlier feature declared.
+PATHS: dict[str, dict[str, Any]] = {}
+_URI_BY_OPERATION: dict[tuple[str, str], str] = {}
+for _uri, _contract in _CONTRACTS.items():
+    for _path, _item in _contract["paths"].items():
+        PATHS.setdefault(_path, {}).update(_item)
+        _URI_BY_OPERATION.update({(_path, method): _uri for method in _item})
 
 
 class HttpResponse(Protocol):
@@ -51,14 +50,16 @@ class HttpResponse(Protocol):
     def json(self) -> Any: ...
 
 
-def resolve(node: dict[str, Any], *, path: str) -> dict[str, Any]:
+def resolve(node: dict[str, Any], *, path: str, method: str) -> dict[str, Any]:
     """Follow ``$ref`` pointers until a concrete object is reached.
 
     Args:
-        node: Object taken from the operation of ``path``.
-        path: Path template whose contract file the pointers are relative to.
+        node: Object taken from the operation of ``path`` and ``method``.
+        path: Path template of the operation.
+        method: HTTP method in lowercase, which with the path names the contract
+            file the pointers are relative to.
     """
-    return _resolve_from(node, uri=_URI_BY_PATH[path])[0]
+    return _resolve_from(node, uri=_URI_BY_OPERATION[path, method])[0]
 
 
 def _resolve_from(node: dict[str, Any], *, uri: str) -> tuple[dict[str, Any], str]:
@@ -87,8 +88,13 @@ def assert_matches_contract(response: HttpResponse, *, path: str, method: str) -
     declared = operation["responses"]
     status = str(response.status_code)
     assert status in declared, f"{method.upper()} {path} does not declare {status}"
-    response_object, uri = _resolve_from(declared[status], uri=_URI_BY_PATH[path])
+    response_object, uri = _resolve_from(
+        declared[status], uri=_URI_BY_OPERATION[path, method]
+    )
     content = response_object.get("content", {})
+    if not content:
+        assert response.headers["x-request-id"]
+        return
     media_type = response.headers["content-type"].split(";")[0]
     assert media_type in content, f"{status} is not declared as {media_type}"
     schema = content[media_type]["schema"]

@@ -3,9 +3,10 @@
 import uuid
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Path, Query, Request, Response
+from fastapi import APIRouter, Path, Query, Request, Response, status
 
 from multimodal_rag.adapters.http.dependencies import (
+    DeleteDocumentDep,
     GetDocumentDep,
     GetElementImageDep,
     GetPageImageDep,
@@ -78,6 +79,28 @@ async def get_document(document_id: uuid.UUID, get_one: GetDocumentDep) -> Docum
         The document and its newest job.
     """
     return DocumentBody.from_view(await get_one(document_id))
+
+
+@documents_router.delete(
+    "/documents/{document_id}",
+    operation_id="deleteDocument",
+    description=(
+        "Removes the document, its jobs, everything captured from it, its page "
+        "images and its original file. Refused while the document's latest job is "
+        "pending or processing."
+    ),
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+    responses=problem_responses(400, 404, 409, 503),
+)
+async def delete_document(document_id: uuid.UUID, delete: DeleteDocumentDep) -> None:
+    """Delete a document that is not being ingested.
+
+    Args:
+        document_id: Id of the document.
+        delete: Deletion use case.
+    """
+    await delete(document_id)
 
 
 @documents_router.get(

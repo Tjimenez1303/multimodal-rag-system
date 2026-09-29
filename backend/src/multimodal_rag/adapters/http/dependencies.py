@@ -13,6 +13,7 @@ from multimodal_rag.adapters.http.request_context import request_id_of
 from multimodal_rag.answering.use_cases.ask import AnswerQuestion
 from multimodal_rag.ingestion.use_cases.intake import GetJob, SubmitDocument
 from multimodal_rag.ingestion.use_cases.library import (
+    DeleteDocument,
     GetDocument,
     GetElementImage,
     GetPageImage,
@@ -32,6 +33,7 @@ class IngestionState(TypedDict):
         get_page_image: Use case behind the page image route.
         list_documents: Use case behind the library route.
         get_document: Use case behind the document route.
+        delete_document: Use case behind the document deletion route.
     """
 
     submit_document: SubmitDocument
@@ -41,6 +43,7 @@ class IngestionState(TypedDict):
     get_page_image: GetPageImage
     list_documents: ListDocuments
     get_document: GetDocument
+    delete_document: DeleteDocument
 
 
 class AnsweringState(TypedDict):
@@ -118,6 +121,19 @@ def provide_get_page_image(request: Request) -> GetPageImage:
     return use_case
 
 
+def provide_delete_document(request: Request) -> DeleteDocument:
+    """Return the document deletion use case built at startup.
+
+    Args:
+        request: Request being handled.
+
+    Returns:
+        The shared ``DeleteDocument`` instance.
+    """
+    use_case: DeleteDocument = request.state.delete_document
+    return use_case
+
+
 def provide_list_documents(request: Request) -> ListDocuments:
     """Return the library use case built at startup.
 
@@ -179,4 +195,5 @@ GetElementImageDep = Annotated[GetElementImage, Depends(provide_get_element_imag
 GetPageImageDep = Annotated[GetPageImage, Depends(provide_get_page_image)]
 ListDocumentsDep = Annotated[ListDocuments, Depends(provide_list_documents)]
 GetDocumentDep = Annotated[GetDocument, Depends(provide_get_document)]
+DeleteDocumentDep = Annotated[DeleteDocument, Depends(provide_delete_document)]
 AnswerQuestionDep = Annotated[AnswerQuestion, Depends(provide_answer_question)]

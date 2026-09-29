@@ -196,6 +196,26 @@ Targets:
   appearing.
 - At least 90% complete task 4 without instructions.
 
+## Scenario 10: read a whole manual and delete one (US5, FR-047 to FR-049, SC-013)
+
+1. On the FAA manual's row, choose "View document". Its first page opens, labeled with
+   the file name and "page 1", and Next steps through to page 71.
+2. Ask "How do I start the welding machine engine?" and note that the answer cites the
+   welding manual.
+3. Choose "Delete" on the welding manual's row. The confirmation names the file.
+   Confirm. The row leaves the list.
+4. Ask the same question again. No source comes from the welding manual (SC-013), and
+   the earlier turn's figure and page views say they are unavailable.
+5. Upload the welding manual again. While it is pending or processing, its row offers no
+   "Delete".
+6. Check that the deleted document's files are gone:
+
+   ```bash
+   docker compose exec api ls /data/blobs/pages /data/blobs/figures
+   ```
+
+   Only the ids of documents still listed remain.
+
 ## Automated checks
 
 ```bash

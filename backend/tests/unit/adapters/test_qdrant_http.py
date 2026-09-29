@@ -203,6 +203,19 @@ async def test_a_missing_collection_answers_no_hits_without_retry(
 
 
 @respx.mock
+async def test_deleting_from_a_missing_collection_deletes_nothing_without_retry(
+    index: QdrantVectorIndex,
+) -> None:
+    route = respx.post(f"{COLLECTION}/points/delete").respond(
+        404, json={"status": {"error": "Collection `units` doesn't exist!"}}
+    )
+
+    await index.delete_document(uuid.uuid4())
+
+    assert route.call_count == 1
+
+
+@respx.mock
 async def test_similarities_are_scored_exactly_for_the_fused_ids(
     index: QdrantVectorIndex,
 ) -> None:

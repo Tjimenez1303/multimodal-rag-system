@@ -1,6 +1,7 @@
 """Request and response bodies of the REST API, as declared in the OpenAPI contracts."""
 
 import uuid
+from collections.abc import Callable
 from datetime import datetime
 from typing import Literal, Self
 
@@ -8,6 +9,7 @@ from pydantic import BaseModel, ConfigDict
 
 from multimodal_rag.answering.domain import (
     Answer,
+    AnswerImage,
     AnswerStatus,
     Citation,
     NotEnoughReason,
@@ -482,6 +484,55 @@ class SourceBody(BaseModel):
         )
 
 
+class AnswerImageBody(BaseModel):
+    """A figure returned with an answer.
+
+    Attributes:
+        element_id: Image element id.
+        document_id: Document of the figure.
+        document_name: File name of that document.
+        page: Page of the figure.
+        bbox: Position of the figure on the page.
+        caption: Caption of the figure, if any.
+        unit_id: Cited unit that brought the figure.
+        url: Path of the PNG, served by the document image route.
+    """
+
+    element_id: uuid.UUID
+    document_id: uuid.UUID
+    document_name: str
+    page: int
+    bbox: BoundingBoxBody
+    caption: str | None
+    unit_id: uuid.UUID
+    url: str
+
+    @classmethod
+    def from_image(cls, image: AnswerImage, *, url: str) -> Self:
+        """Build the body of an answer image.
+
+        Args:
+            image: Figure selected for the answer.
+            url: Path of its PNG.
+
+        Returns:
+            The response body.
+        """
+        box = image.bbox
+        return cls(
+            element_id=image.element_id,
+            document_id=image.document_id,
+            document_name=image.document_name,
+            page=image.page,
+            bbox=BoundingBoxBody(
+                left=box.left, top=box.top, right=box.right, bottom=box.bottom
+            ),
+            caption=image.caption,
+            unit_id=image.unit_id,
+            url=url,
+        )
+
+
 class AnswerBody(BaseModel):
     """The answer to a question.
 
@@ -502,19 +553,23 @@ class AnswerBody(BaseModel):
     not_covered: str | None
     citations: list[CitationBody]
     sources: list[SourceBody]
-    primary_image: None = None
-    related_images: tuple[()] = ()
+    primary_image: AnswerImageBody | None
+    related_images: list[AnswerImageBody]
 
     @classmethod
-    def from_answer(cls, answer: Answer) -> Self:
+    def from_answer(
+        cls, answer: Answer, *, image_url: Callable[[AnswerImage], str]
+    ) -> Self:
         """Build the body of an answer.
 
         Args:
             answer: Outcome of the question.
+            image_url: Path of the PNG of an answer image.
 
         Returns:
             The response body.
         """
+        primary = answer.primary_image
         return cls(
             status=answer.status,
             reason=answer.reason,
@@ -522,4 +577,11 @@ class AnswerBody(BaseModel):
             not_covered=answer.not_covered,
             citations=[CitationBody.from_citation(c) for c in answer.citations],
             sources=[SourceBody.from_source(source) for source in answer.sources],
+            primary_image=None
+            if primary is None
+            else AnswerImageBody.from_image(primary, url=image_url(primary)),
+            related_images=[
+                AnswerImageBody.from_image(image, url=image_url(image))
+                for image in answer.related_images
+            ],
         )

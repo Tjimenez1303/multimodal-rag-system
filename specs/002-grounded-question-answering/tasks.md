@@ -278,7 +278,7 @@ is the figure next to the cited text, with its caption and a URL that returns a 
 
 ### Tests for User Story 4 (REQUIRED) ⚠️
 
-- [ ] T046 [P] [US4] Write `backend/tests/unit/answering/test_images.py`:
+- [x] T046 [P] [US4] Write `backend/tests/unit/answering/test_images.py`:
   - A cited figure unit's own figure is primary.
   - Among the figures of one cited text unit, the one with the smallest `gap_to` on the same page wins.
   - The figures of the higher-ranked cited unit come first.
@@ -286,18 +286,18 @@ is the figure next to the cited text, with its caption and a URL that returns a 
   - No duplicates appear, the primary is not repeated among related images, and there is no primary when no cited unit has figures.
   - The caption comes from a `caption_of` relationship, and is `None` without one.
   - In `backend/tests/unit/answering/test_ask.py`: a selected image whose crop is missing from `BlobStorage` raises `DataInconsistencyError` (spec edge case), and the check runs only for the returned images.
-- [ ] T047 [P] [US4] Add table cases to `backend/tests/unit/answering/test_sources.py`: a table unit returns one `TableContent` per table element with its page and rows in order, a continued table returns both parts, and text units return no tables.
-- [ ] T048 [P] [US4] Add to `backend/tests/contract/test_questions_contract.py`: an answer with a primary image, related images and a table source validates against the contract, and `primary_image.url` is the path of `getDocumentImage` for that document and element.
+- [x] T047 [P] [US4] Add table cases to `backend/tests/unit/answering/test_sources.py`: a table unit returns one `TableContent` per table element with its page and rows in order, a continued table returns both parts, and text units return no tables.
+- [x] T048 [P] [US4] Add to `backend/tests/contract/test_questions_contract.py`: an answer with a primary image, related images and a table source validates against the contract, and `primary_image.url` is the path of `getDocumentImage` for that document and element.
 
 ### Implementation for User Story 4
 
-- [ ] T049 [US4] Implement `select_images(cited_units, elements, relationships) -> tuple[AnswerImage | None, tuple[AnswerImage, ...]]` in `backend/src/multimodal_rag/answering/images.py` (research section 7), using `BoundingBox.gap_to`.
-- [ ] T050 [US4] Add `TableContent` assembly to `backend/src/multimodal_rag/answering/sources.py`, reading `ExtractedElement.table` of each table element of the unit.
-- [ ] T051 [US4] Extend `AnswerQuestion` in `backend/src/multimodal_rag/answering/use_cases/ask.py`:
+- [x] T049 [US4] Implement `select_images(cited_units, elements, relationships) -> tuple[AnswerImage | None, tuple[AnswerImage, ...]]` in `backend/src/multimodal_rag/answering/images.py` (research section 7), using `BoundingBox.gap_to`.
+- [x] T050 [US4] Add `TableContent` assembly to `backend/src/multimodal_rag/answering/sources.py`, reading `ExtractedElement.table` of each table element of the unit.
+- [x] T051 [US4] Extend `AnswerQuestion` in `backend/src/multimodal_rag/answering/use_cases/ask.py`:
   - Load the figure elements of the cited units with `get_many`, and their relationships with `relationships_for`.
   - Fill `primary_image` and `related_images` only for `answered` outcomes.
   - Check with `BlobStorage.exists` that the crop of every returned image exists, and raise `DataInconsistencyError` when one is missing. Inject `BlobStorage` in `backend/src/multimodal_rag/bootstrap.py`.
-- [ ] T052 [US4] Add `AnswerImageBody` to `backend/src/multimodal_rag/adapters/http/schemas.py`. Build its `url` in `backend/src/multimodal_rag/adapters/http/routes_questions.py` with `request.url_for("get_document_image", ...)`, as the elements route does.
+- [x] T052 [US4] Add `AnswerImageBody` to `backend/src/multimodal_rag/adapters/http/schemas.py`. Build its `url` in `backend/src/multimodal_rag/adapters/http/routes_questions.py` with `request.url_for("get_document_image", ...)`, as the elements route does.
 
 **Checkpoint**: answers show their diagram (quickstart Scenario 5).
 

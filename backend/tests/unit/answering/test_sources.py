@@ -4,7 +4,7 @@ from typing import Any
 
 import pytest
 
-from multimodal_rag.answering.domain import RetrievedSource
+from multimodal_rag.answering.domain import RetrievedSource, TableContent
 from multimodal_rag.answering.sources import assemble_sources
 from multimodal_rag.ingestion.domain import (
     DescriptionStatus,
@@ -162,3 +162,34 @@ def test_an_element_missing_from_the_repository_is_an_inconsistency() -> None:
 
     with pytest.raises(DataInconsistencyError):
         assemble([hit(unit(TM, "Orphan.", members=[paragraph]))], [])
+
+
+def table_part(page: int, rows: tuple[tuple[str, ...], ...]) -> ExtractedElement:
+    return element(TM, page=page, kind=ElementKind.TABLE, table=rows)
+
+
+def test_a_table_unit_carries_the_rows_of_each_part_in_order() -> None:
+    title = element(TM, page=3, kind=ElementKind.CAPTION, text="Table 2. Torque")
+    head = table_part(3, (("Bolt", "Nm"), ("M6", "10")))
+    continued = table_part(4, (("Bolt", "Nm"), ("M8", "25")))
+    table_unit = unit(
+        TM,
+        "Table 2. Torque\n| Bolt | Nm |",
+        members=[title, head, continued],
+        unit_type=UnitType.TABLE,
+    )
+
+    [source] = assemble([hit(table_unit)], [title, head, continued])
+
+    assert source.tables == (
+        TableContent(page=3, rows=(("Bolt", "Nm"), ("M6", "10"))),
+        TableContent(page=4, rows=(("Bolt", "Nm"), ("M8", "25"))),
+    )
+
+
+def test_text_units_carry_no_tables() -> None:
+    paragraph = element(TM)
+
+    [source] = assemble([hit(unit(TM, "Text.", members=[paragraph]))], [paragraph])
+
+    assert source.tables == ()

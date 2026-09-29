@@ -13,6 +13,7 @@ from multimodal_rag.ingestion.domain import (
     BoundingBox,
     Document,
     ElementKind,
+    ElementRelationship,
     ExtractedElement,
     PagedBox,
     RetrievalUnit,
@@ -24,6 +25,7 @@ from tests.fakes import (
     FakeEmbedder,
     FakeLanguageIdentifier,
     FrozenClock,
+    InMemoryBlobStorage,
     InMemoryDocumentRepository,
     InMemoryElementRepository,
     InMemoryJobQueue,
@@ -113,6 +115,7 @@ class Library:
     embedder: FakeEmbedder = field(default_factory=FakeEmbedder)
     generator: FakeAnswerGenerator = field(default_factory=FakeAnswerGenerator)
     languages: FakeLanguageIdentifier = field(default_factory=FakeLanguageIdentifier)
+    blobs: InMemoryBlobStorage = field(default_factory=InMemoryBlobStorage)
 
     async def add(
         self,
@@ -120,7 +123,9 @@ class Library:
         elements: Sequence[ExtractedElement],
         units: Sequence[RetrievalUnit],
         *,
+        relationships: Sequence[ElementRelationship] = (),
         registered: bool = True,
+        crops: bool = True,
     ) -> None:
         """Store a document with its elements and publish its units.
 
@@ -128,11 +133,17 @@ class Library:
             owner: Document of the elements and units.
             elements: Every element the units refer to.
             units: Units to index and publish.
+            relationships: Links between the elements.
             registered: Whether the document record is stored too.
+            crops: Whether the crop of every image with an ``image_key`` is stored.
         """
         if registered:
             await self.documents.register(owner)
         self.elements.elements.setdefault(owner.id, []).extend(elements)
+        self.elements.relationships.setdefault(owner.id, []).extend(relationships)
+        for image in elements:
+            if crops and image.image_key is not None:
+                await self.blobs.save_bytes(image.image_key, b"png")
         await self.index.upsert_units(units, [[0.0]] * len(units))
         await self.index.publish(owner.id)
 
@@ -157,5 +168,6 @@ class Library:
             elements=self.elements,
             generator=self.generator,
             languages=self.languages,
+            blobs=self.blobs,
             options=AnsweringOptions(**(defaults | options)),
         )

@@ -5,7 +5,8 @@ other outcome where the documents do not support an answer, whether decided befo
 after the model call, is a not-enough-information answer with a reason and no
 citations, sources or images. An answer the model wrote without any source marker is
 attributed to the supplied units statement by statement before its citations are
-checked.
+checked. An answer returns the figure closest to its most relevant cited text, once the
+use case has checked that every returned figure's crop is stored.
 """
 
 import logging
@@ -22,18 +23,25 @@ from multimodal_rag.answering.citations import (
 )
 from multimodal_rag.answering.domain import (
     Answer,
+    AnswerImage,
     AnswerStatus,
     GeneratedAnswer,
     NotEnoughReason,
     Question,
 )
+from multimodal_rag.answering.images import figure_ids_of, select_images
 from multimodal_rag.answering.messages import SUPPORTED_LANGUAGES, not_enough_message
 from multimodal_rag.answering.ports import AnswerGenerator, LanguageIdentifier
 from multimodal_rag.answering.prompting import build_prompt
 from multimodal_rag.answering.relevance import distinct_hits, passes_gate
 from multimodal_rag.answering.sources import assemble_sources, elements_of
-from multimodal_rag.ingestion.domain import ExtractedElement
+from multimodal_rag.ingestion.domain import (
+    ExtractedElement,
+    RelationshipKind,
+    RetrievalUnit,
+)
 from multimodal_rag.ingestion.ports import (
+    BlobStorage,
     DocumentRepository,
     ElementRepository,
     Embedder,
@@ -90,6 +98,7 @@ class AnswerQuestion:
         elements: Element persistence, for the flags of each source.
         generator: Answer model.
         languages: Identifies the question's language for the fixed messages.
+        blobs: Storage of the figure crops, checked before a figure is returned.
         options: Limits and thresholds of the use case.
     """
 
@@ -102,6 +111,7 @@ class AnswerQuestion:
         elements: ElementRepository,
         generator: AnswerGenerator,
         languages: LanguageIdentifier,
+        blobs: BlobStorage,
         options: AnsweringOptions,
     ) -> None:
         self._embedder = embedder
@@ -110,6 +120,7 @@ class AnswerQuestion:
         self._elements = elements
         self._generator = generator
         self._languages = languages
+        self._blobs = blobs
         self._options = options
 
     async def __call__(
@@ -175,7 +186,7 @@ class AnswerQuestion:
             return self._not_enough(
                 question, NotEnoughReason.NO_VALID_CITATIONS, generated
             )
-        return self._grounded(generated, cited, hits, names, elements)
+        return await self._grounded(generated, cited, hits, names, elements)
 
     async def _search(self, question: Question) -> list[SearchHit]:
         vector = await self._embedder.embed_query(question.text)
@@ -235,7 +246,7 @@ class AnswerQuestion:
         )
         return attribution.text
 
-    def _grounded(
+    async def _grounded(
         self,
         generated: GeneratedAnswer,
         cited: CitedText,
@@ -243,6 +254,8 @@ class AnswerQuestion:
         names: dict[uuid.UUID, str],
         elements: dict[uuid.UUID, ExtractedElement],
     ) -> Answer:
+        cited_units = [hit.unit for hit in hits if hit.unit.id in cited.numbers]
+        primary, related = await self._images(cited_units, names, elements)
         return Answer(
             status=AnswerStatus.ANSWERED,
             reason=None,
@@ -256,7 +269,42 @@ class AnswerQuestion:
                 citation_numbers=cited.numbers,
                 low_confidence_threshold=self._options.low_confidence_threshold,
             ),
+            primary_image=primary,
+            related_images=related,
         )
+
+    async def _images(
+        self,
+        cited_units: Sequence[RetrievalUnit],
+        names: dict[uuid.UUID, str],
+        elements: dict[uuid.UUID, ExtractedElement],
+    ) -> tuple[AnswerImage | None, tuple[AnswerImage, ...]]:
+        figures = list(dict.fromkeys(i for u in cited_units for i in figure_ids_of(u)))
+        if not figures:
+            return None, ()
+        links = await self._elements.relationships_for(figures)
+        captions = [
+            link.source_id
+            for link in links
+            if link.kind is RelationshipKind.CAPTION_OF
+            and link.source_id not in elements
+        ]
+        known = elements | {e.id: e for e in await self._elements.get_many(captions)}
+        primary, related = select_images(
+            cited_units, elements=known, relationships=links, document_names=names
+        )
+        returned = [primary, *related] if primary else []
+        await self._require_crops([known[image.element_id] for image in returned])
+        return primary, related
+
+    async def _require_crops(self, figures: Sequence[ExtractedElement]) -> None:
+        for figure in figures:
+            if figure.image_key is None or not await self._blobs.exists(
+                figure.image_key
+            ):
+                raise DataInconsistencyError(
+                    f"The crop of figure {figure.id} is missing"
+                )
 
     def _not_enough(
         self,

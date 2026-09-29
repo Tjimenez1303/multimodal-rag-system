@@ -2,13 +2,14 @@
 
 Each source carries what a reader needs to judge it: where it comes from, an excerpt,
 whether the answer cites it, and flags from the elements ingestion stored, such as text
-recognized with low confidence or a figure description written by a model.
+recognized with low confidence or a figure description written by a model. A table
+unit carries the rows of each of its parts, so a client can render it as a table.
 """
 
 import uuid
 from collections.abc import Mapping, Sequence
 
-from multimodal_rag.answering.domain import RetrievedSource
+from multimodal_rag.answering.domain import RetrievedSource, TableContent
 from multimodal_rag.ingestion.domain import (
     DescriptionStatus,
     ElementKind,
@@ -86,7 +87,7 @@ def assemble_sources(
                 unverified_identifiers=(
                     () if described is None else described.unverified_identifiers
                 ),
-                tables=(),
+                tables=_tables(unit, members),
                 figure_ids=_figure_ids(unit, elements),
             )
         )
@@ -114,6 +115,18 @@ def _described_figure(
             if member.description_status is DescriptionStatus.DESCRIBED
         ),
         None,
+    )
+
+
+def _tables(
+    unit: RetrievalUnit, members: Sequence[ExtractedElement]
+) -> tuple[TableContent, ...]:
+    if unit.unit_type is not UnitType.TABLE:
+        return ()
+    return tuple(
+        TableContent(page=member.page, rows=member.table)
+        for member in members
+        if member.table is not None
     )
 
 

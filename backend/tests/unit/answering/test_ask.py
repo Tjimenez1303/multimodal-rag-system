@@ -1,4 +1,6 @@
 import logging
+from collections.abc import Sequence
+from typing import Any
 
 import pytest
 
@@ -9,7 +11,15 @@ from multimodal_rag.answering.domain import (
     NotEnoughReason,
 )
 from multimodal_rag.answering.messages import not_enough_message
-from multimodal_rag.ingestion.domain import Document, RetrievalUnit
+from multimodal_rag.ingestion.domain import (
+    BoundingBox,
+    Document,
+    ElementKind,
+    ElementRelationship,
+    ExtractedElement,
+    RelationshipKind,
+    RetrievalUnit,
+)
 from multimodal_rag.shared.errors import DataInconsistencyError
 from tests.library import Library, document, element, unit
 
@@ -404,3 +414,86 @@ async def test_an_identifier_question_below_the_gate_reaches_the_model(
     assert answer.status is AnswerStatus.ANSWERED
     [citation] = answer.citations
     assert (citation.unit_ids, citation.pages) == ((code.id,), (13,))
+
+
+class TestImages:
+    @staticmethod
+    def figure(owner: Document, *, top: float, **values: Any) -> ExtractedElement:
+        fields: dict[str, Any] = {
+            "kind": ElementKind.IMAGE,
+            "page": 12,
+            "bbox": BoundingBox(left=72, top=top, right=540, bottom=top + 100),
+            "image_key": f"figures/{owner.id}/{top}.png",
+        }
+        return element(owner, **(fields | values))
+
+    async def add_figure_text(
+        self,
+        library: Library,
+        owner: Document,
+        figures: Sequence[ExtractedElement],
+        text: str = SERIES,
+        **options: Any,
+    ) -> RetrievalUnit:
+        paragraph = element(owner, page=12)
+        cited = unit(
+            owner, text, members=[paragraph], figure_ids=tuple(f.id for f in figures)
+        )
+        await library.add(owner, [paragraph, *figures], [cited], **options)
+        return cited
+
+    async def test_an_answer_returns_the_figure_next_to_its_cited_text(
+        self, library: Library, faa: Document
+    ) -> None:
+        near, far = self.figure(faa, top=170), self.figure(faa, top=600)
+        caption = element(faa, kind=ElementKind.CAPTION, text="Figure 4-21. Series")
+        link = ElementRelationship(
+            source_id=caption.id, target_id=near.id, kind=RelationshipKind.CAPTION_OF
+        )
+        await library.add(faa, [caption], [], relationships=[link])
+        cited = await self.add_figure_text(library, faa, [far, near])
+
+        answer = await library.ask()(QUESTION)
+
+        assert answer.primary_image is not None
+        assert answer.primary_image.element_id == near.id
+        assert answer.primary_image.caption == "Figure 4-21. Series"
+        assert answer.primary_image.unit_id == cited.id
+        assert [image.element_id for image in answer.related_images] == [far.id]
+
+    async def test_a_returned_figure_without_its_crop_is_an_inconsistency(
+        self, library: Library, faa: Document
+    ) -> None:
+        await self.add_figure_text(
+            library, faa, [self.figure(faa, top=170)], crops=False
+        )
+
+        with pytest.raises(DataInconsistencyError):
+            await library.ask()(QUESTION)
+
+    async def test_only_returned_figures_need_a_crop(
+        self, library: Library, faa: Document
+    ) -> None:
+        logo = self.figure(faa, top=170, is_decorative=True)
+        await self.add_figure_text(library, faa, [logo], crops=False)
+        other = document("tm-5-3431.pdf")
+        uncited = await self.add_figure_text(
+            library, other, [self.figure(other, top=170)], text=TABLE, crops=False
+        )
+        library.answer(GeneratedAnswer(text="Poor regulation [1].", not_covered=""))
+
+        answer = await library.ask()(QUESTION)
+
+        assert answer.primary_image is None
+        assert uncited.id in {source.unit_id for source in answer.sources}
+        assert uncited.id not in {c.unit_ids[0] for c in answer.citations}
+
+    async def test_a_not_enough_answer_returns_no_images(
+        self, library: Library, faa: Document
+    ) -> None:
+        await self.add_figure_text(library, faa, [self.figure(faa, top=170)])
+        library.answer(GeneratedAnswer(text="", not_covered=""))
+
+        answer = await library.ask()(QUESTION)
+
+        assert (answer.primary_image, answer.related_images) == (None, ())

@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
 from multimodal_rag.adapters.http.dependencies import AnswerQuestionDep
 from multimodal_rag.adapters.http.problems import problem_responses
@@ -11,6 +11,7 @@ from multimodal_rag.adapters.http.routes_ingestion import (
     REQUEST_ID_PARAMETER,
 )
 from multimodal_rag.adapters.http.schemas import AnswerBody, QuestionBody
+from multimodal_rag.answering.domain import AnswerImage
 
 _RETRY_AFTER: dict[str, Any] = {
     "Retry-After": {
@@ -36,14 +37,26 @@ questions_router = APIRouter(prefix=API_PREFIX, tags=["questions"])
     openapi_extra={"parameters": [REQUEST_ID_PARAMETER]},
     responses=_PROBLEMS,
 )
-async def ask_question(body: QuestionBody, answer: AnswerQuestionDep) -> AnswerBody:
+async def ask_question(
+    body: QuestionBody, answer: AnswerQuestionDep, request: Request
+) -> AnswerBody:
     """Answer a question only from the retrieved content of the documents.
 
     Args:
         body: The question.
         answer: Question use case.
+        request: Request being handled, used to build image URLs.
 
     Returns:
-        The answer, its citations and the sources supplied to the answer model.
+        The answer, its citations, the sources supplied to the answer model and the
+        figures that go with it.
     """
-    return AnswerBody.from_answer(await answer(body.question))
+
+    def image_url(image: AnswerImage) -> str:
+        return request.url_for(
+            "get_document_image",
+            document_id=str(image.document_id),
+            element_id=str(image.element_id),
+        ).path
+
+    return AnswerBody.from_answer(await answer(body.question), image_url=image_url)

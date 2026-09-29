@@ -104,7 +104,7 @@ def create_api_app() -> ASGIApp:
     async def lifespan(_: FastAPI) -> AsyncGenerator[ApiState]:
         async with AsyncExitStack() as resources:
             resources.push_async_callback(engine.dispose)
-            answering = await _answering_state(settings, engine, resources)
+            answering = await _answering_state(settings, engine, storage, resources)
             logger.info("api ready, version %s", __version__)
             yield ApiState(**ingestion, **answering)
 
@@ -157,7 +157,10 @@ def _ingestion_state(
 
 
 async def _answering_state(
-    settings: ApiSettings, engine: AsyncEngine, resources: AsyncExitStack
+    settings: ApiSettings,
+    engine: AsyncEngine,
+    storage: FilesystemBlobStorage,
+    resources: AsyncExitStack,
 ) -> AnsweringState:
     # No client connects here, so the API starts while Qdrant or the models are down.
     retry = RetryPolicy.for_providers(settings)
@@ -206,6 +209,7 @@ async def _answering_state(
                 retry=retry,
             ),
             languages=Py3LangidIdentifier(),
+            blobs=storage,
             options=AnsweringOptions(
                 top_k=settings.retrieval_top_k,
                 max_question_chars=settings.max_question_chars,

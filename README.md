@@ -1,8 +1,12 @@
-# Multimodal RAG System
+<p align="center">
+  <img src="docs/images/banner.png" alt="Multimodal RAG System" width="100%">
+</p>
 
-[![CI](https://github.com/Tjimenez1303/multimodal-rag-system/actions/workflows/ci.yml/badge.svg)](https://github.com/Tjimenez1303/multimodal-rag-system/actions/workflows/ci.yml)
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.14-3776AB.svg)](https://www.python.org/downloads/)
+<p align="center">
+  <a href="https://github.com/Tjimenez1303/multimodal-rag-system/actions/workflows/ci.yml"><img src="https://github.com/Tjimenez1303/multimodal-rag-system/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License"></a>
+  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.14-3776AB.svg" alt="Python"></a>
+</p>
 
 Ask questions about technical PDF manuals and get answers that cite the page they come
 from, next to the diagram they refer to.
@@ -14,6 +18,13 @@ runs entirely on your machine, including the models.
 
 Open the chat in your browser, upload a manual and ask it a question. Each answer lists
 its sources by document and page and shows the figure it relies on beside the text.
+
+## Demo
+
+A walkthrough of the architecture, uploading a manual, and asking questions whose answers
+cite their page and show the figure they rely on.
+
+https://github.com/user-attachments/assets/23bcd737-6e99-433a-9d1b-c472452cfcde
 
 ## Features
 

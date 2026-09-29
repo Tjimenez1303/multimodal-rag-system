@@ -46,6 +46,9 @@ document and page, with previous and next limited to the pages of the source.
 - Bad, because pages take about 0.45 MB each, about 4.5 GB for 100 manuals of 100 pages.
 - Bad, because documents ingested before this change have no page images, and the
   system's volumes are recreated once when upgrading.
+- Bad, because the backend image carries about 20 MB of fonts. Many PDFs name the
+  standard fonts (Helvetica, Times, Courier) without embedding them, and the page
+  renderer needs a substitute to draw their text.
 
 ## Annex: technical evidence
 
@@ -61,6 +64,14 @@ Reference machine, sample manuals, 144 dpi, pages 1 to 24.
 
 After the change, the page image route answered `200 image/png` with a 1188 × 1548 page
 in 12 ms, and `404 page_not_found` for a page past the end of the document.
+
+### Fonts for non-embedded standard fonts
+
+Docling's parser renders pages with the fonts installed in the image. The slim Python
+image has none, so a PDF set in non-embedded Helvetica rendered every glyph as a box, in
+the stored page and in the image the layout model reads. With `fonts-urw-base35`, the
+free clones of the standard fonts, the same page rendered correctly and its extraction
+went from 4 elements to 9.
 
 ### Alternatives
 

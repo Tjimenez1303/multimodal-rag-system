@@ -345,6 +345,12 @@ constraint is stated. Section numbers are referenced from [plan.md](plan.md) and
   - Page outside 1 to `page_count`: 404 `page_not_found`.
   - Stored page missing for a completed document: 500 `data_inconsistency`, as a missing
     figure crop is (Principle VI).
+- **Fonts in the image**: the threaded docling-parse backend renders pages with system
+  fonts in place of the standard PDF fonts a file does not embed. The slim Python image
+  had none, so a PDF set in non-embedded Helvetica rendered every glyph as a box, in
+  the page image and in the image Docling's layout model reads. The backend image
+  installs `fonts-urw-base35`, the free clones of those fonts (19.8 MB). On a sample
+  invoice the page rendered correctly and Docling extracted 9 elements instead of 4.
 - **Existing data**: documents completed before this change have no page images. In this
   pre-release project the blob and database volumes are recreated
   (`docker compose down -v`), which the quickstart states. No backfill job is built.

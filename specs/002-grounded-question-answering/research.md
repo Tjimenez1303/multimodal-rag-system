@@ -356,6 +356,10 @@ https://github.com/pemistahl/lingua-py, https://pypi.org/project/fast-langdetect
   uses. When the client disconnects, the group cancels the use case. The cancellation
   closes the httpx request, Docker Model Runner's reverse proxy cancels its upstream
   call, llama-server stops generating, and the slot is released on the way out.
+  The route then returns an empty response with status 499, nginx's "Client Closed
+  Request", which nobody reads but which the request log records. The task group wraps
+  an error of the use case in an exception group, so the route re-raises the single
+  error itself, and the problem details handlers still map it to its status.
 
 **Rationale**:
 

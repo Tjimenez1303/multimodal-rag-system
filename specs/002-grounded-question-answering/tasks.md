@@ -316,17 +316,17 @@ get 503 `answer_model_unavailable` within the deadline while the library answers
 
 ### Tests for User Story 5 (REQUIRED) ⚠️
 
-- [ ] T053 [P] [US5] Add the failure cases to `backend/tests/unit/answering/test_ask.py`:
+- [x] T053 [P] [US5] Add the failure cases to `backend/tests/unit/answering/test_ask.py`:
   - **Error translation.** Embedder and index `ProviderUnavailableError` become `SearchUnavailableError`, and their `ProviderTimeoutError` becomes `SearchTimeoutError`. The generator's `ProviderUnavailableError`, `ProviderTimeoutError` and `ProviderResponseError` become `AnswerModelUnavailableError`, `AnswerModelTimeoutError` and `AnswerModelResponseError`. Each keeps the original as `__cause__`.
   - **Deadline.** A generator slower than the deadline raises `AnswerDeadlineExceededError`, and so does a question that waits for a slot beyond it.
   - **Busy.** A full `FakeAnswerSlots` raises `AnsweringBusyError` before any search.
   - **Invalid question.** An empty or 2,001-character question raises `InvalidQuestionError` before any port is called.
-- [ ] T054 [P] [US5] Write `backend/tests/unit/adapters/test_anyio_slots.py`:
+- [x] T054 [P] [US5] Write `backend/tests/unit/adapters/test_anyio_slots.py`:
   - With capacity 1 and queue limit 1, the third concurrent admission raises `AnsweringBusyError` at once, while the second waits and then runs.
   - A cancelled waiter frees its place in the line.
   - A cancelled holder releases its token.
-- [ ] T055 [P] [US5] Write `backend/tests/unit/adapters/test_http_disconnect.py`: an ASGI call whose `receive` returns `http.disconnect` after the body cancels the running handler coroutine, observed through a `CancelledError` in a fake use case. A normal request returns its result.
-- [ ] T056 [P] [US5] Add to `backend/tests/unit/adapters/test_http_app.py`:
+- [x] T055 [P] [US5] Write `backend/tests/unit/adapters/test_http_disconnect.py`: an ASGI call whose `receive` returns `http.disconnect` after the body cancels the running handler coroutine, observed through a `CancelledError` in a fake use case. A normal request returns its result.
+- [x] T056 [P] [US5] Add to `backend/tests/unit/adapters/test_http_app.py`:
   - Each answering error maps to the status and code of research section 11.
   - The 5xx answering errors include their fixed `detail`, while other 5xx errors still omit it.
   - `answering_busy` carries `Retry-After: 10`.
@@ -334,17 +334,17 @@ get 503 `answer_model_unavailable` within the deadline while the library answers
 
 ### Implementation for User Story 5
 
-- [ ] T057 [US5] Implement `AnyioAnswerSlots` in `backend/src/multimodal_rag/adapters/concurrency/anyio_slots.py` over `anyio.CapacityLimiter(ANSWER_CONCURRENCY)`. Raise `AnsweringBusyError` when `available_tokens == 0` and `statistics().tasks_waiting >= ANSWER_QUEUE_LIMIT`, with no `await` between the check and the acquisition (research section 10).
-- [ ] T058 [US5] Extend `AnswerQuestion` in `backend/src/multimodal_rag/answering/use_cases/ask.py`:
+- [x] T057 [US5] Implement `AnyioAnswerSlots` in `backend/src/multimodal_rag/adapters/concurrency/anyio_slots.py` over `anyio.CapacityLimiter(ANSWER_CONCURRENCY)`. Raise `AnsweringBusyError` when `available_tokens == 0` and `statistics().tasks_waiting >= ANSWER_QUEUE_LIMIT`, with no `await` between the check and the acquisition (research section 10).
+- [x] T058 [US5] Extend `AnswerQuestion` in `backend/src/multimodal_rag/answering/use_cases/ask.py`:
   - Validate the question before admission.
   - Wrap admission and work in `asyncio.timeout(ANSWER_DEADLINE_SECONDS)` and translate `TimeoutError` to `AnswerDeadlineExceededError`.
   - Translate provider errors per component, and log retries and busy rejections at warning level.
-- [ ] T059 [US5] Implement `run_until_disconnect(request, operation)` in `backend/src/multimodal_rag/adapters/http/disconnect.py`: an anyio task group runs the operation next to a listener that awaits `request.receive()` until `http.disconnect` and then cancels the group. Use it in `backend/src/multimodal_rag/adapters/http/routes_questions.py`.
-- [ ] T060 [US5] Map the answering errors in `backend/src/multimodal_rag/adapters/http/problems.py`:
+- [x] T059 [US5] Implement `run_until_disconnect(request, operation)` in `backend/src/multimodal_rag/adapters/http/disconnect.py`: an anyio task group runs the operation next to a listener that awaits `request.receive()` until `http.disconnect` and then cancels the group. Use it in `backend/src/multimodal_rag/adapters/http/routes_questions.py`.
+- [x] T060 [US5] Map the answering errors in `backend/src/multimodal_rag/adapters/http/problems.py`:
   - Add them to `_STATUS_BY_ERROR`, with the most specific first: 400, 409, 502, 503 and 504 as research section 11 lists, and `CapacityError` at 503.
   - Send `detail` for errors listed in a `_PUBLIC_SERVER_ERRORS` tuple.
   - Add `Retry-After: 10` to `AnsweringBusyError` responses.
-- [ ] T061 [US5] Wire `AnyioAnswerSlots` and the deadline into `AnswerQuestion` in `backend/src/multimodal_rag/bootstrap.py`.
+- [x] T061 [US5] Wire `AnyioAnswerSlots` and the deadline into `AnswerQuestion` in `backend/src/multimodal_rag/bootstrap.py`.
 
 **Checkpoint**: failures are bounded and specific, and ingestion is unaffected (quickstart Scenarios 7 to 9).
 

@@ -2,7 +2,9 @@
 
 Every problem uses the ``about:blank`` type, so its ``title`` is the standard phrase of
 its status. The specific cause travels in the ``code``
-extension member and, for client errors, in ``detail``.
+extension member and, for client errors, in ``detail``. Answering server errors carry
+fixed messages that name the failing component without provider data, so they send
+``detail`` too.
 """
 
 import logging
@@ -18,12 +20,22 @@ from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from multimodal_rag.adapters.http.request_context import request_id_of
+from multimodal_rag.answering.errors import (
+    AnswerDeadlineExceededError,
+    AnsweringBusyError,
+    AnswerModelResponseError,
+    AnswerModelTimeoutError,
+    AnswerModelUnavailableError,
+    SearchTimeoutError,
+    SearchUnavailableError,
+)
 from multimodal_rag.ingestion.errors import (
     FileTooLargeError,
     PageLimitExceededError,
     UnsupportedMediaTypeError,
 )
 from multimodal_rag.shared.errors import (
+    CapacityError,
     ConcurrencyError,
     ConfigurationError,
     DataInconsistencyError,
@@ -41,6 +53,8 @@ PROBLEM_MEDIA_TYPE = "application/problem+json"
 # Same pattern as Problem.code in the OpenAPI contract.
 PROBLEM_CODE_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
 NOT_READY_CODE = "not_ready"
+# About the time one answer takes, so a retry finds a free place.
+BUSY_RETRY_AFTER_SECONDS = 10
 
 # Most specific classes first: the first match along the error's MRO wins.
 _STATUS_BY_ERROR: dict[type[MultimodalRagError], int] = {
@@ -51,12 +65,27 @@ _STATUS_BY_ERROR: dict[type[MultimodalRagError], int] = {
     NotFoundError: 404,
     ConcurrencyError: 409,
     ExtractionError: 422,
+    SearchTimeoutError: 504,
+    AnswerModelTimeoutError: 504,
+    AnswerDeadlineExceededError: 504,
+    AnswerModelResponseError: 502,
+    CapacityError: 503,
     ProviderError: 503,
     StorageError: 503,
     ConfigurationError: 500,
     DataInconsistencyError: 500,
     MultimodalRagError: 500,
 }
+# Server errors whose fixed message names the failing component and nothing else.
+_PUBLIC_SERVER_ERRORS: tuple[type[MultimodalRagError], ...] = (
+    AnsweringBusyError,
+    SearchUnavailableError,
+    SearchTimeoutError,
+    AnswerModelUnavailableError,
+    AnswerModelTimeoutError,
+    AnswerModelResponseError,
+    AnswerDeadlineExceededError,
+)
 
 
 class ProblemHTTPException(StarletteHTTPException):
@@ -178,11 +207,20 @@ async def _handle_domain_error(
     request: Request, error: MultimodalRagError
 ) -> JSONResponse:
     status = status_for(error)
-    if status >= 500:
+    headers = (
+        {"Retry-After": str(BUSY_RETRY_AFTER_SECONDS)}
+        if isinstance(error, AnsweringBusyError)
+        else None
+    )
+    if status >= 500 and not isinstance(error, _PUBLIC_SERVER_ERRORS):
         # Internal details stay in the logs, and clients only get the stable code.
         logger.error("request failed with %s", error.code, exc_info=error)
         return problem_response(request, status=status, code=error.code)
-    return problem_response(request, status=status, code=error.code, detail=str(error))
+    if status >= 500:
+        logger.warning("request failed with %s", error.code, exc_info=error)
+    return problem_response(
+        request, status=status, code=error.code, detail=str(error), headers=headers
+    )
 
 
 async def _handle_validation_error(

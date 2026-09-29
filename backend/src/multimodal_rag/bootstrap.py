@@ -23,6 +23,7 @@ from starlette.types import ASGIApp
 
 from multimodal_rag import __version__
 from multimodal_rag.adapters.clock import SystemClock
+from multimodal_rag.adapters.concurrency.anyio_slots import AnyioAnswerSlots
 from multimodal_rag.adapters.docling.pdfium import PdfiumInspector
 from multimodal_rag.adapters.http.app import create_app
 from multimodal_rag.adapters.http.body_limit import (
@@ -210,6 +211,10 @@ async def _answering_state(
             ),
             languages=Py3LangidIdentifier(),
             blobs=storage,
+            slots=AnyioAnswerSlots(
+                capacity=settings.answer_concurrency,
+                queue_limit=settings.answer_queue_limit,
+            ),
             options=AnsweringOptions(
                 top_k=settings.retrieval_top_k,
                 max_question_chars=settings.max_question_chars,
@@ -217,6 +222,7 @@ async def _answering_state(
                 low_confidence_threshold=settings.low_confidence_threshold,
                 min_similarity=settings.min_similarity,
                 attribution_min_score=settings.attribution_min_score,
+                deadline_seconds=settings.answer_deadline_seconds,
             ),
         )
     )

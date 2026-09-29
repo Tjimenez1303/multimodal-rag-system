@@ -22,6 +22,7 @@ from multimodal_rag.ingestion.domain import (
 from multimodal_rag.ingestion.ports import SearchHit
 from tests.fakes import (
     FakeAnswerGenerator,
+    FakeAnswerSlots,
     FakeEmbedder,
     FakeLanguageIdentifier,
     FrozenClock,
@@ -116,6 +117,7 @@ class Library:
     generator: FakeAnswerGenerator = field(default_factory=FakeAnswerGenerator)
     languages: FakeLanguageIdentifier = field(default_factory=FakeLanguageIdentifier)
     blobs: InMemoryBlobStorage = field(default_factory=InMemoryBlobStorage)
+    slots: FakeAnswerSlots = field(default_factory=FakeAnswerSlots)
 
     async def add(
         self,
@@ -160,6 +162,7 @@ class Library:
             "low_confidence_threshold": 0.90,
             "min_similarity": 0.60,
             "attribution_min_score": 0.5,
+            "deadline_seconds": 90.0,
         }
         return AnswerQuestion(
             embedder=self.embedder,
@@ -169,5 +172,6 @@ class Library:
             generator=self.generator,
             languages=self.languages,
             blobs=self.blobs,
+            slots=self.slots,
             options=AnsweringOptions(**(defaults | options)),
         )

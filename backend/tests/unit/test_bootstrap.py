@@ -127,6 +127,7 @@ def test_questions_are_served_and_fail_while_search_is_unreachable(
         response = client.post("/api/v1/questions", json={"question": "What is V-12?"})
 
     assert response.status_code == 503
+    assert response.json()["code"] == "search_unavailable"
 
 
 @pytest.mark.parametrize("name", ["ANSWER_MODEL_URL", "QDRANT_URL", "EMBEDDER_MODEL"])

@@ -7,12 +7,18 @@ citations, sources or images. An answer the model wrote without any source marke
 attributed to the supplied units statement by statement before its citations are
 checked. An answer returns the figure closest to its most relevant cited text, once the
 use case has checked that every returned figure's crop is stored.
+
+A question waits for a free place before any search, and the whole question, waiting
+included, runs under one deadline. Failures of the embedding model and the vector index
+are reported as search failures, and failures of the answer model under its own name.
 """
 
+import asyncio
 import logging
 import time
 import uuid
-from collections.abc import Sequence
+from collections.abc import Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass
 
 from multimodal_rag.answering.attribution import attribute, find_statements
@@ -29,9 +35,22 @@ from multimodal_rag.answering.domain import (
     NotEnoughReason,
     Question,
 )
+from multimodal_rag.answering.errors import (
+    AnswerDeadlineExceededError,
+    AnsweringBusyError,
+    AnswerModelResponseError,
+    AnswerModelTimeoutError,
+    AnswerModelUnavailableError,
+    SearchTimeoutError,
+    SearchUnavailableError,
+)
 from multimodal_rag.answering.images import figure_ids_of, select_images
 from multimodal_rag.answering.messages import SUPPORTED_LANGUAGES, not_enough_message
-from multimodal_rag.answering.ports import AnswerGenerator, LanguageIdentifier
+from multimodal_rag.answering.ports import (
+    AnswerGenerator,
+    AnswerSlots,
+    LanguageIdentifier,
+)
 from multimodal_rag.answering.prompting import build_prompt
 from multimodal_rag.answering.relevance import distinct_hits, passes_gate
 from multimodal_rag.answering.sources import assemble_sources, elements_of
@@ -48,12 +67,28 @@ from multimodal_rag.ingestion.ports import (
     SearchHit,
     VectorIndex,
 )
-from multimodal_rag.shared.errors import DataInconsistencyError
+from multimodal_rag.shared.errors import (
+    DataInconsistencyError,
+    ProviderError,
+    ProviderResponseError,
+    ProviderTimeoutError,
+    ProviderUnavailableError,
+)
 
 logger = logging.getLogger(__name__)
 
 # Hits searched per supplied unit, so that dropping repeated texts keeps the slots full.
 SEARCH_OVERFETCH = 2
+# The embedding model and the vector index both count as search.
+_SEARCH_FAILURES: Mapping[type[ProviderError], type[ProviderError]] = {
+    ProviderUnavailableError: SearchUnavailableError,
+    ProviderTimeoutError: SearchTimeoutError,
+}
+_ANSWER_MODEL_FAILURES: Mapping[type[ProviderError], type[ProviderError]] = {
+    ProviderUnavailableError: AnswerModelUnavailableError,
+    ProviderTimeoutError: AnswerModelTimeoutError,
+    ProviderResponseError: AnswerModelResponseError,
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,6 +105,7 @@ class AnsweringOptions:
             gate.
         attribution_min_score: Lowest match that attributes a statement of an answer
             written without markers.
+        deadline_seconds: Total time of a question, waiting for a place included.
     """
 
     top_k: int
@@ -78,6 +114,7 @@ class AnsweringOptions:
     low_confidence_threshold: float
     min_similarity: float
     attribution_min_score: float
+    deadline_seconds: float
 
 
 @dataclass
@@ -99,6 +136,7 @@ class AnswerQuestion:
         generator: Answer model.
         languages: Identifies the question's language for the fixed messages.
         blobs: Storage of the figure crops, checked before a figure is returned.
+        slots: Admission control that bounds the questions answered and waiting.
         options: Limits and thresholds of the use case.
     """
 
@@ -112,6 +150,7 @@ class AnswerQuestion:
         generator: AnswerGenerator,
         languages: LanguageIdentifier,
         blobs: BlobStorage,
+        slots: AnswerSlots,
         options: AnsweringOptions,
     ) -> None:
         self._embedder = embedder
@@ -121,6 +160,7 @@ class AnswerQuestion:
         self._generator = generator
         self._languages = languages
         self._blobs = blobs
+        self._slots = slots
         self._options = options
 
     async def __call__(
@@ -148,7 +188,21 @@ class AnswerQuestion:
             max_documents=self._options.max_filter_documents,
         )
         timings = _Timings()
-        answer = await self._answer(question, timings)
+        deadline = asyncio.timeout(self._options.deadline_seconds)
+        try:
+            async with deadline, self._slots.admit():
+                answer = await self._answer(question, timings)
+        except AnsweringBusyError:
+            logger.warning("question rejected: answering is busy")
+            raise
+        except TimeoutError as error:
+            if not deadline.expired():
+                raise
+            logger.warning(
+                "question stopped at the deadline of %s s",
+                self._options.deadline_seconds,
+            )
+            raise AnswerDeadlineExceededError() from error
         logger.info(
             "question answered: outcome %s, reason %s, units %s, cited %s, "
             "search_ms %.1f, generation_ms %.1f",
@@ -175,7 +229,8 @@ class AnswerQuestion:
         elements = await self._elements_of(hits)
         started = time.perf_counter()
         prompt = build_prompt(question, hits, document_names=names)
-        generated = await self._generator.generate(prompt)
+        with _named(_ANSWER_MODEL_FAILURES):
+            generated = await self._generator.generate(prompt)
         timings.generation_ms = (time.perf_counter() - started) * 1000
         if not generated.text.strip():
             return self._not_enough(
@@ -189,13 +244,14 @@ class AnswerQuestion:
         return await self._grounded(generated, cited, hits, names, elements)
 
     async def _search(self, question: Question) -> list[SearchHit]:
-        vector = await self._embedder.embed_query(question.text)
-        hits = await self._index.search_hybrid(
-            query_text=question.text,
-            query_vector=vector,
-            limit=self._options.top_k * SEARCH_OVERFETCH,
-            document_ids=question.document_ids,
-        )
+        with _named(_SEARCH_FAILURES):
+            vector = await self._embedder.embed_query(question.text)
+            hits = await self._index.search_hybrid(
+                query_text=question.text,
+                query_vector=vector,
+                limit=self._options.top_k * SEARCH_OVERFETCH,
+                document_ids=question.document_ids,
+            )
         return distinct_hits(hits, limit=self._options.top_k)
 
     async def _document_names(self, hits: Sequence[SearchHit]) -> dict[uuid.UUID, str]:
@@ -228,9 +284,10 @@ class AnswerQuestion:
         if not statements:
             return text
         units = [hit.unit for hit in hits]
-        vectors = await self._embedder.embed(
-            [s.text for s in statements] + [unit.embedding_text for unit in units]
-        )
+        with _named(_SEARCH_FAILURES):
+            vectors = await self._embedder.embed(
+                [s.text for s in statements] + [unit.embedding_text for unit in units]
+            )
         attribution = attribute(
             text,
             statements,
@@ -320,3 +377,17 @@ class AnswerQuestion:
             )
             explanation = not_enough_message(reason, language=language)
         return Answer.not_enough(reason, explanation)
+
+
+@contextmanager
+def _named(
+    failures: Mapping[type[ProviderError], type[ProviderError]],
+) -> Iterator[None]:
+    # Re-raises a provider failure as the error that names its component.
+    try:
+        yield
+    except ProviderError as error:
+        for family, named in failures.items():
+            if isinstance(error, family) and not isinstance(error, named):
+                raise named() from error
+        raise

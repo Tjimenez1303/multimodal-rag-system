@@ -3,6 +3,7 @@ import io
 import json
 import logging
 import time
+import uuid
 from collections.abc import Iterator
 
 import pytest
@@ -12,19 +13,36 @@ from starlette.types import Message, Receive, Scope, Send
 
 from multimodal_rag.adapters.http.app import create_app
 from multimodal_rag.adapters.http.body_limit import BodyLimits, BodySizeLimitMiddleware
-from multimodal_rag.adapters.http.dependencies import RequestIdDep
+from multimodal_rag.adapters.http.dependencies import (
+    RequestIdDep,
+    provide_list_documents,
+)
 from multimodal_rag.adapters.http.problems import (
     PROBLEM_CODE_PATTERN,
     http_problem_code,
     status_for,
 )
 from multimodal_rag.adapters.http.request_context import RequestContextMiddleware
+from multimodal_rag.adapters.http.routes_documents import documents_router
+from multimodal_rag.answering.errors import (
+    AnswerDeadlineExceededError,
+    AnsweringBusyError,
+    AnswerModelResponseError,
+    AnswerModelTimeoutError,
+    AnswerModelUnavailableError,
+    DocumentsNotReadyError,
+    InvalidQuestionError,
+    SearchTimeoutError,
+    SearchUnavailableError,
+    UnknownDocumentsError,
+)
 from multimodal_rag.ingestion.errors import (
     FileTooLargeError,
     JobNotFoundError,
     PageLimitExceededError,
     UnsupportedMediaTypeError,
 )
+from multimodal_rag.ingestion.use_cases.library import ListDocuments
 from multimodal_rag.shared.errors import (
     DataInconsistencyError,
     MultimodalRagError,
@@ -32,6 +50,7 @@ from multimodal_rag.shared.errors import (
     StorageError,
 )
 from multimodal_rag.shared.logging import configure_logging
+from tests.fakes import FrozenClock, InMemoryDocumentRepository, InMemoryJobQueue
 
 probe_router = APIRouter()
 
@@ -413,3 +432,89 @@ def test_routes_without_their_own_limit_get_the_default_body_limit() -> None:
 
     assert small_route.status_code == 413
     assert upload_route.status_code == 200
+
+
+ANSWERING_ERRORS: list[tuple[MultimodalRagError, int]] = [
+    (InvalidQuestionError("empty"), 400),
+    (UnknownDocumentsError([uuid.UUID(int=1)]), 400),
+    (DocumentsNotReadyError([uuid.UUID(int=1)]), 409),
+    (AnsweringBusyError(), 503),
+    (SearchUnavailableError(), 503),
+    (SearchTimeoutError(), 504),
+    (AnswerModelUnavailableError(), 503),
+    (AnswerModelTimeoutError(), 504),
+    (AnswerModelResponseError(), 502),
+    (AnswerDeadlineExceededError(), 504),
+]
+
+
+@pytest.mark.parametrize(
+    ("error", "status"), ANSWERING_ERRORS, ids=[e.code for e, _ in ANSWERING_ERRORS]
+)
+def test_answering_errors_map_to_their_status(
+    error: MultimodalRagError, status: int
+) -> None:
+    assert status_for(error) == status
+
+
+def answering_client(error: MultimodalRagError) -> TestClient:
+    router = APIRouter()
+
+    @router.post("/probe/question")
+    async def fail() -> None:
+        raise error
+
+    return TestClient(served(create_app(readiness_checks={}, routers=(router,))))
+
+
+@pytest.mark.parametrize(
+    "error",
+    [e for e, status in ANSWERING_ERRORS if status >= 500],
+    ids=[e.code for e, status in ANSWERING_ERRORS if status >= 500],
+)
+def test_answering_server_errors_explain_the_failing_component(
+    error: MultimodalRagError,
+) -> None:
+    response = answering_client(error).post("/probe/question")
+
+    assert response.json()["code"] == error.code
+    assert response.json()["detail"] == str(error)
+
+
+def test_other_server_errors_still_hide_their_details(client: TestClient) -> None:
+    response = client.get("/probe/inconsistent")
+
+    assert "detail" not in response.json()
+
+
+def test_a_busy_answer_tells_the_client_when_to_retry() -> None:
+    response = answering_client(AnsweringBusyError()).post("/probe/question")
+
+    assert response.status_code == 503
+    assert response.headers["retry-after"] == "10"
+
+
+def test_other_errors_carry_no_retry_after() -> None:
+    response = answering_client(AnswerModelUnavailableError()).post("/probe/question")
+
+    assert "retry-after" not in response.headers
+
+
+def test_the_library_answers_while_the_answer_model_is_down() -> None:
+    router = APIRouter()
+
+    @router.post("/api/v1/questions")
+    async def fail() -> None:
+        raise AnswerModelUnavailableError()
+
+    app = create_app(readiness_checks={}, routers=(router, documents_router))
+    app.dependency_overrides[provide_list_documents] = lambda: ListDocuments(
+        documents=InMemoryDocumentRepository(),
+        jobs=InMemoryJobQueue(FrozenClock()),
+    )
+    with TestClient(served(app)) as client:
+        question = client.post("/api/v1/questions")
+        library = client.get("/api/v1/documents")
+
+    assert question.status_code == 503
+    assert library.status_code == 200

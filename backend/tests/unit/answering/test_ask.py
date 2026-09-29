@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from collections.abc import Sequence
 from typing import Any
@@ -10,6 +11,16 @@ from multimodal_rag.answering.domain import (
     GeneratedAnswer,
     NotEnoughReason,
 )
+from multimodal_rag.answering.errors import (
+    AnswerDeadlineExceededError,
+    AnsweringBusyError,
+    AnswerModelResponseError,
+    AnswerModelTimeoutError,
+    AnswerModelUnavailableError,
+    InvalidQuestionError,
+    SearchTimeoutError,
+    SearchUnavailableError,
+)
 from multimodal_rag.answering.messages import not_enough_message
 from multimodal_rag.ingestion.domain import (
     BoundingBox,
@@ -20,7 +31,15 @@ from multimodal_rag.ingestion.domain import (
     RelationshipKind,
     RetrievalUnit,
 )
-from multimodal_rag.shared.errors import DataInconsistencyError
+from multimodal_rag.shared.errors import (
+    DataInconsistencyError,
+    MultimodalRagError,
+    ProviderError,
+    ProviderResponseError,
+    ProviderTimeoutError,
+    ProviderUnavailableError,
+)
+from tests.fakes import FakeAnswerSlots
 from tests.library import Library, document, element, unit
 
 QUESTION = "Why is a series wound generator never used on airplanes?"
@@ -497,3 +516,139 @@ class TestImages:
         answer = await library.ask()(QUESTION)
 
         assert (answer.primary_image, answer.related_images) == (None, ())
+
+
+class TestFailures:
+    @pytest.mark.parametrize(
+        ("failure", "expected"),
+        [
+            (ProviderUnavailableError("embedder down"), SearchUnavailableError),
+            (ProviderTimeoutError("embedder slow"), SearchTimeoutError),
+        ],
+    )
+    async def test_embedding_failures_are_reported_as_search_failures(
+        self,
+        library: Library,
+        failure: ProviderError,
+        expected: type[MultimodalRagError],
+    ) -> None:
+        library.embedder.error = failure
+
+        with pytest.raises(expected) as raised:
+            await library.ask()(QUESTION)
+
+        assert raised.value.__cause__ is failure
+
+    @pytest.mark.parametrize(
+        ("failure", "expected"),
+        [
+            (ProviderUnavailableError("qdrant down"), SearchUnavailableError),
+            (ProviderTimeoutError("qdrant slow"), SearchTimeoutError),
+        ],
+    )
+    async def test_index_failures_are_reported_as_search_failures(
+        self,
+        library: Library,
+        failure: ProviderError,
+        expected: type[MultimodalRagError],
+    ) -> None:
+        library.index.failures["search_hybrid"] = failure
+
+        with pytest.raises(expected) as raised:
+            await library.ask()(QUESTION)
+
+        assert raised.value.__cause__ is failure
+
+    @pytest.mark.parametrize(
+        ("failure", "expected"),
+        [
+            (ProviderUnavailableError("model down"), AnswerModelUnavailableError),
+            (ProviderTimeoutError("model slow"), AnswerModelTimeoutError),
+            (ProviderResponseError("model rejected"), AnswerModelResponseError),
+        ],
+    )
+    async def test_generation_failures_name_the_answer_model(
+        self,
+        library: Library,
+        faa: Document,
+        failure: ProviderError,
+        expected: type[MultimodalRagError],
+    ) -> None:
+        await add_text(library, faa, SERIES, 12)
+        library.answer(failure)
+
+        with pytest.raises(expected) as raised:
+            await library.ask()(QUESTION)
+
+        assert raised.value.__cause__ is failure
+
+    async def test_an_answer_model_error_is_raised_as_it_is(
+        self, library: Library, faa: Document
+    ) -> None:
+        await add_text(library, faa, SERIES, 12)
+        invalid = AnswerModelResponseError()
+        library.answer(invalid)
+
+        with pytest.raises(AnswerModelResponseError) as raised:
+            await library.ask()(QUESTION)
+
+        assert raised.value is invalid
+
+    async def test_a_generation_slower_than_the_deadline_is_cancelled(
+        self, library: Library, faa: Document
+    ) -> None:
+        await add_text(library, faa, SERIES, 12)
+        library.generator.delay_seconds = 1.0
+
+        with pytest.raises(AnswerDeadlineExceededError):
+            await library.ask(deadline_seconds=0.05)(QUESTION)
+
+        assert library.generator.cancelled == 1
+
+    async def test_a_timeout_that_is_not_the_deadline_is_not_reported_as_one(
+        self, library: Library, faa: Document
+    ) -> None:
+        await add_text(library, faa, SERIES, 12)
+        library.answer(TimeoutError("raised by a component"))
+
+        with pytest.raises(TimeoutError) as raised:
+            await library.ask()(QUESTION)
+
+        assert not isinstance(raised.value, AnswerDeadlineExceededError)
+
+    async def test_waiting_for_a_place_counts_toward_the_deadline(
+        self, library: Library, faa: Document
+    ) -> None:
+        await add_text(library, faa, SERIES, 12)
+        library.slots = FakeAnswerSlots(capacity=1, queue_limit=5)
+        library.generator.delay_seconds = 0.3
+        first = asyncio.create_task(library.ask(deadline_seconds=5)(QUESTION))
+        await asyncio.sleep(0.01)
+
+        with pytest.raises(AnswerDeadlineExceededError):
+            await library.ask(deadline_seconds=0.05)(QUESTION)
+
+        await first
+        assert len(library.generator.prompts) == 1
+
+    async def test_a_full_line_rejects_the_question_before_any_search(
+        self, library: Library, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        library.slots = FakeAnswerSlots(capacity=0, queue_limit=0)
+
+        with caplog.at_level(logging.WARNING, logger=LOGGER):
+            with pytest.raises(AnsweringBusyError):
+                await library.ask()(QUESTION)
+
+        assert library.embedder.queries == []
+        assert "busy" in caplog.text
+
+    @pytest.mark.parametrize("text", ["   ", "a" * 2001], ids=["blank", "too_long"])
+    async def test_an_invalid_question_is_rejected_before_any_port_is_called(
+        self, library: Library, text: str
+    ) -> None:
+        with pytest.raises(InvalidQuestionError):
+            await library.ask()(text)
+
+        assert library.embedder.queries == []
+        assert library.slots.admitted == 0

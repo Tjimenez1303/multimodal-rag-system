@@ -19,6 +19,13 @@ runs entirely on your machine, including the models.
 Open the chat in your browser, upload a manual and ask it a question. Each answer lists
 its sources by document and page and shows the figure it relies on beside the text.
 
+## Demo
+
+A walkthrough of the architecture, uploading a manual, and asking questions whose answers
+cite their page and show the figure they rely on.
+
+https://github.com/user-attachments/assets/23bcd737-6e99-433a-9d1b-c472452cfcde
+
 ## Features
 
 - Uploads return a job id right away, while a separate worker processes the document

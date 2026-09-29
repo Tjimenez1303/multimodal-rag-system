@@ -110,6 +110,7 @@ class EnrichmentOptions:
 
 @dataclass
 class _Extraction:
+    document_id: uuid.UUID
     elements: list[ExtractedElement] = field(default_factory=list)
     links: list[ElementRelationship] = field(default_factory=list)
     page_sizes: dict[int, PageSize] = field(default_factory=dict)
@@ -130,7 +131,7 @@ class ProcessJob:
         documents: Document persistence.
         jobs: Job queue.
         elements: Element persistence.
-        blobs: Storage of the original files and figure crops.
+        blobs: Storage of the original files, figure crops and page images.
         extractor: Layout-aware extraction of typed elements.
         describer: Vision model, or ``None`` when figure description is disabled.
         embedder: Embedding model.
@@ -254,7 +255,9 @@ class ProcessJob:
     async def _extract(
         self, document: Document, job: IngestionJob, lease_token: uuid.UUID
     ) -> _Extraction:
-        extraction = _Extraction(pages=document.page_count or 0)
+        extraction = _Extraction(
+            document_id=document.id, pages=document.page_count or 0
+        )
         await self._progress(
             job, lease_token, JobStage.EXTRACTING, 0, document.page_count
         )
@@ -278,6 +281,12 @@ class ProcessJob:
         return extraction
 
     async def _collect(self, batch: ExtractionBatch, extraction: _Extraction) -> None:
+        # Keys derive from the document and page, so a retried job overwrites them.
+        for page_number, page_png in batch.page_images.items():
+            key = ExtractedElement.page_image_key_for(
+                document_id=extraction.document_id, page_number=page_number
+            )
+            await self._blobs.save_bytes(key, page_png)
         for element in batch.elements:
             png = batch.images.get(element.id)
             if png is not None:

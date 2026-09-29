@@ -1,0 +1,10 @@
+{
+  "status": "not_enough_information",
+  "reason": "no_relevant_content",
+  "answer": "The documents do not contain enough information to answer this question.",
+  "not_covered": null,
+  "citations": [],
+  "sources": [],
+  "primary_image": null,
+  "related_images": []
+}

@@ -1,0 +1,94 @@
+{
+  "status": "answered",
+  "reason": null,
+  "answer": "Las cinco reglas de oro para trabajar sin tensión son las siguientes:\n\n1. **Desconectar**: Esta etapa produce el aislamiento de la instalación respecto a las fuentes de alimentación [1].\n2. **Prevenir cualquier possible realimentación**: Su objetivo es impedir que la instalación se reconecte a causa de errores o fallos fortuitos [1].\n3. **Verificar la ausencia de tensión**: Tiene por objeto comprobar que la instalación está libre de tensión en ese memento [1].\n4. **Poner a tierra y en cortocircuito**: Esta etapa garantiza el mantenimiento de la situación de seguridad durante el período de tiempo que duren los trabajos [1].\n5. **Proteger frente a elementos próximos en tensión y establecer señalización**: Complementa las etapas anteriores mediante la introducción de barreras para evitar el contacto con otros elementos en tensión o mediante la delimitación y señalización de la zona de trabajo [1].\n\nHasta que no se hayan completado las cinco etapas no podrá autorizarse el inicio del trabajo sin tensión [1].",
+  "not_covered": null,
+  "citations": [
+    {
+      "number": 1,
+      "document_id": "b5551573-56ec-4b9d-b4bb-1c46549dcb32",
+      "document_name": "insst-guia-riesgo-electrico.pdf",
+      "pages": [27],
+      "unit_ids": [
+        "2a249125-05b1-5604-b429-22f8295a7905",
+        "4992458a-d815-511b-b32a-b469492ada03"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "unit_id": "00ada8b8-6706-5e22-8d4a-11c7e5eb27b4",
+      "rank": 1,
+      "similarity": 0.70376164,
+      "document_id": "b5d1a952-567c-4f17-9bc7-40b31c8a33f2",
+      "document_name": "insst-crash.pdf",
+      "section": ["Notas:", "Artículo 4. Técnicas y procedimientos de trabajo"],
+      "pages": [14],
+      "content_type": "text",
+      "excerpt": "\u0007El principio general (con las excepciones indicadas en los apartados que se citan) conlleva la obligación de que cualquier trabajo que se efectúe en una instalación o en su proximidad se realice sin tensión. El incumplimiento de este requisito ha sido causa de accidents graves.\n\u0007En el anexo II.A s",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": []
+    },
+    {
+      "unit_id": "2a249125-05b1-5604-b429-22f8295a7905",
+      "rank": 2,
+      "similarity": 0.64162815,
+      "document_id": "b5551573-56ec-4b9d-b4bb-1c46549dcb32",
+      "document_name": "insst-guia-riesgo-electrico.pdf",
+      "section": ["A.1 Supresión de la tensión."],
+      "pages": [27],
+      "content_type": "text",
+      "excerpt": "Una vez identificados la zona y los elementos de la instalación donde se va a realizar el trabajo, y salvo que existan razones esenciales para hacerlo de otra forma, se seguirá el proceso que se describe a continuación, que se desarrolla secuencialmente en cinco etapas:\n1ª Desconectar.\n2ª Prevenir c",
+      "cited": true,
+      "citation_number": 1,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": []
+    },
+    {
+      "unit_id": "140a9986-21ae-5191-ae81-fbb38f274630",
+      "rank": 3,
+      "similarity": 0.60206574,
+      "document_id": "4ad1e86a-812c-4888-ba14-22be855cae08",
+      "document_name": "insst-crash.pdf",
+      "section": ["ANEXO II Trabajos sin tensión", "A. Disposiciones generales"],
+      "pages": [26],
+      "content_type": "text",
+      "excerpt": "Las operaciones y maniobras para dejar sin tensión una instalación, antes de iniciar el «trabajo sin tensión», y la reposición de la tensión, al finalizarlo, las realizarán trabajadores autorizados que, en el caso de instalaciones de alta tensión, deberán set trabajadores cualificados.",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": []
+    },
+    {
+      "unit_id": "4992458a-d815-511b-b32a-b469492ada03",
+      "rank": 4,
+      "similarity": 0.525082,
+      "document_id": "b5551573-56ec-4b9d-b4bb-1c46549dcb32",
+      "document_name": "insst-guia-riesgo-electrico.pdf",
+      "section": ["A.1 Supresión de la tensión."],
+      "pages": [27],
+      "content_type": "text",
+      "excerpt": "En dicho proceso, la aplicación de la primera etapa produce el aislamiento de la instalación respecto a las fuentes de alimentación; la segunda etapa tiene por objeto impedir que se reconecte, a causa de errores o fallos fortuitos; la tercera etapa tiene por objeto comprobar que la instalación está,",
+      "cited": true,
+      "citation_number": 1,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": []
+    }
+  ],
+  "primary_image": null,
+  "related_images": []
+}

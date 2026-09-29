@@ -88,12 +88,14 @@ constraint is stated. Section numbers are referenced from [plan.md](plan.md) and
     quickstart.
   - **Security headers**: `Content-Security-Policy` with `default-src 'self'`,
     `img-src 'self' data: blob:`, `connect-src 'self'`, `script-src 'self'`,
-    `style-src 'self'`, `object-src 'none'`, `base-uri 'none'` and
+    `style-src 'self' 'nonce-$request_id'` (section 14), `object-src 'none'`,
+    `base-uri 'none'` and
     `frame-ancestors 'none'`. It enforces FR-046 (no external resources) and backs up
     FR-009. The same headers add `X-Content-Type-Options: nosniff` and
     `Referrer-Policy: no-referrer`.
   - **Routing**: `try_files $uri /index.html` for the single route, long-lived caching
-    for hashed assets and `no-cache` for `index.html`.
+    for hashed assets and `no-store` for `index.html`, which carries a nonce of its own
+    request (section 14).
   - **Health**: `/healthz` returns 200 from nginx itself, and the Compose healthcheck
     probes it with BusyBox `wget`.
   - **Logging** (Principle VII): a `log_format` with `escape=json` writes one JSON line
@@ -119,6 +121,10 @@ constraint is stated. Section numbers are referenced from [plan.md](plan.md) and
   - The input is `frontend/openapi.json`, exported from the backend's FastAPI app by
     `backend/scripts/export_openapi.py`.
   - Generated files are committed, and CI regenerates them and fails on any difference.
+  - Generated files start with `// @ts-nocheck`, set through the generator's
+    `output.header` option. The bundled fetch client is not written for
+    `exactOptionalPropertyTypes`, so it is treated like library declarations under
+    `skipLibCheck`, while the client's own code keeps that option.
 - **Rationale**:
   - This is the reference template's flow (`scripts/generate-client.sh` exports
     `app.openapi()`, then `openapi-ts` generates the client).
@@ -208,26 +214,66 @@ constraint is stated. Section numbers are referenced from [plan.md](plan.md) and
 
 ## 9. Markdown rendering and content safety
 
-- **Decision**: `react-markdown` 10.1 with `remark-gfm` 4.0 (tables, strikethrough and
-  task lists), and three small remark plugins in `src/answer/markdown/`:
-  - **`htmlAsText`** turns mdast `html` nodes into `text` nodes. Raw markup is then shown
-    literally (FR-009) instead of being dropped, which is `react-markdown`'s default.
-  - **`citationMarkers`** uses `mdast-util-find-and-replace` 3.0, the utility
-    `remark-gfm` itself relies on, to turn `[n]` in text nodes into citation nodes when
-    `n` is a citation number of the response. Code spans and code blocks are not text
-    nodes, so markers inside code stay literal. Other bracketed numbers stay text.
-  - **`noRemoteMedia`** renders Markdown images as their alt text and never as `<img>`,
-    so no answer can make the browser load an external resource (FR-046).
-- **Rationale**: `react-markdown` builds React elements from a syntax tree and never uses
-  `dangerouslySetInnerHTML`. Its default `urlTransform` removes `javascript:` and other
-  unsafe URLs. Links keep their text and open in a new tab with
-  `rel="noopener noreferrer"`. The CSP (section 4) is the second layer.
-- **Wide tables**: they scroll horizontally inside a wrapper, not the page.
-- **Performance**: the rendered answer is memoized per turn, so typing in the input does
-  not re-parse 50 answers (SC-010).
+- **Decision**: the answer is rendered by AI Elements' `MessageResponse`, which wraps
+  Streamdown 2.6, configured in `src/answer/markdown/AnswerMarkdown.tsx`:
+  - **Static mode.** `mode="static"` and `parseIncompleteMarkdown={false}`. Streamdown's
+    incomplete-Markdown repair (`remend`) closes unterminated emphasis and code while a
+    reply streams. Answers arrive complete, so the repair is off and the text is shown
+    exactly as returned (FR-022).
+  - **No Streamdown plugins.** The installed `message.tsx` no longer passes the `cjk`,
+    `code`, `math` and `mermaid` plugins. `math` would read `$5 and $10` as a formula,
+    `mermaid` turns text into diagrams (active content, FR-009), and `code` loads Shiki
+    grammars that no requirement needs. Code blocks keep Streamdown's plain rendering.
+  - **Raw HTML as text.** The rehype chain is Streamdown's `sanitize` and `harden`
+    without `rehype-raw`. When `rehype-raw` is absent, Streamdown adds its own remark
+    step that turns mdast `html` nodes into text, so raw markup is shown literally
+    (FR-009) with no plugin of the client's own.
+  - **Remark plugins.** Streamdown's `defaultRemarkPlugins` (GFM tables, strikethrough,
+    task lists) followed by two small plugins in `src/answer/markdown/`:
+    - **`citationMarkers`** uses `mdast-util-find-and-replace` 3.0 to turn `[n]` in text
+      nodes into `citation-ref` elements when `n` is a citation number of the response.
+      Code spans and code blocks are not text nodes, so markers inside code stay literal,
+      and other bracketed numbers stay text. The numbers are passed as plugin options
+      (`[citationMarkers, { numbers }]`) because Streamdown caches its processor under
+      a key built from each plugin's name and JSON options, so numbers held in a
+      closure would be reused from another answer. The element passes Streamdown's
+      sanitizer through its own schema, extended with the element, and is rendered
+      through the `components` option as an AI Elements `InlineCitation` link (FR-011).
+    - **`noRemoteMedia`** renders Markdown images as their alt text and never as `<img>`.
+      Streamdown's default hardening allows every image prefix and even adds a
+      `<link rel="preload">` for remote images, so this plugin is what keeps an answer
+      from loading an external resource (FR-046).
+  - **Semantic emphasis.** Streamdown renders bold as a styled `<span>`, so the
+    `strong` component is replaced by `<strong>`.
+  - **Controls off.** `controls={false}` removes the copy, download and full-screen
+    buttons Streamdown adds to tables and code, since copying and exporting answers is
+    out of scope.
+  - **Links.** Streamdown's link-safety modal is disabled and the `a` component is
+    replaced, so links keep their text and open in a new tab with
+    `rel="noopener noreferrer"`. Streamdown's hardening still blocks `javascript:` and
+    other unsafe URLs, and the CSP (section 4) is the second layer.
+- **Evidence** (a prototype rendering the same answer in Streamdown 2.6, 2026-09-29):
+  - With the defaults, `<b>` rendered as bold, `![alt](http://example.com/a.png)`
+    produced an `<img>` and a preload link, and `**unclosed` was repaired to bold.
+  - With the configuration above, the markup showed as text, the image showed as "alt",
+    `[1]` became the citation element while `[7]` and `` `[1]` `` stayed literal, and
+    `**unclosed` stayed as written.
+- **Rationale**: the maintainer asked for AI Elements' response renderer. Streamdown
+  builds React elements from a syntax tree, never uses `dangerouslySetInnerHTML`, and
+  styles every Markdown element with the shadcn/ui theme tokens, so headings, lists,
+  tables and code match the rest of the interface without hand-written styles.
+- **Wide tables**: the `table` component is replaced by one that wraps the table in a
+  focusable region (`tabIndex=0`, labeled) that scrolls sideways within the answer.
+- **Performance**: `MessageResponse` is memoized on its text, and `AnswerMarkdown` is
+  memoized per turn, so typing in the input does not re-parse 50 answers (SC-010).
 - **Alternatives considered**:
+  - **`react-markdown` with `remark-gfm`**, the plan's first choice: the same safety
+    model, but every element would need hand-written styles, and it is not the renderer
+    AI Elements composes.
+  - **Streamdown with its defaults**: it renders raw HTML and loads remote images, which
+    breaks FR-009 and FR-046 (evidence above).
   - **`marked` with DOMPurify**: it produces HTML strings that React must inject.
-  - **`rehype-sanitize`**: it removes markup instead of showing it as text.
+  - **`rehype-sanitize` alone**: it removes markup instead of showing it as text.
 
 ## 10. Request references
 
@@ -316,38 +362,114 @@ constraint is stated. Section numbers are referenced from [plan.md](plan.md) and
 ## 13. Image and page viewers
 
 - **Decision**:
-  - The full-size image view and the page view use the native `<dialog>` element opened
-    with `showModal()`. Images in the conversation use `loading="lazy"` and
+  - The full-size image view and the page view use the shadcn/ui `Dialog`, built on
+    Radix Dialog. Images in the conversation use `loading="lazy"` and
     `decoding="async"`.
   - The page view shows one page at a time, with previous and next controls limited to
     the pages of the source it was opened from. For a figure, those are its own page.
 - **Rationale**:
-  - `showModal()` puts the dialog in the top layer, makes the rest of the page inert,
-    moves focus into the dialog, closes on Escape and returns focus to the opener. That
-    covers FR-016, FR-018 and FR-044 without a dialog library, and it is Baseline widely
-    available.
+  - The maintainer asked for the interface to be composed from shadcn/ui, so the
+    viewers use the same dialog, buttons and theme as the rest of the client.
+  - Radix Dialog traps focus inside the dialog, hides the rest of the page from
+    assistive technology, closes on Escape and on the close button, and returns focus
+    to the opener. That covers FR-016, FR-018 and FR-044.
   - Lazy loading keeps a 50-turn conversation from loading every image at once (SC-010).
+- **Scroll locking and the CSP**: Radix Dialog locks page scrolling with
+  `react-remove-scroll`, which injects a `<style>` element at runtime. The
+  `style-src 'self'` policy of section 4 refuses inline `<style>` elements, and the
+  outcome in the browser is recorded under "CSP and runtime styles" below.
 - **Text alternatives**: every image's alt text is built from its caption, document name
   and page, for example "Figure 4-12, Ignition harness. FAA_Powerplant.pdf, page 12"
   (FR-044).
-- **Alternatives considered**: Radix Dialog, which the reference template uses. It adds a
-  dependency for behavior the platform provides.
+- **Alternatives considered**: the native `<dialog>` with `showModal()`, the plan's first
+  choice. It needs no dependency, but it would be the only hand-styled overlay in an
+  interface otherwise built from shadcn/ui.
 
 ## 14. Layout and styling
 
-- **Decision**: CSS Modules (built into Vite) with design tokens as CSS custom
-  properties. No UI kit.
-  - **Layout**: a CSS grid with the collapsible document panel on the left and the
-    conversation on the right (FR-031).
+- **Decision**: shadcn/ui (CLI 4.21, Radix primitives through the `radix-ui` package,
+  Tailwind CSS 4.3 through `@tailwindcss/vite`, `lucide-react` icons) and Vercel AI
+  Elements 1.9 for the chat pieces, both installed with their CLIs into the existing Vite
+  project:
+  - `npx shadcn@latest init -t vite -b radix -p nova` writes `components.json`,
+    `src/lib/utils.ts` and the theme tokens in `src/index.css`. The base color is
+    neutral, with one restrained blue as `--primary`.
+  - The preset's Geist font comes from the `@fontsource-variable/geist` npm package, so
+    Vite bundles the font file and nginx serves it from the client's own origin. No
+    font is loaded from an external service (FR-046).
+  - `npx ai-elements@latest add <component>` copies AI Elements components into
+    `src/components/ai-elements/`, and the shadcn/ui primitives they need into
+    `src/components/ui/`.
+  - The feature's own components (`TurnView`, `SourceList`, `ImageColumn`,
+    `DocumentPanel` and the others in the plan) compose these components and hold only
+    the feature's logic. No CSS Modules and no hand-written component exists where a
+    registry component does.
+  - **Layout**: the shadcn/ui `Sidebar` holds the collapsible document panel on the
+    left, and the conversation fills the rest (FR-031).
   - **Turns**: each turn is a two-column grid, with the answer text and source lines on
     the left and the image column on the right. The grid collapses to one column when the
     response has no images (FR-015).
   - **Minimum size**: 1280 × 720 (FR-043).
-- **Rationale**: the interface is one screen with a few components, and CSS Modules keep
-  styles scoped without a build dependency. The palette meets WCAG 2.1 AA contrast, which
-  the axe checks in section 15 verify.
-- **Alternatives considered**: Tailwind CSS with shadcn/ui, as in the reference template.
-  It suits larger applications with many screens.
+- **Component map**: which registry component serves each requirement, and what was
+  changed after installing it.
+
+  | Need | Component | Source | Adaptation |
+  |---|---|---|---|
+  | Conversation log, scroll to the new turn (FR-002, US1-11) | `Conversation`, `ConversationContent`, `ConversationEmptyState`, `ConversationScrollButton` | AI Elements | `targetScrollTop` keeps the top of a tall new turn in view. `ConversationDownload` and `messagesToMarkdown`, the only users of the `ai` package's `UIMessage`, are removed because exporting a conversation is out of scope |
+  | Question and answer blocks | `Message`, `MessageContent` | AI Elements | `from` is typed `"user" \| "assistant"` instead of `UIMessage["role"]` |
+  | Answer Markdown (FR-008, FR-009) | `MessageResponse` (Streamdown) | AI Elements | Streamdown plugins removed and options set as in section 9 |
+  | Question input, send and stop (FR-001, FR-006) | `PromptInput`, `PromptInputProvider`, `PromptInputTextarea`, `PromptInputSubmit` | AI Elements | `ChatStatus`, `FileUIPart` and `SourceDocumentUIPart` from `ai` are declared in the file. They describe the input's own state, and the generated client has no equivalent. The shadcn/ui `InputGroup` under it dims the whole box when any descendant is disabled, so the empty question's disabled send button made the input look disabled and failed the axe contrast check. Its disabled styles now apply only when the text control itself is disabled |
+  | Citation markers (FR-011) | `InlineCitation`, `InlineCitationCard`, `InlineCitationCardBody`, `InlineCitationSource` | AI Elements | `InlineCitationCardTrigger` derives a hostname from a URL, and citations are pages, so the marker is a link wrapped in the Radix `HoverCardTrigger` |
+  | Uncited passages (FR-014) | `Sources`, `SourcesTrigger`, `SourcesContent` | AI Elements | None. `Source` renders an external link, so each passage is a `SourceLine` instead |
+  | Source line details, table rows (FR-012, FR-013) | `Collapsible`, `Badge`, `Table`, `Button` | shadcn/ui | None |
+  | Working indicator (FR-023) | `Spinner` | shadcn/ui | None. AI Elements no longer ships `Loader`, and its replacement, `Shimmer`, needs the `motion` animation library for one indicator |
+  | Figures (FR-015 to FR-017) | `Card`, `Button` | shadcn/ui | None. AI Elements' `Image` only renders base64 images generated by the AI SDK, and figures are URLs |
+  | Image and page viewers (FR-016, FR-018) | `Dialog` | shadcn/ui | Opened through `DialogTrigger`, since a modal Radix dialog returns the focus to its trigger. The overlay's backdrop blur is replaced by a plain dark scrim, following the design direction, in `Dialog`, `AlertDialog` and `Sheet` |
+  | Notes, failures, no-information state, connection notice (FR-020, FR-021, FR-024, FR-030) | `Alert` | shadcn/ui | None |
+  | New conversation confirmation (FR-004) | `AlertDialog` | shadcn/ui | None |
+  | Document panel (FR-031) | `Sidebar` (`collapsible="icon"`) | shadcn/ui | Its state is kept in `sessionStorage` (data-model section 1.5) instead of the cookie the component writes |
+  | Processing and transfer progress (FR-032, FR-034) | `Progress`, `Badge` | shadcn/ui | The installed `Progress` did not pass `value` to the Radix root, so the bar had no `aria-valuenow`. It now does |
+  | Selection and filter (FR-038, FR-039) | `Checkbox`, `Input`, `Badge` | shadcn/ui | None |
+  | File picker (FR-032) | `Button` with a native `<input type="file">` | shadcn/ui | None. Neither registry nor Radix has a file input |
+
+- **Rationale**:
+  - The maintainer asked for a modern interface built from existing component
+    libraries, with hand-written components only where no library component exists.
+  - shadcn/ui is the UI kit of the reference template, and its components are copied
+    into the repository, so they can be adapted to the requirements above.
+  - AI Elements is built on shadcn/ui and covers the chat surface (log, messages,
+    Markdown response, prompt input, citations and sources).
+  - AI Elements targets Next.js and the AI SDK, but the components used here are plain
+    React. The `"use client"` directives are ignored by Vite, and no component calls the
+    AI SDK runtime once its `ai` type imports are replaced as listed.
+  - The palette meets WCAG 2.1 AA contrast, which the axe checks in section 15 verify.
+- **Design direction**: a calm, dense desktop working tool. Neutral surfaces with one
+  accent color, generous line height for answer text, and clear separation between the
+  answer, its source lines and the image column. No gradients, glass effects, pill-shaped
+  primary buttons, emoji icons or decorative illustrations.
+- **CSP and runtime styles**: Tailwind produces one stylesheet at build time, and React
+  applies `style` props through the CSSOM, which `style-src 'self'` allows. Radix's
+  scroll lock (`react-remove-scroll`) is the one component that injects a `<style>`
+  element at runtime.
+  - **Observed** (Chromium, the nginx container, 2026-09-29): with `style-src 'self'`,
+    opening a dialog logged "Applying inline style violates the following Content
+    Security Policy directive" and the body kept `overflow: visible`. The dialog still
+    worked, since the lock also blocks wheel and touch events outside it.
+  - **Fix**: a per-request nonce, the narrowest option. Vite's `html.cspNonce` option
+    writes a `csp-nonce` meta tag and the nonce placeholder on its own tags. nginx
+    replaces the placeholder with `$request_id` through `sub_filter` and adds
+    `'nonce-$request_id'` to `style-src`, and `src/csp.ts` hands the nonce to
+    `get-nonce`, which `react-style-singleton` reads when it creates the element. After
+    the fix, the same check logged no violation, the element carried the nonce and the
+    body was locked.
+  - **Rejected**: `'unsafe-inline'` allows every inline style, and a hash cannot
+    match, because the injected rule contains the scrollbar width of each machine.
+- **Alternatives considered**:
+  - **CSS Modules with no UI kit**, the plan's first choice: every component, from the
+    dialogs to the prompt input, would be written by hand.
+  - **AI Elements with the AI SDK runtime (`useChat`)**: it expects a streaming chat
+    endpoint, while this client sends one complete question at a time with its own
+    queue (section 8).
 
 ## 15. Testing
 
@@ -358,7 +480,14 @@ constraint is stated. Section numbers are referenced from [plan.md](plan.md) and
     replaced with `vi.mock`, and test doubles are not `vi.fn()` spies asserted on call
     sequences, following Principle VIII's spirit.
   - **Coverage**: `@vitest/coverage-v8` enforces a 90% line coverage gate on `src/`,
-    excluding the generated client.
+    excluding the generated client and the registry components in
+    `src/components/ui/` and `src/components/ai-elements/`. Those are library code
+    copied by the shadcn/ui and AI Elements CLIs and tested upstream, and most of their
+    variants are unused here (the prompt input alone has about 1,400 lines, mostly for
+    attachments). The feature's tests still exercise every part the client uses.
+  - **Browser APIs**: jsdom lacks `ResizeObserver`, `matchMedia` and
+    `Element.scrollIntoView`, which `use-stick-to-bottom`, the shadcn/ui `Sidebar` and
+    the source highlight use. `tests/setup.ts` installs minimal stand-ins.
 - **Reference answer set**: `frontend/tests/fixtures/answers/` holds at least 20
   responses, as described in the spec's Success Criteria.
   - `frontend/scripts/capture-answers.ts` captures them from a running system. It runs

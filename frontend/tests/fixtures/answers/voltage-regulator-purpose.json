@@ -1,0 +1,203 @@
+{
+  "status": "answered",
+  "reason": null,
+  "answer": "The voltage regulator is used to control the output voltage of a DC generator by regulating the field current strength [1]. In a shunt generator, the output voltage can be controlled by means of a rheostat inserted in series with the field windings, which acts as an automatic control device to adjust the field current [2].",
+  "not_covered": null,
+  "citations": [
+    {
+      "number": 1,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "pages": [70],
+      "unit_ids": ["8167e1dd-904f-536b-8736-ee73e2e8453e"]
+    },
+    {
+      "number": 2,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "pages": [12],
+      "unit_ids": ["5af34635-fac6-54f8-be16-b6f82b1e04ae"]
+    }
+  ],
+  "sources": [
+    {
+      "unit_id": "7c03a2cc-d29e-5d77-9d52-0c7edb552c11",
+      "rank": 1,
+      "similarity": 0.46741962,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": ["Reciprocating Engine Ignition Systems", "DC Generator Maintenance"],
+      "pages": [13, 14],
+      "content_type": "text",
+      "excerpt": "The following information about the inspection and maintenance of DC generator systems is general in nature because of the large number of differing aircraft generator systems. These procedures are for familiarization only. Always follow the applicable manufacturer's instructions for a given generat",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": ["1c96a395-f328-569c-bb45-575482fd89c2"]
+    },
+    {
+      "unit_id": "6a68e4df-04ba-578c-9fbe-992c2c28b046",
+      "rank": 2,
+      "similarity": 0.66103286,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": [
+        "Reciprocating Engine Ignition Systems",
+        "Parallel (Shunt) Wound DC Generators"
+      ],
+      "pages": [13],
+      "content_type": "text",
+      "excerpt": "as a voltage regulator.",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": []
+    },
+    {
+      "unit_id": "2bbd5565-d939-5321-a384-23a83a3cd5bd",
+      "rank": 3,
+      "similarity": 0.5826355,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": ["Reciprocating Engine Ignition Systems", "Generator Ratings"],
+      "pages": [13],
+      "content_type": "text",
+      "excerpt": "A DC generator is typically rated for its voltage and power output. Each generator is designed to operate at a specified voltage, approximately 14 or 28 volts. It should be noted that aircraft electrical systems are designed to operate at one of these two voltage values. The aircraft's voltage depen",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": ["69e289ef-48ca-543e-b796-252f46fde920"]
+    },
+    {
+      "unit_id": "a58a51b5-8e5b-5154-a0f4-49f72db30563",
+      "rank": 4,
+      "similarity": 0.51980793,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": [
+        "Reciprocating Engine Ignition System Maintenance & Inspection",
+        "Controlling or Monitoring the Electrical Load"
+      ],
+      "pages": [70],
+      "content_type": "text",
+      "excerpt": "Placards are recommended to inform crewmembers of an aircraft about the combinations of loads that can safely be connected to the power source.\nIn installations where the ammeter is in the battery lead and the regulator system limits the maximum current that the generator or alternator can deliver, ",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": []
+    },
+    {
+      "unit_id": "e6e8a461-7c70-588e-b988-d4224f9b9238",
+      "rank": 5,
+      "similarity": 0.4965552,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": [
+        "Reciprocating Engine Ignition System Maintenance & Inspection",
+        "Voltage Drop in Aircraft Wire & Cable"
+      ],
+      "pages": [50],
+      "content_type": "text",
+      "excerpt": "The voltage drop in the main power cables from the aircraft generation source or the battery to the bus should not exceed 2 percent of the regulated voltage when the generator is carrying rated current or the battery is being discharged at a 5-minute rate. The 5-minute rate in this case means that t",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": []
+    },
+    {
+      "unit_id": "5af34635-fac6-54f8-be16-b6f82b1e04ae",
+      "rank": 6,
+      "similarity": 0.58124065,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": [
+        "Reciprocating Engine Ignition Systems",
+        "Parallel (Shunt) Wound DC Generators"
+      ],
+      "pages": [12],
+      "content_type": "text",
+      "excerpt": "A generator having a field winding connected in parallel with the external circuit is called a shunt generator. [Figure 4-22] It should be noted that, in electrical terms, shunt means parallel. Therefore, this type of generator could be called either a shunt generator or a parallel generator.\nIn a s",
+      "cited": true,
+      "citation_number": 2,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": ["d9b34abe-b2e5-52e8-8b3a-96a9c9ccf6cb"]
+    },
+    {
+      "unit_id": "ef60a339-6e0d-5ea0-a974-d8ce6f719031",
+      "rank": 7,
+      "similarity": 0.5824237,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": [
+        "Reciprocating Engine Ignition Systems",
+        "Series Wound DC Generators"
+      ],
+      "pages": [12],
+      "content_type": "text",
+      "excerpt": "The series generator contains a field winding connected in series with the external circuit. [Figure 4-21] Series generators have very poor voltage regulation under changing load, since the greater the current is through the field coils to the external circuit, the greater the induced EMFs and the g",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": ["5f50b93a-c12e-5c2a-91b8-48a0b1e0211a"]
+    },
+    {
+      "unit_id": "8167e1dd-904f-536b-8736-ee73e2e8453e",
+      "rank": 8,
+      "similarity": 0.46874395,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": [
+        "Reciprocating Engine Ignition System Maintenance & Inspection",
+        "Electrical Load Limits"
+      ],
+      "pages": [70],
+      "content_type": "text",
+      "excerpt": "When installing additional electrical equipment that consumes electrical power in an aircraft, the total electrical load must be safely controlled or managed within the rated limits of the affected components of the aircraft's powersupply system. Regulation of the field current strength is used to c",
+      "cited": true,
+      "citation_number": 1,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": []
+    }
+  ],
+  "primary_image": {
+    "element_id": "d9b34abe-b2e5-52e8-8b3a-96a9c9ccf6cb",
+    "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+    "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+    "page": 12,
+    "bbox": {
+      "left": 302.4508361816406,
+      "top": 358.0992126464844,
+      "right": 541.246337890625,
+      "bottom": 694.8045043945312,
+      "origin": "top_left"
+    },
+    "caption": "Figure 4-22. Shunt wound generator.",
+    "unit_id": "5af34635-fac6-54f8-be16-b6f82b1e04ae",
+    "url": "/api/v1/documents/5d3ff0f9-f671-4a1b-b3e6-3258071fa024/images/d9b34abe-b2e5-52e8-8b3a-96a9c9ccf6cb"
+  },
+  "related_images": []
+}

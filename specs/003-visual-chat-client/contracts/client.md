@@ -8,7 +8,7 @@ features 001 and 002 and in [openapi.yaml](openapi.yaml).
 
 | Route | Served by | Content |
 |---|---|---|
-| `/` and any path without a file | nginx, `try_files` | `index.html`, `Cache-Control: no-cache` |
+| `/` and any path without a file | nginx, `try_files` | `index.html` with this response's style nonce, `Cache-Control: no-store` |
 | `/assets/*` | nginx | Hashed build assets, `Cache-Control: public, max-age=31536000, immutable` |
 | `/config.json` | nginx, rendered from the environment at start | Runtime configuration below, `Cache-Control: no-store` |
 | `/healthz` | nginx | `200 ok`, used by the Compose healthcheck |

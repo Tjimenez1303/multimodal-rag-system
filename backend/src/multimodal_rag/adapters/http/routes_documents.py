@@ -3,11 +3,12 @@
 import uuid
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Query, Request, Response
+from fastapi import APIRouter, Path, Query, Request, Response
 
 from multimodal_rag.adapters.http.dependencies import (
     GetDocumentDep,
     GetElementImageDep,
+    GetPageImageDep,
     ListDocumentElementsDep,
     ListDocumentsDep,
 )
@@ -149,4 +150,34 @@ async def get_document_image(
     """
     return Response(
         content=await get_image(document_id, element_id), media_type=PNG_MEDIA_TYPE
+    )
+
+
+@documents_router.get(
+    "/documents/{document_id}/pages/{page_number}/image",
+    operation_id="getDocumentPageImage",
+    description=(
+        "PNG of a whole page at 144 dpi, stored when the document was ingested. "
+        "Available once the document's latest job has completed."
+    ),
+    response_class=Response,
+    responses={200: _PNG_RESPONSE, **problem_responses(400, 404, 409)},
+)
+async def get_document_page_image(
+    document_id: uuid.UUID,
+    page_number: Annotated[int, Path(ge=1)],
+    get_page: GetPageImageDep,
+) -> Response:
+    """Return the rendered image of a page of a completed document.
+
+    Args:
+        document_id: Document the page belongs to.
+        page_number: 1-based page number.
+        get_page: Page image use case.
+
+    Returns:
+        The PNG bytes.
+    """
+    return Response(
+        content=await get_page(document_id, page_number), media_type=PNG_MEDIA_TYPE
     )

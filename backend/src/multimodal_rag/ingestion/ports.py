@@ -66,6 +66,8 @@ class ExtractionBatch:
         page_sizes: Size of each page of the batch.
         relationships: Caption links the extractor found between the elements of
             the batch.
+        page_images: PNG bytes of each page of the batch, keyed by 1-based page
+            number.
     """
 
     first_page: int
@@ -76,6 +78,7 @@ class ExtractionBatch:
     recognized_pages: tuple[int, ...] = ()
     page_sizes: dict[int, PageSize] = field(default_factory=dict)
     relationships: tuple[ElementRelationship, ...] = ()
+    page_images: dict[int, bytes] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -413,7 +416,7 @@ class ElementRepository(Protocol):
 
 
 class BlobStorage(Protocol):
-    """Storage of original PDFs and figure crops under string keys."""
+    """Storage of original PDFs, figure crops and page images under string keys."""
 
     async def save_stream(self, key: str, chunks: AsyncIterable[bytes]) -> int:
         """Write a stream atomically under a key.

@@ -9,6 +9,7 @@ disk.
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Protocol
+from urllib.parse import urldefrag, urljoin
 
 import yaml
 from jsonschema import Draft202012Validator
@@ -19,6 +20,7 @@ SPECS = Path(__file__).resolve().parents[3] / "specs"
 CONTRACT_FILES = (
     SPECS / "001-async-pdf-ingestion" / "contracts" / "openapi.yaml",
     SPECS / "002-grounded-question-answering" / "contracts" / "openapi.yaml",
+    SPECS / "003-visual-chat-client" / "contracts" / "openapi.yaml",
 )
 _CONTRACTS: dict[str, dict[str, Any]] = {
     path.as_uri(): yaml.safe_load(path.read_text()) for path in CONTRACT_FILES
@@ -56,11 +58,21 @@ def resolve(node: dict[str, Any], *, path: str) -> dict[str, Any]:
         node: Object taken from the operation of ``path``.
         path: Path template whose contract file the pointers are relative to.
     """
-    resolver = _REGISTRY.resolver(_URI_BY_PATH[path])
+    return _resolve_from(node, uri=_URI_BY_PATH[path])[0]
+
+
+def _resolve_from(node: dict[str, Any], *, uri: str) -> tuple[dict[str, Any], str]:
+    """Follow ``$ref`` pointers from the file at ``uri``.
+
+    Returns:
+        The concrete object and the URI of the file it lives in, which its own
+        relative pointers are resolved against.
+    """
     while "$ref" in node:
-        resolved = resolver.lookup(node["$ref"])
-        node, resolver = resolved.contents, resolved.resolver
-    return node
+        target = urljoin(uri, node["$ref"])
+        node = _REGISTRY.resolver(uri).lookup(target).contents
+        uri = urldefrag(target).url
+    return node, uri
 
 
 def assert_matches_contract(response: HttpResponse, *, path: str, method: str) -> None:
@@ -75,14 +87,16 @@ def assert_matches_contract(response: HttpResponse, *, path: str, method: str) -
     declared = operation["responses"]
     status = str(response.status_code)
     assert status in declared, f"{method.upper()} {path} does not declare {status}"
-    content = resolve(declared[status], path=path).get("content", {})
+    response_object, uri = _resolve_from(declared[status], uri=_URI_BY_PATH[path])
+    content = response_object.get("content", {})
     media_type = response.headers["content-type"].split(";")[0]
     assert media_type in content, f"{status} is not declared as {media_type}"
     schema = content[media_type]["schema"]
     pointer = schema["$ref"] if "$ref" in schema else None
     assert pointer is not None, "contract bodies are named components"
     validator = Draft202012Validator(
-        {"$ref": f"{_URI_BY_PATH[path]}{pointer}"},
+        # The pointer is local ("#/...") or relative to another contract file.
+        {"$ref": urljoin(uri, pointer)},
         registry=_REGISTRY,
         format_checker=Draft202012Validator.FORMAT_CHECKER,
     )

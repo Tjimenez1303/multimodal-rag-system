@@ -14,7 +14,7 @@ document and page, together with the closest relevant image.
 | Path | Content |
 | --- | --- |
 | `backend/` | Python API and ingestion worker |
-| `frontend/` | Chat client |
+| `frontend/` | Chat client (React, Vite, shadcn/ui, AI Elements), served by nginx |
 | `docs/adr/` | Architecture decision records |
 | `specs/` | Spec Kit feature artifacts (spec, plan, tasks) |
 | `.specify/` | Spec Kit configuration, constitution, templates and scripts |
@@ -56,6 +56,12 @@ Run these from the repository root. The backend is a uv project in `backend/`.
 | Run the API or the worker outside Docker | `uv run --directory backend python -m multimodal_rag {api,worker}` |
 | Create a migration after changing `tables.py` | `uv run --directory backend alembic revision --autogenerate -m "<change>"` |
 | Regenerate the test PDFs | `uv run --directory backend python tests/fixtures/build_fixtures.py` |
+| Install the frontend dependencies (Node 24, see `frontend/.node-version`) | `npm --prefix frontend ci` |
+| Run the chat client with hot reload against a local API | `npm --prefix frontend run dev` |
+| Lint, check the format of and type-check the frontend | `npm --prefix frontend run lint`, `format:check`, `typecheck` |
+| Run the frontend tests with the 90% coverage gate | `npm --prefix frontend run test:coverage` |
+| Run the end-to-end tests (Chromium, Firefox, WebKit, axe) | `npm --prefix frontend run test:e2e` |
+| Regenerate the typed client after an API change | `uv run --directory backend python scripts/export_openapi.py ../frontend/openapi.json && npm --prefix frontend run generate-client` |
 
 Integration tests start PostgreSQL and Qdrant with testcontainers, so Docker must be
 running. Docker Model Runner must be enabled once with

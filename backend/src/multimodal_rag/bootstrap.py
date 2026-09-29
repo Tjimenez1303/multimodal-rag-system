@@ -68,6 +68,7 @@ from multimodal_rag.ingestion.use_cases.intake import (
 from multimodal_rag.ingestion.use_cases.library import (
     GetDocument,
     GetElementImage,
+    GetPageImage,
     ListDocumentElements,
     ListDocuments,
 )
@@ -152,6 +153,7 @@ def _ingestion_state(
             documents=documents, jobs=jobs, elements=elements
         ),
         get_element_image=GetElementImage(elements=elements, blobs=storage),
+        get_page_image=GetPageImage(documents=documents, jobs=jobs, blobs=storage),
         list_documents=ListDocuments(documents=documents, jobs=jobs),
         get_document=GetDocument(documents=documents, jobs=jobs),
     )

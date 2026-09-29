@@ -31,6 +31,9 @@ node_modules/
 dist/
 build/
 .next/
+frontend/coverage/
+frontend/playwright-report/
+frontend/test-results/
 
 # macOS
 .DS_Store

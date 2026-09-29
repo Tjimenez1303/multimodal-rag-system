@@ -111,8 +111,22 @@ automatically" mark and list any unverified identifiers.
 
 ## Scenario 6: failures and references (US2, FR-024 to FR-030, SC-007)
 
+Compose's `models` element sets `ANSWER_MODEL_URL`, so an environment variable on the
+command line does not replace it. Point the API at a dead port with an override file
+instead:
+
 ```bash
-ANSWER_MODEL_URL=http://127.0.0.1:9/v1 docker compose up -d api --wait
+cat > /tmp/answer-model-down.yaml <<'EOF'
+services:
+  api:
+    models: !reset {}
+    environment:
+      ANSWER_MODEL_URL: http://127.0.0.1:9/v1
+      ANSWER_MODEL: ai/qwen3.5:9b
+      EMBEDDER_URL: http://model-runner.docker.internal/v1/
+      EMBEDDER_MODEL: ai/qwen3-embedding:0.6b
+EOF
+docker compose -f compose.yaml -f /tmp/answer-model-down.yaml up -d api --wait
 ```
 
 Ask any question. The turn shows "The answer model is not responding." with "Reference:
@@ -138,6 +152,10 @@ answering quickstart and ask one from the client meanwhile. It shows the busy me
 with the wait in seconds.
 
 ## Scenario 7: restrict to documents (US4, FR-038 to FR-041)
+
+Not delivered. US4 was left out of this feature on 2026-09-29, because the question
+route does not accept `document_ids` until User Story 6 of the question answering
+feature (its tasks T062 to T065) is implemented.
 
 1. Type "ins" in the panel's filter and select the INSST guide. It appears next to the
    question input.

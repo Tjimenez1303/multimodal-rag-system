@@ -1,0 +1,311 @@
+{
+  "status": "answered",
+  "reason": null,
+  "answer": "Before operating the welding machine, the operator must perform the following preventive maintenance checks:\n\n*   **Tools and equipment:** Ensure that all tools and equipment issued with the unit are in serviceable condition, clean, and properly stowed.\n*   **Unusual operation and noise:** Make a visual inspection of the entire welding machine for loose mountings. Observe the unit while in operation for excessive vibration, unusual noises, overheating, or other defects. If defects are present, shut down the engine and correct any operational trouble or report the condition to organizational maintenance.\n*   **Tampering:** Inspect to see whether the welding machine has been tampered with or damaged. Do not operate until all deficiencies have been corrected.\n*   **Cleaning:** Clean all dirt, grease, or other foreign matter from the welding machine. Pay particular attention to the radiator core.\n*   **Protection:** See that all doors and panels are properly installed and latched. If the welding machine is outside, cover it with a suitable waterproof cover. If low temperatures are expected and antifreeze is not available, drain the cooling system and place a tag on the radiator to indicate that the cooling system has been drained.\n\nAdditionally, the operator should:\n*   Lubricate the welding machine in accordance with the current lubrication order.\n*   Fill the engine fuel tank and the heater fuel tank with the proper fuels.\n*   Clean all grease and dirt from the welding machine with an approved cleaning solvent.\n\nThese checks are listed under \"Operator's Daily Services\" and are to be performed before operation [1][2].",
+  "not_covered": null,
+  "citations": [
+    {
+      "number": 1,
+      "document_id": "d875dd9a-4b58-414c-a79b-bdd4a858a19c",
+      "document_name": "tm-5-3431-201-10-welding-machine-scanned.pdf",
+      "pages": [36],
+      "unit_ids": ["62891b4d-ba1a-5033-82d0-6928db451567"]
+    },
+    {
+      "number": 2,
+      "document_id": "d875dd9a-4b58-414c-a79b-bdd4a858a19c",
+      "document_name": "tm-5-3431-201-10-welding-machine-scanned.pdf",
+      "pages": [16],
+      "unit_ids": ["180abcf0-7548-547e-b843-8ae4425a2238"]
+    }
+  ],
+  "sources": [
+    {
+      "unit_id": "37d2f56c-e11f-5f69-a7cd-2e121f3bbc6a",
+      "rank": 1,
+      "similarity": 0.6282681,
+      "document_id": "d875dd9a-4b58-414c-a79b-bdd4a858a19c",
+      "document_name": "tm-5-3431-201-10-welding-machine-scanned.pdf",
+      "section": ["1. Scope"],
+      "pages": [10],
+      "content_type": "text",
+      "excerpt": "a. These instructions are published for the use of the personnel to whom the Libby Model ODW-300 Welding Machine is issued. They provide information on the operation, lubrication, and preventive maintenance services of the equipment, accessories, components, and attachments.\nc. Numbers in parentheses",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": []
+    },
+    {
+      "unit_id": "62891b4d-ba1a-5033-82d0-6928db451567",
+      "rank": 2,
+      "similarity": 0.72002137,
+      "document_id": "d875dd9a-4b58-414c-a79b-bdd4a858a19c",
+      "document_name": "tm-5-3431-201-10-welding-machine-scanned.pdf",
+      "section": ["30. Operator's Daily Services"],
+      "pages": [36],
+      "content_type": "table",
+      "excerpt": "| Intervals - B   | Intervals - D   | Intervals - y   | Procedure                                                                                                                                                                                                                                           ",
+      "cited": true,
+      "citation_number": 1,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [
+        {
+          "page": 36,
+          "rows": [
+            ["Intervals", "Intervals", "Intervals", "Procedure"],
+            ["B", "D", "y", "Procedure"],
+            [
+              "x",
+              "--",
+              "x",
+              "Tools and equipment. Make sure that all tools and equipment issued with the unit are in serviceable condition, clean, and properly stowed."
+            ],
+            [
+              "x",
+              "x",
+              "",
+              "Unusual operation and noise. Make a visual inspection of the entire welding machine for loose mountings. Observe the unit while in operation for excess- sive vibration, unusual noises, over- heating, or other defects. If defects are present, shut down the engine and correct any operational trouble or re- port the condition to organizational maintenance."
+            ],
+            [
+              "x",
+              "",
+              "",
+              "Tampering. Inspect to see whether the welding machine has been tampered with or damaged. Do not operate until all deficiencies have been corrected."
+            ],
+            [
+              "",
+              "",
+              "x",
+              "Cleaning. Clean all dirt, grease, or other foreign matter for the welding machine. Pay particular attention to the radiator core."
+            ],
+            [
+              "",
+              "",
+              "x",
+              "Protection. See that all doors and panels are properly installed and latched. If the welding machine is outside, cover with a suitable waterproof cover. If low temperatures are expected and antifreeze is not available, drain the cooling system (par. 47). Place a tag on the radiator to indicate that the cooling system has been drained."
+            ]
+          ]
+        }
+      ],
+      "figure_ids": []
+    },
+    {
+      "unit_id": "180abcf0-7548-547e-b843-8ae4425a2238",
+      "rank": 3,
+      "similarity": 0.6544163,
+      "document_id": "d875dd9a-4b58-414c-a79b-bdd4a858a19c",
+      "document_name": "tm-5-3431-201-10-welding-machine-scanned.pdf",
+      "section": ["6. Inspecting and Servicing Equipment"],
+      "pages": [16],
+      "content_type": "text",
+      "excerpt": "Note. Make sure equipment is completely deprocessed before servicing. Make sure preservatives have been removed from the crankcase, fuel tanks, instrument panel, and accessory components.\nInspection.\nMake a general inspection of the entire welding machine. Inspect the packing list to be sure that al",
+      "cited": true,
+      "citation_number": 2,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": []
+    },
+    {
+      "unit_id": "84f8dec5-876f-5d18-8c48-757e05083a05",
+      "rank": 4,
+      "similarity": 0.5956051,
+      "document_id": "d875dd9a-4b58-414c-a79b-bdd4a858a19c",
+      "document_name": "tm-5-3431-201-10-welding-machine-scanned.pdf",
+      "section": ["TM 5-3431-201-10"],
+      "pages": [60],
+      "content_type": "table",
+      "excerpt": "| Machine, welding                                                                 | 4t    | 6     |\n|----------------------------------------------------------------------------------|-------|-------|\n| Maintenance and operating supplies                                               | 4b    | 6    ",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [
+        {
+          "page": 60,
+          "rows": [
+            ["Machine, welding", "4t", "6"],
+            ["Maintenance and operating supplies", "4b", "6"],
+            ["Models, differences", "5", "6"],
+            ["Monobromotrifluoromethane type fire extinguishers", "22", "20"],
+            ["Operating supplies", "4b", "6"],
+            ["Operation of equipment:", "", ""],
+            ["At high altitude", "21", "19"],
+            ["In dusty area", "18", "19"],
+            ["In extreme cold (below 0°F.)", "16", "18"],
+            ["In extreme heat", "17", "19"],
+            ["In salt water areas", "20", "19"],
+            ["In sandy areas", "18", "19"],
+            ["Starting", "13", "15"],
+            ["Stopping", "14", "15"],
+            ["Welder", "15", "15"],
+            ["Under humid conditions", "19", "19"],
+            ["Under rainy conditions", "19", "19"],
+            ["Operator's daily services", "30", "29"],
+            ["Panel lamps, control", "53", "40"],
+            ["Plates, identification", "4a", "3"],
+            ["Preventive maintenance services:", "", ""],
+            ["General", "29", "28"],
+            ["Operator's daily", "30", "29"],
+            ["Pump breather, vacuum", "52", "36"],
+            ["Pump, fuel", "56", "41"],
+            ["Radiator", "47", "33"],
+            ["Rainy or humid conditions operation", "18", "19"],
+            ["Recommended current per electrode size", "15c", "16"],
+            ["Record and report forms", "2", "3"],
+            ["Salt water areas operation", "20", "19"],
+            ["Sandy areas operation", "18", "19"],
+            ["Services. (See Preventive maintenance services.)", "", ""],
+            ["Servicing equipment", "6", "9"],
+            ["Setting-up instructions", "7", "9"],
+            ["Special tools and equipment", "25", "23"],
+            ["Starting", "18", "15"],
+            ["Stopping", "14", "15"],
+            ["Storage batteries", "4b,49", "6,33"],
+            ["Strainer, fuel", "50", "36"],
+            ["Supplies, maintenance and operating", "4b", "6"],
+            ["Tables:", "", ""],
+            [
+              "I. Maintenance and Operating Supplies II. Recommended current per electrode size",
+              "",
+              "7"
+            ],
+            ["", "", "18"],
+            ["Tabulated data:", "", ""],
+            ["Adjustment", "4b", "6"],
+            ["Capacities", "46", "6"],
+            ["Dimensions and weight", "46", "6"],
+            ["Engine Maintenance and operating supplies", "46", "6"],
+            ["Storage batteries", "4b", "6"],
+            ["Welder", "46", "6"],
+            ["Welding machine", "46", "6"],
+            ["Winterization heater", "46", "6"],
+            ["Tank filter, fuel", "4b", "6"],
+            ["", "57", "41"],
+            ["Tools and equipment: Special", "", ""],
+            ["Basic issue", "25 26", "23 23"]
+          ]
+        }
+      ],
+      "figure_ids": []
+    },
+    {
+      "unit_id": "d148f0a9-4c42-5886-adc7-87c660688ef5",
+      "rank": 5,
+      "similarity": 0.6451742,
+      "document_id": "d875dd9a-4b58-414c-a79b-bdd4a858a19c",
+      "document_name": "tm-5-3431-201-10-welding-machine-scanned.pdf",
+      "section": ["26. Basic Issue Tools and Equirment"],
+      "pages": [30],
+      "content_type": "text",
+      "excerpt": "No special tools or equipment are required by the operator for the maintenance of the welding machine.\nTools and repair parts issued with or authorized for the welding machine are listed in appendix II.",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": []
+    },
+    {
+      "unit_id": "a3c38315-dde4-54d4-abf0-b226c5c62043",
+      "rank": 6,
+      "similarity": 0.36812255,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": [
+        "Reciprocating Engine Ignition System Maintenance & Inspection",
+        "Performing Ignition System Checks"
+      ],
+      "pages": [31],
+      "content_type": "text",
+      "excerpt": "The ignition system has checks performed on it during the aircraft engine run-up, which is the engine check before each flight. The magneto check, as it is usually referred to, is performed during the engine run-up check list.\nOne other check is accomplished prior to engine shutdown. The ignition sy",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": []
+    },
+    {
+      "unit_id": "4a847bf8-1f6b-595a-89c8-5964d8b90fef",
+      "rank": 7,
+      "similarity": 0.5876408,
+      "document_id": "d875dd9a-4b58-414c-a79b-bdd4a858a19c",
+      "document_name": "tm-5-3431-201-10-welding-machine-scanned.pdf",
+      "section": ["12. General"],
+      "pages": [22],
+      "content_type": "text",
+      "excerpt": "a. The instructions in this section are published for the information and guidance of the personnel responsible for operation of the welding machine.\nb. The operator must know how to perform every operation of which the welding machine is capable. This section gives instructions on starting and stop",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": []
+    },
+    {
+      "unit_id": "68d2dcd9-f063-548d-8782-55c7bed2540f",
+      "rank": 8,
+      "similarity": 0.6052922,
+      "document_id": "d875dd9a-4b58-414c-a79b-bdd4a858a19c",
+      "document_name": "tm-5-3431-201-10-welding-machine-scanned.pdf",
+      "section": [
+        "WELDING MACHINE, ARC: GENERATOR; DIESEL DRIVEN SINGLE OPERATOR; REMOTE CONTROL; 30O AMP DC ARC; SKID MTD; 60 AMP 20 V MIN, 375 AMP AT 40 V MAX, CURRENT 115 V, 3 KW AUXILIARY POWER (LIBBY MODEL ODW-3OO) FSN 3431-894-1573"
+      ],
+      "pages": [8],
+      "content_type": "table",
+      "excerpt": "|                                                                              | Paragraph   | Pago   |\n|------------------------------------------------------------------------------|-------------|--------|\n| CHAPTER 1. INTRODUCTION                                                      |            ",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [
+        {
+          "page": 8,
+          "rows": [
+            ["", "Paragraph", "Pago"],
+            ["CHAPTER 1. INTRODUCTION", "", ""],
+            ["Section I. General", "1,2", "3"],
+            ["II. Description and data", "3-5", "6"],
+            ["CHAPTER 2. INSTALLATION AND OPERATION INSTRUCTIONS", "", ""],
+            ["Section I. Service upon receipt of equipment", "6-9", "9"],
+            ["II. Controls and instruments", "10,11", "11"],
+            ["III. Operation of equipment", "12-21", "15"],
+            [
+              "IV. Operation of auxiliary materiel used in conjunction with welding machine",
+              "22-24",
+              "20"
+            ],
+            ["CHAPTER 3. MAINTENANCE INSTRUCTIONS", "", ""],
+            ["Section I. Operator's tools and equipment", "25,26", "23"],
+            ["II. Lubrication", "27,28", "23"],
+            ["III. Preventive maintenance services", "29,30", "28,29"],
+            ["IV. Troubleshooting", "31-41", "32"],
+            ["V. Field expedient repairs", "42-46", "33"],
+            ["VI. Engine accessories", "47-52", "33"],
+            ["VII. Lamps and fuse -", "53,54", "40"],
+            ["VIII. Winterization heater", "5557", "41"],
+            ["CDH N L    J   DHS", "58-62", "43"],
+            ["APPENDIX I. REFERENCES", "", "45"],
+            ["II. BASIS ISSUE ITEMS", "", "47"],
+            ["", "", "51"]
+          ]
+        }
+      ],
+      "figure_ids": []
+    }
+  ],
+  "primary_image": null,
+  "related_images": []
+}

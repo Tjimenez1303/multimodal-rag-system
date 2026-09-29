@@ -729,6 +729,19 @@ class ExtractedElement:
         """
         return f"figures/{document_id}/{element_id}.png"
 
+    @staticmethod
+    def page_image_key_for(*, document_id: uuid.UUID, page_number: int) -> str:
+        """Return the storage key of the rendered image of a document page.
+
+        Args:
+            document_id: Document the page belongs to.
+            page_number: 1-based page number.
+
+        Returns:
+            The key ``pages/{document_id}/{page_number}.png``.
+        """
+        return f"pages/{document_id}/{page_number}.png"
+
     def with_image_key(self, image_key: str) -> ExtractedElement:
         """Return the image with the storage key of its crop.
 

@@ -1,0 +1,193 @@
+{
+  "status": "answered",
+  "reason": null,
+  "answer": "A series wound generator is never used on airplanes because it has very poor voltage and current regulation [1]. This is due to the fact that the greater the current through the field coils to the external circuit, the greater the induced EMFs and the greater the output voltage becomes [1]. Consequently, when the aircraft electrical load is increased, the voltage increases, and when the load is decreased, the voltage decreases [1].",
+  "not_covered": null,
+  "citations": [
+    {
+      "number": 1,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "pages": [12],
+      "unit_ids": ["ef60a339-6e0d-5ea0-a974-d8ce6f719031"]
+    }
+  ],
+  "sources": [
+    {
+      "unit_id": "ef60a339-6e0d-5ea0-a974-d8ce6f719031",
+      "rank": 1,
+      "similarity": 0.76137173,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": [
+        "Reciprocating Engine Ignition Systems",
+        "Series Wound DC Generators"
+      ],
+      "pages": [12],
+      "content_type": "text",
+      "excerpt": "The series generator contains a field winding connected in series with the external circuit. [Figure 4-21] Series generators have very poor voltage regulation under changing load, since the greater the current is through the field coils to the external circuit, the greater the induced EMFs and the g",
+      "cited": true,
+      "citation_number": 1,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": ["5f50b93a-c12e-5c2a-91b8-48a0b1e0211a"]
+    },
+    {
+      "unit_id": "ebf61330-48c7-5c48-9077-be57d183dc5b",
+      "rank": 2,
+      "similarity": 0.6940394,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": ["Reciprocating Engine Ignition Systems", "Types of DC Generators"],
+      "pages": [12],
+      "content_type": "text",
+      "excerpt": "There are three types of DC generators: series wound, parallel (shunt) wound, and series-parallel (compound) wound. The appropriate generator is determined by the connections to the armature and field circuits with respect to the external circuit. The external circuit is the electrical load powered ",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": []
+    },
+    {
+      "unit_id": "1ee7213f-2663-52a9-9880-43a7537559ad",
+      "rank": 3,
+      "similarity": 0.648857,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": [
+        "Reciprocating Engine Ignition Systems",
+        "Compound Wound DC Generators"
+      ],
+      "pages": [13],
+      "content_type": "text",
+      "excerpt": "A compound wound generator employs two field windings one in series and another in parallel with the load. [Figure 4-23]\nThis arrangement takes advantage of both the series and parallel characteristics described earlier. The output of a compound wound generator is relatively constant, even with chan",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": []
+    },
+    {
+      "unit_id": "ea46f9ea-e856-539f-8107-3f544898f412",
+      "rank": 4,
+      "similarity": 0.5673827,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": [
+        "Reciprocating Engine Ignition Systems",
+        "Series Wound DC Generators"
+      ],
+      "pages": [12],
+      "content_type": "figure",
+      "excerpt": "Figure 4-21. Diagram of a series wound generator.\nN S + - Field rheostat Field winding Load W\nThis figure shows a schematic diagram of a series wound generator, with red lines indicating current flow through field windings on either side of a central commutator and brushes, connected to a load via a",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": true,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": ["5f50b93a-c12e-5c2a-91b8-48a0b1e0211a"]
+    },
+    {
+      "unit_id": "d166d829-7399-5b00-8658-5b068a5e0aa4",
+      "rank": 5,
+      "similarity": 0.599805,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": ["Reciprocating Engine Ignition Systems", "Generator Ratings"],
+      "pages": [13],
+      "content_type": "figure",
+      "excerpt": "Figure 4-23. Compound wound generator.\nA B N S + - Series field winding Parallel field winding Load Armature winding Series field coil To load Armature Shunt field coil Compound wound o W\nThe figure displays two diagrams of a compound wound generator: Diagram A shows a physical schematic with labele",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": true,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": ["69e289ef-48ca-543e-b796-252f46fde920"]
+    },
+    {
+      "unit_id": "2a31d66f-3342-5ead-944a-cba776d66722",
+      "rank": 6,
+      "similarity": 0.58948326,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": ["Reciprocating Engine Ignition Systems", "Generator Ratings"],
+      "pages": [13],
+      "content_type": "text",
+      "excerpt": "The rotation of generators is termed either clockwise or counterclockwise, as viewed from the driven end. The direction of rotation may also be stamped on the data plate. It is important that a generator with the correct rotation be used; otherwise, the polarity of the output voltage is reversed. Th",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": []
+    },
+    {
+      "unit_id": "320baffa-e1fd-5311-b20a-a7b0742c4ad3",
+      "rank": 7,
+      "similarity": 0.56111395,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": [
+        "Reciprocating Engine Ignition Systems",
+        "Parallel (Shunt) Wound DC Generators"
+      ],
+      "pages": [12],
+      "content_type": "figure",
+      "excerpt": "Figure 4-22. Shunt wound generator.\nA B N S + - Field rheostat Field winding Load Shunt circuit Main circuit Armature winding Armature Field coils wW\nThe figure displays two diagrams of a shunt wound generator: Diagram A shows a physical schematic with labeled components including field windings, ar",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": true,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": ["d9b34abe-b2e5-52e8-8b3a-96a9c9ccf6cb"]
+    },
+    {
+      "unit_id": "5af34635-fac6-54f8-be16-b6f82b1e04ae",
+      "rank": 8,
+      "similarity": 0.53222597,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": [
+        "Reciprocating Engine Ignition Systems",
+        "Parallel (Shunt) Wound DC Generators"
+      ],
+      "pages": [12],
+      "content_type": "text",
+      "excerpt": "A generator having a field winding connected in parallel with the external circuit is called a shunt generator. [Figure 4-22] It should be noted that, in electrical terms, shunt means parallel. Therefore, this type of generator could be called either a shunt generator or a parallel generator.\nIn a s",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": ["d9b34abe-b2e5-52e8-8b3a-96a9c9ccf6cb"]
+    }
+  ],
+  "primary_image": {
+    "element_id": "5f50b93a-c12e-5c2a-91b8-48a0b1e0211a",
+    "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+    "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+    "page": 12,
+    "bbox": {
+      "left": 52.98486328125,
+      "top": 486.4576416015625,
+      "right": 292.279052734375,
+      "bottom": 693.4794311523438,
+      "origin": "top_left"
+    },
+    "caption": "Figure 4-21. Diagram of a series wound generator.",
+    "unit_id": "ef60a339-6e0d-5ea0-a974-d8ce6f719031",
+    "url": "/api/v1/documents/5d3ff0f9-f671-4a1b-b3e6-3258071fa024/images/5f50b93a-c12e-5c2a-91b8-48a0b1e0211a"
+  },
+  "related_images": []
+}

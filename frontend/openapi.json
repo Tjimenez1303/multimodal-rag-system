@@ -1,0 +1,1712 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Multimodal RAG API",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/health/live": {
+      "get": {
+        "tags": ["health"],
+        "summary": "Liveness",
+        "description": "The process is running.",
+        "operationId": "liveness",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Liveness"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "tags": ["health"],
+        "summary": "Readiness",
+        "description": "Dependencies (database, blob storage) are reachable.",
+        "operationId": "readiness",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/documents": {
+      "post": {
+        "tags": ["ingestion"],
+        "summary": "Upload Document",
+        "description": "Stores the file, registers the document by the SHA-256 of its bytes and enqueues an ingestion job. Answers 202 while the job is pending or processing, and 200 when identical content already completed.",
+        "operationId": "uploadDocument",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_uploadDocument"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Job pending or processing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadAccepted"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "description": "Status URL of the job",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Identical content already ingested",
+            "headers": {
+              "Location": {
+                "description": "Status URL of the job",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadAccepted"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "413": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "415": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 128
+            }
+          }
+        ]
+      },
+      "get": {
+        "tags": ["documents"],
+        "summary": "List Documents",
+        "description": "Known documents with their latest job status, newest first.",
+        "operationId": "listDocuments",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentPageBody"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{job_id}": {
+      "get": {
+        "tags": ["ingestion"],
+        "summary": "Get Job",
+        "description": "State, stage and page progress of an ingestion job.",
+        "operationId": "getJob",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobBody"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/documents/{document_id}": {
+      "get": {
+        "tags": ["documents"],
+        "summary": "Get Document",
+        "description": "A document and its latest job.",
+        "operationId": "getDocument",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Document Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentBody"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/documents/{document_id}/elements": {
+      "get": {
+        "tags": ["documents"],
+        "summary": "List Document Elements",
+        "description": "Captured elements of a completed document, in reading order.",
+        "operationId": "listDocumentElements",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Document Id"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Page"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ElementKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElementPageBody"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        }
+      }
+    },
+    "/api/v1/documents/{document_id}/images/{element_id}": {
+      "get": {
+        "tags": ["documents"],
+        "summary": "Get Document Image",
+        "description": "Stored crop of an image element.",
+        "operationId": "getDocumentImage",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Document Id"
+            }
+          },
+          {
+            "name": "element_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Element Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "PNG image",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/documents/{document_id}/pages/{page_number}/image": {
+      "get": {
+        "tags": ["documents"],
+        "summary": "Get Document Page Image",
+        "description": "PNG of a whole page at 144 dpi, stored when the document was ingested. Available once the document's latest job has completed.",
+        "operationId": "getDocumentPageImage",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Document Id"
+            }
+          },
+          {
+            "name": "page_number",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "title": "Page Number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "PNG image",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        }
+      }
+    },
+    "/api/v1/questions": {
+      "post": {
+        "tags": ["questions"],
+        "summary": "Ask Question",
+        "description": "Searches the completed documents by meaning and by exact keywords, asks the local answer model when relevant content exists, and returns the answer with numbered citations. When the documents do not support an answer, status is not_enough_information and no citation or image is returned. The request is cancelled when the client disconnects.",
+        "operationId": "askQuestion",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuestionBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnswerBody"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          },
+          "503": {
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before retrying, sent with answering_busy",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          },
+          "504": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Gateway Timeout"
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 128
+            }
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AnswerBody": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/AnswerStatus"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NotEnoughReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "answer": {
+            "type": "string",
+            "title": "Answer"
+          },
+          "not_covered": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Not Covered"
+          },
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/CitationBody"
+            },
+            "type": "array",
+            "title": "Citations"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/SourceBody"
+            },
+            "type": "array",
+            "title": "Sources"
+          },
+          "primary_image": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AnswerImageBody"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "related_images": {
+            "items": {
+              "$ref": "#/components/schemas/AnswerImageBody"
+            },
+            "type": "array",
+            "title": "Related Images"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "reason",
+          "answer",
+          "not_covered",
+          "citations",
+          "sources",
+          "primary_image",
+          "related_images"
+        ],
+        "title": "AnswerBody",
+        "description": "The answer to a question.\n\nAttributes:\n    status: ``answered`` or ``not_enough_information``.\n    reason: Why there is no answer, only when not answered.\n    answer: Markdown with ``[n]`` markers, or the not-enough message.\n    not_covered: What the documents do not answer, for a partial answer.\n    citations: Numbered citations.\n    sources: Every unit supplied to the answer model, in rank order.\n    primary_image: The figure closest to the most relevant cited text.\n    related_images: Other figures of the cited units."
+      },
+      "AnswerImageBody": {
+        "properties": {
+          "element_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Element Id"
+          },
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "document_name": {
+            "type": "string",
+            "title": "Document Name"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "bbox": {
+            "$ref": "#/components/schemas/BoundingBoxBody"
+          },
+          "caption": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Caption"
+          },
+          "unit_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Unit Id"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "element_id",
+          "document_id",
+          "document_name",
+          "page",
+          "bbox",
+          "caption",
+          "unit_id",
+          "url"
+        ],
+        "title": "AnswerImageBody",
+        "description": "A figure returned with an answer.\n\nAttributes:\n    element_id: Image element id.\n    document_id: Document of the figure.\n    document_name: File name of that document.\n    page: Page of the figure.\n    bbox: Position of the figure on the page.\n    caption: Caption of the figure, if any.\n    unit_id: Cited unit that brought the figure.\n    url: Path of the PNG, served by the document image route."
+      },
+      "AnswerStatus": {
+        "type": "string",
+        "enum": ["answered", "not_enough_information"],
+        "title": "AnswerStatus",
+        "description": "Whether the documents supported an answer."
+      },
+      "Body_uploadDocument": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": ["file"],
+        "title": "Body_uploadDocument"
+      },
+      "BoundingBoxBody": {
+        "properties": {
+          "left": {
+            "type": "number",
+            "title": "Left"
+          },
+          "top": {
+            "type": "number",
+            "title": "Top"
+          },
+          "right": {
+            "type": "number",
+            "title": "Right"
+          },
+          "bottom": {
+            "type": "number",
+            "title": "Bottom"
+          },
+          "origin": {
+            "type": "string",
+            "const": "top_left",
+            "title": "Origin",
+            "default": "top_left"
+          }
+        },
+        "type": "object",
+        "required": ["left", "top", "right", "bottom"],
+        "title": "BoundingBoxBody",
+        "description": "Position on a page in PDF points with a top-left origin.\n\nAttributes:\n    left: Distance from the left edge of the page.\n    top: Distance from the top edge of the page.\n    right: Distance from the left edge to the right side of the box.\n    bottom: Distance from the top edge to the bottom side of the box.\n    origin: Always ``top_left``."
+      },
+      "CitationBody": {
+        "properties": {
+          "number": {
+            "type": "integer",
+            "title": "Number"
+          },
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "document_name": {
+            "type": "string",
+            "title": "Document Name"
+          },
+          "pages": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Pages"
+          },
+          "unit_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Unit Ids"
+          }
+        },
+        "type": "object",
+        "required": ["number", "document_id", "document_name", "pages", "unit_ids"],
+        "title": "CitationBody",
+        "description": "A numbered citation of the answer.\n\nAttributes:\n    number: Number of the ``[n]`` markers that refer to it.\n    document_id: Cited document.\n    document_name: File name of the cited document.\n    pages: Cited pages, ascending.\n    unit_ids: Retrieval units behind the citation."
+      },
+      "DescriptionStatus": {
+        "type": "string",
+        "enum": ["described", "skipped", "not_described"],
+        "title": "DescriptionStatus",
+        "description": "Outcome of describing an image with the vision model."
+      },
+      "DocumentBody": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "file_name": {
+            "type": "string",
+            "title": "File Name"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "title": "Size Bytes"
+          },
+          "page_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Count"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "latest_job": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobBody"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "file_name",
+          "size_bytes",
+          "page_count",
+          "created_at",
+          "latest_job"
+        ],
+        "title": "DocumentBody",
+        "description": "A document of the library with its newest job.\n\nAttributes:\n    id: Document id.\n    file_name: Name of the uploaded file.\n    size_bytes: Size of the file.\n    page_count: Page count, unknown for encrypted files.\n    created_at: Time the document was registered.\n    latest_job: Newest job, or ``None`` until its job is enqueued."
+      },
+      "DocumentPageBody": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentBody"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "type": "object",
+        "required": ["items", "next_cursor"],
+        "title": "DocumentPageBody",
+        "description": "One page of documents, newest first.\n\nAttributes:\n    items: Documents of this page.\n    next_cursor: Cursor of the next page, or ``None`` on the last page."
+      },
+      "ElementBody": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ElementKind"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "bbox": {
+            "$ref": "#/components/schemas/BoundingBoxBody"
+          },
+          "reading_order": {
+            "type": "integer",
+            "title": "Reading Order"
+          },
+          "heading_level": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Heading Level"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "table": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TableBody"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin": {
+            "$ref": "#/components/schemas/TextOrigin"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "image_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Url"
+          },
+          "image_class": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Class"
+          },
+          "labels": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Labels"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "description_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DescriptionStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unverified_identifiers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Unverified Identifiers"
+          },
+          "is_decorative": {
+            "type": "boolean",
+            "title": "Is Decorative"
+          },
+          "relationships": {
+            "items": {
+              "$ref": "#/components/schemas/RelationshipBody"
+            },
+            "type": "array",
+            "title": "Relationships"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "page",
+          "bbox",
+          "reading_order",
+          "heading_level",
+          "text",
+          "table",
+          "origin",
+          "confidence",
+          "image_url",
+          "image_class",
+          "labels",
+          "description",
+          "description_status",
+          "unverified_identifiers",
+          "is_decorative",
+          "relationships"
+        ],
+        "title": "ElementBody",
+        "description": "A captured element with its position and relationships.\n\nAttributes:\n    id: Element id.\n    kind: Type of content.\n    page: 1-based page number.\n    bbox: Position on the page.\n    reading_order: Order within the document.\n    heading_level: Level of a heading.\n    text: Text content, or the Markdown of a table.\n    table: Rows and columns of a table.\n    origin: Whether the text came from the text layer or from recognition.\n    confidence: Recognition confidence of recognized text.\n    image_url: Relative URL of the stored crop of an image.\n    image_class: Classifier label of an image.\n    labels: Text printed inside an image.\n    description: Generated description of an image.\n    description_status: Outcome of describing an image.\n    unverified_identifiers: Identifiers of the description absent from the\n        image's labels and caption.\n    is_decorative: Whether the image is a logo or a repeated decoration.\n    relationships: Every link that touches the element."
+      },
+      "ElementKind": {
+        "type": "string",
+        "enum": [
+          "heading",
+          "paragraph",
+          "list_item",
+          "caption",
+          "table",
+          "image",
+          "page_furniture"
+        ],
+        "title": "ElementKind",
+        "description": "Type of an extracted element."
+      },
+      "ElementPageBody": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ElementBody"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "type": "object",
+        "required": ["items", "next_cursor"],
+        "title": "ElementPageBody",
+        "description": "One page of elements in reading order.\n\nAttributes:\n    items: Elements of this page.\n    next_cursor: Cursor of the next page, or ``None`` on the last page."
+      },
+      "FailureCode": {
+        "type": "string",
+        "enum": [
+          "encrypted_document",
+          "corrupt_document",
+          "no_extractable_text",
+          "provider_unavailable",
+          "interrupted_repeatedly",
+          "internal_error"
+        ],
+        "title": "FailureCode",
+        "description": "Machine-readable cause of a failed job."
+      },
+      "JobBody": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/JobStatus"
+          },
+          "stage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobStage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "attempt": {
+            "type": "integer",
+            "title": "Attempt"
+          },
+          "max_attempts": {
+            "type": "integer",
+            "title": "Max Attempts"
+          },
+          "pages_done": {
+            "type": "integer",
+            "title": "Pages Done"
+          },
+          "pages_total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pages Total"
+          },
+          "failure_code": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FailureCode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "failure_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Reason"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobSummaryBody"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "document_id",
+          "status",
+          "stage",
+          "attempt",
+          "max_attempts",
+          "pages_done",
+          "pages_total",
+          "failure_code",
+          "failure_reason",
+          "summary",
+          "created_at",
+          "started_at",
+          "finished_at"
+        ],
+        "title": "JobBody",
+        "description": "State and progress of an ingestion job.\n\nBuilt from a domain job with ``model_validate(job)``, which reads only the\ndeclared fields, so lease and worker details never reach clients.\n\nAttributes:\n    id: Job id.\n    document_id: Document being ingested.\n    status: Lifecycle state.\n    stage: Current step while processing.\n    attempt: Attempts started so far.\n    max_attempts: Attempts allowed.\n    pages_done: Pages processed in the current attempt.\n    pages_total: Pages to process, once known.\n    failure_code: Cause of a failure.\n    failure_reason: Human-readable failure reason.\n    summary: Counts of a completed job.\n    created_at: Creation time.\n    started_at: Time of the first claim.\n    finished_at: Time the job completed or failed."
+      },
+      "JobStage": {
+        "type": "string",
+        "enum": [
+          "extracting",
+          "describing_figures",
+          "building_units",
+          "embedding",
+          "indexing",
+          "finalizing"
+        ],
+        "title": "JobStage",
+        "description": "Step a processing job is currently running."
+      },
+      "JobStatus": {
+        "type": "string",
+        "enum": ["pending", "processing", "completed", "failed"],
+        "title": "JobStatus",
+        "description": "Lifecycle state of an ingestion job."
+      },
+      "JobSummaryBody": {
+        "properties": {
+          "pages": {
+            "type": "integer",
+            "title": "Pages"
+          },
+          "text_elements": {
+            "type": "integer",
+            "title": "Text Elements"
+          },
+          "tables": {
+            "type": "integer",
+            "title": "Tables"
+          },
+          "table_chains": {
+            "type": "integer",
+            "title": "Table Chains"
+          },
+          "images": {
+            "type": "integer",
+            "title": "Images"
+          },
+          "figures_described": {
+            "type": "integer",
+            "title": "Figures Described"
+          },
+          "figures_skipped": {
+            "type": "integer",
+            "title": "Figures Skipped"
+          },
+          "figures_not_described": {
+            "type": "integer",
+            "title": "Figures Not Described"
+          },
+          "retrieval_units": {
+            "type": "integer",
+            "title": "Retrieval Units"
+          },
+          "recognized_pages": {
+            "type": "integer",
+            "title": "Recognized Pages"
+          }
+        },
+        "type": "object",
+        "required": [
+          "pages",
+          "text_elements",
+          "tables",
+          "table_chains",
+          "images",
+          "figures_described",
+          "figures_skipped",
+          "figures_not_described",
+          "retrieval_units",
+          "recognized_pages"
+        ],
+        "title": "JobSummaryBody",
+        "description": "Counts of what a completed job captured.\n\nAttributes:\n    pages: Pages processed.\n    text_elements: Headings, paragraphs, list items and captions.\n    tables: Table elements.\n    table_chains: Tables that continue across pages.\n    images: Image elements.\n    figures_described: Images with a generated description.\n    figures_skipped: Images not sent to the vision model.\n    figures_not_described: Images whose description failed.\n    retrieval_units: Units written to the index.\n    recognized_pages: Pages that went through text recognition."
+      },
+      "NotEnoughReason": {
+        "type": "string",
+        "enum": [
+          "no_searchable_documents",
+          "no_relevant_content",
+          "not_answered_by_sources",
+          "no_valid_citations"
+        ],
+        "title": "NotEnoughReason",
+        "description": "Why a question received no answer."
+      },
+      "Problem": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "about:blank",
+            "title": "Type",
+            "default": "about:blank"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "integer",
+            "title": "Status"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "instance": {
+            "type": "string",
+            "title": "Instance"
+          },
+          "code": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "title": "Code"
+          },
+          "request_id": {
+            "type": "string",
+            "title": "Request Id"
+          }
+        },
+        "type": "object",
+        "required": ["title", "status", "instance", "code", "request_id"],
+        "title": "Problem",
+        "description": "RFC 9457 problem details, the body of every error response.\n\nAttributes:\n    type: Always ``about:blank``, so ``title`` is the phrase of the status.\n    title: Standard phrase of the HTTP status.\n    status: HTTP status code.\n    detail: Explanation of this occurrence, sent for client errors only.\n    instance: Path of the request.\n    code: Stable machine-readable code in lowercase snake case.\n    request_id: Correlation id of the request."
+      },
+      "QuestionBody": {
+        "properties": {
+          "question": {
+            "type": "string",
+            "title": "Question"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["question"],
+        "title": "QuestionBody",
+        "description": "A question about the ingested documents.\n\nThe length of the question is not limited here: the use case enforces the\nconfigurable limit and answers ``invalid_question``.\n\nAttributes:\n    question: The question, in any language."
+      },
+      "RelationshipBody": {
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Source Id"
+          },
+          "target_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Target Id"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/RelationshipKind"
+          }
+        },
+        "type": "object",
+        "required": ["source_id", "target_id", "kind"],
+        "title": "RelationshipBody",
+        "description": "A directed link between two elements.\n\nAttributes:\n    source_id: Element the link starts from, such as a caption.\n    target_id: Element the link points to, such as an image.\n    kind: Meaning of the link."
+      },
+      "RelationshipKind": {
+        "type": "string",
+        "enum": ["caption_of", "title_of", "describes", "near", "continues"],
+        "title": "RelationshipKind",
+        "description": "Kind of link between two extracted elements."
+      },
+      "SourceBody": {
+        "properties": {
+          "unit_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Unit Id"
+          },
+          "rank": {
+            "type": "integer",
+            "title": "Rank"
+          },
+          "similarity": {
+            "type": "number",
+            "title": "Similarity"
+          },
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "document_name": {
+            "type": "string",
+            "title": "Document Name"
+          },
+          "section": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Section"
+          },
+          "pages": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Pages"
+          },
+          "content_type": {
+            "$ref": "#/components/schemas/UnitType"
+          },
+          "excerpt": {
+            "type": "string",
+            "title": "Excerpt"
+          },
+          "cited": {
+            "type": "boolean",
+            "title": "Cited"
+          },
+          "citation_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Citation Number"
+          },
+          "low_confidence_text": {
+            "type": "boolean",
+            "title": "Low Confidence Text"
+          },
+          "generated_description": {
+            "type": "boolean",
+            "title": "Generated Description"
+          },
+          "unverified_identifiers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Unverified Identifiers"
+          },
+          "tables": {
+            "items": {
+              "$ref": "#/components/schemas/TableContentBody"
+            },
+            "type": "array",
+            "title": "Tables"
+          },
+          "figure_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Figure Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "unit_id",
+          "rank",
+          "similarity",
+          "document_id",
+          "document_name",
+          "section",
+          "pages",
+          "content_type",
+          "excerpt",
+          "cited",
+          "citation_number",
+          "low_confidence_text",
+          "generated_description",
+          "unverified_identifiers",
+          "tables",
+          "figure_ids"
+        ],
+        "title": "SourceBody",
+        "description": "A retrieval unit supplied to the answer model.\n\nAttributes:\n    unit_id: Retrieval unit id.\n    rank: Position in the fused ranking.\n    similarity: Dense cosine similarity to the question.\n    document_id: Document of the unit.\n    document_name: File name of that document.\n    section: Heading path, outermost first.\n    pages: Pages the unit spans.\n    content_type: Text, table or figure unit.\n    excerpt: Beginning of the unit text.\n    cited: Whether the answer cites the unit.\n    citation_number: Citation that cites the unit.\n    low_confidence_text: Part of the content was recognized with low confidence.\n    generated_description: The content includes a figure description written by\n        a model.\n    unverified_identifiers: Identifiers of that description missing from the\n        figure's labels and caption.\n    tables: Rows of each part of a table unit.\n    figure_ids: Non-decorative image elements associated with the unit."
+      },
+      "TableBody": {
+        "properties": {
+          "rows": {
+            "type": "integer",
+            "title": "Rows"
+          },
+          "columns": {
+            "type": "integer",
+            "title": "Columns"
+          },
+          "cells": {
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "title": "Cells"
+          }
+        },
+        "type": "object",
+        "required": ["rows", "columns", "cells"],
+        "title": "TableBody",
+        "description": "Rows and columns of a table.\n\nAttributes:\n    rows: Number of rows, the header included.\n    columns: Number of columns.\n    cells: Cell text, row by row."
+      },
+      "TableContentBody": {
+        "properties": {
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "rows": {
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "title": "Rows"
+          }
+        },
+        "type": "object",
+        "required": ["page", "rows"],
+        "title": "TableContentBody",
+        "description": "Rows of one part of a table.\n\nAttributes:\n    page: Page of this part.\n    rows: Cell text, header row first."
+      },
+      "TextOrigin": {
+        "type": "string",
+        "enum": ["text_layer", "recognized"],
+        "title": "TextOrigin",
+        "description": "Where the text of an element came from."
+      },
+      "UnitType": {
+        "type": "string",
+        "enum": ["text", "table", "figure"],
+        "title": "UnitType",
+        "description": "Type of a retrieval unit."
+      },
+      "UploadAccepted": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "job_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Job Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/JobStatus"
+          },
+          "already_ingested": {
+            "type": "boolean",
+            "title": "Already Ingested"
+          }
+        },
+        "type": "object",
+        "required": ["document_id", "job_id", "status", "already_ingested"],
+        "title": "UploadAccepted",
+        "description": "Identifiers returned by an upload.\n\nAttributes:\n    document_id: Document registered for the file's content.\n    job_id: Job that ingests the document.\n    status: Current state of that job.\n    already_ingested: Whether identical content had already completed."
+      }
+    }
+  }
+}

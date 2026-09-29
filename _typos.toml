@@ -5,4 +5,9 @@ extend-exclude = [
     ".claude/skills/",
     "*.lock",
     "*.pdf",
+    "frontend/src/client/",
+    "frontend/openapi.json",
+    "frontend/package-lock.json",
+    # Responses captured from the service, kept verbatim, some in Spanish.
+    "frontend/tests/fixtures/answers/*.json",
 ]

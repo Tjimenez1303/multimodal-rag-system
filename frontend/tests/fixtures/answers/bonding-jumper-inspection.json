@@ -1,0 +1,246 @@
+{
+  "status": "answered",
+  "reason": null,
+  "answer": "A bonding jumper is used to carry a substantial amount of ground return current, and its current rating should be adequate to ensure a negligible voltage drop is produced [1]. Bonding jumpers should be kept as short as practicable, and the resistance of each connection should not exceed 0.003 ohm [2]. To ensure a low resistance connection, nonconducting finishes such as paint and anodizing films must be removed from the surface to be contacted by the bonding terminal [2]. Inspection of bonding jumpers involves verifying that the connection resistance does not exceed the specified limit and ensuring that the jumper does not interfere with the operation of movable aircraft elements [2].",
+  "not_covered": "The sources do not provide specific step-by-step inspection procedures or visual criteria for inspecting the physical condition of the bonding jumper itself, other than checking resistance and interference with movable parts.",
+  "citations": [
+    {
+      "number": 1,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "pages": [66, 67],
+      "unit_ids": ["221b0e2f-7074-51e9-8f88-a80246d18c1e"]
+    },
+    {
+      "number": 2,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "pages": [65],
+      "unit_ids": ["8bec6df1-eba4-5a87-9ef9-b0d4c87a0fee"]
+    }
+  ],
+  "sources": [
+    {
+      "unit_id": "221b0e2f-7074-51e9-8f88-a80246d18c1e",
+      "rank": 1,
+      "similarity": 0.6884432,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": [
+        "Reciprocating Engine Ignition System Maintenance & Inspection",
+        "General Bonding & Grounding Procedures"
+      ],
+      "pages": [66, 67],
+      "content_type": "text",
+      "excerpt": "The use of solder to attach bonding jumpers should be avoided. Tubular members should be bonded by means of clamps to which the jumper is attached. The proper choice of clamp material minimizes the probability of corrosion. When bonding\njumpers carry a substantial amount of ground return current, th",
+      "cited": true,
+      "citation_number": 1,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": [
+        "e734b2e2-518e-50b2-ae5b-9a533e7d8b13",
+        "b20facff-97fe-51b7-bc05-ecbcd5e65ce5",
+        "ba956a2b-9477-5d4f-9cb0-98eaa616914a"
+      ]
+    },
+    {
+      "unit_id": "8bec6df1-eba4-5a87-9ef9-b0d4c87a0fee",
+      "rank": 2,
+      "similarity": 0.6787387,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": [
+        "Reciprocating Engine Ignition System Maintenance & Inspection",
+        "General Bonding & Grounding Procedures"
+      ],
+      "pages": [65],
+      "content_type": "text",
+      "excerpt": "The following general procedures and precautions are recommended when making bonding or grounding connections.\nBond or ground parts to the primary aircraft structure, where practicable.\nMake bonding or grounding connections in such a manner that no part of the aircraft structure is weakened.\nBond pa",
+      "cited": true,
+      "citation_number": 2,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": []
+    },
+    {
+      "unit_id": "d1594fb9-6871-5388-ac7c-db66a3994523",
+      "rank": 3,
+      "similarity": 0.65661657,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": [
+        "Reciprocating Engine Ignition System Maintenance & Inspection",
+        "General Bonding & Grounding Procedures"
+      ],
+      "pages": [66],
+      "content_type": "figure",
+      "excerpt": "Figure 4-117. Hardware combinations used in making bonding connections.\nCadmium plated steel locknut Cylindrical surface Aluminum washers Cadmium plated steel screw Cadmium plated steel lockwasher Copper terminal Clamp Cadmium plated steel locknut Cylindrical surface Aluminum washers Cadmium plated ",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": true,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": ["e734b2e2-518e-50b2-ae5b-9a533e7d8b13"]
+    },
+    {
+      "unit_id": "3fe7d229-a562-5338-ac8d-afd1dca4d29d",
+      "rank": 4,
+      "similarity": 0.62964404,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": [
+        "Reciprocating Engine Ignition System Maintenance & Inspection",
+        "General Bonding & Grounding Procedures"
+      ],
+      "pages": [67],
+      "content_type": "text",
+      "excerpt": "Hardware used to make bonding or grounding connections should be selected on the basis of mechanical strength, current to be carried, and ease of installation. If connection is made by aluminum or copper jumpers to the structure of a dissimilar material, a washer of suitable material should be insta",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": ["714f1774-776f-5595-a607-3e5e75a1a01b"]
+    },
+    {
+      "unit_id": "7fd5e47c-ed90-55e0-9cdc-bc9cc2147697",
+      "rank": 5,
+      "similarity": 0.40054756,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": [
+        "Reciprocating Engine Ignition System Maintenance & Inspection",
+        "Breaker Point Inspection"
+      ],
+      "pages": [39, 40],
+      "content_type": "text",
+      "excerpt": "To inspect the breaker contact surfaces, it is necessary to know what a normal operating set of contacts looks like, what surface condition is considered as permissible wear, and what surface condition is cause for dressing or replacement. The probable cause of an abnormal surface condition can be d",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": []
+    },
+    {
+      "unit_id": "d46e63b9-3596-5ed8-861b-c68ecf32d5bd",
+      "rank": 6,
+      "similarity": 0.49907905,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": [
+        "Reciprocating Engine Ignition System Maintenance & Inspection",
+        "Solderless Terminals & Splices"
+      ],
+      "pages": [61],
+      "content_type": "text",
+      "excerpt": "Splicing of electrical cable should be kept to a minimum and avoided entirely in locations subject to extreme vibrations. Individual wires in a group or bundle can usually be spliced if the completed splice is located where it can be inspected periodically. The splices should be staggered so that th",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": []
+    },
+    {
+      "unit_id": "b2d635ba-f367-52b9-a26b-4909b566c069",
+      "rank": 7,
+      "similarity": 0.52598834,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": [
+        "Reciprocating Engine Ignition System Maintenance & Inspection",
+        "Bonding & Grounding"
+      ],
+      "pages": [65],
+      "content_type": "text",
+      "excerpt": "Bonding is the electrical connecting of two or more conducting objects not otherwise connected adequately. Grounding is the electrical connecting of a conducting object to the primary structure for return of current. Primary structure is the main frame, fuselage, or wing structure of the aircraft. B",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": []
+    },
+    {
+      "unit_id": "0d67ce83-f8fe-5aaa-bd45-78cda749b8ef",
+      "rank": 8,
+      "similarity": 0.49792433,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": [
+        "Reciprocating Engine Ignition System Maintenance & Inspection",
+        "General Bonding & Grounding Procedures"
+      ],
+      "pages": [66],
+      "content_type": "figure",
+      "excerpt": "Figure 4-119. Nut plate bonding or grounding to flat surface.\nRivet or weld Terminal (limited to 4) Nut plate Screw or bolt Lockwasher Washers\nThis figure illustrates a cross-sectional view of a mechanical assembly showing how a nut plate is bonded or grounded to a flat surface using screws, washers",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": true,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": ["a1362bf8-8dd5-53bb-ae87-4cda05d1ffbf"]
+    }
+  ],
+  "primary_image": {
+    "element_id": "b20facff-97fe-51b7-bc05-ecbcd5e65ce5",
+    "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+    "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+    "page": 66,
+    "bbox": {
+      "left": 302.2708740234375,
+      "top": 410.94073486328125,
+      "right": 541.4091186523438,
+      "bottom": 542.2529296875,
+      "origin": "top_left"
+    },
+    "caption": "Figure 4-118. Stud bonding or grounding to a flat surface.",
+    "unit_id": "221b0e2f-7074-51e9-8f88-a80246d18c1e",
+    "url": "/api/v1/documents/5d3ff0f9-f671-4a1b-b3e6-3258071fa024/images/b20facff-97fe-51b7-bc05-ecbcd5e65ce5"
+  },
+  "related_images": [
+    {
+      "element_id": "e734b2e2-518e-50b2-ae5b-9a533e7d8b13",
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "page": 66,
+      "bbox": {
+        "left": 52.9762077331543,
+        "top": 43.040802001953125,
+        "right": 291.7565002441406,
+        "bottom": 612.0189208984375,
+        "origin": "top_left"
+      },
+      "caption": "Figure 4-117. Hardware combinations used in making bonding connections.",
+      "unit_id": "221b0e2f-7074-51e9-8f88-a80246d18c1e",
+      "url": "/api/v1/documents/5d3ff0f9-f671-4a1b-b3e6-3258071fa024/images/e734b2e2-518e-50b2-ae5b-9a533e7d8b13"
+    },
+    {
+      "element_id": "ba956a2b-9477-5d4f-9cb0-98eaa616914a",
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "page": 67,
+      "bbox": {
+        "left": 52.713706970214844,
+        "top": 43.390350341796875,
+        "right": 292.2110900878906,
+        "bottom": 317.6172790527344,
+        "origin": "top_left"
+      },
+      "caption": "Figure 4-120. Bonding or grounding tab riveted to structure.",
+      "unit_id": "221b0e2f-7074-51e9-8f88-a80246d18c1e",
+      "url": "/api/v1/documents/5d3ff0f9-f671-4a1b-b3e6-3258071fa024/images/ba956a2b-9477-5d4f-9cb0-98eaa616914a"
+    }
+  ]
+}

@@ -1,0 +1,222 @@
+{
+  "status": "answered",
+  "reason": null,
+  "answer": "The controls on the welding machine control panel include the following:\n\n*   **JOB SELECTOR**: A large dial used to select welding jobs or settings.\n*   **CONTINUOUS CURRENT CONTROL**: A smaller gauge used to control the current.\n*   **POLARITY SWITCH**: A toggle switch for setting polarity.\n*   **IDLE CONTROL SWITCH**: A toggle switch for idle control.\n*   **AUXILIARY GENERATOR SWITCH**: A toggle switch for the auxiliary generator.\n*   **115-V RECEPTACLE**: Two outlets for 115-volt power.\n\nThese components are located on the control panel as shown in the figure describing the control panel with multiple gauges, switches, and terminals [1]. The purpose of these controls and instruments is described in section 11 of the manual [2].",
+  "not_covered": null,
+  "citations": [
+    {
+      "number": 1,
+      "document_id": "d875dd9a-4b58-414c-a79b-bdd4a858a19c",
+      "document_name": "tm-5-3431-201-10-welding-machine-scanned.pdf",
+      "pages": [24],
+      "unit_ids": ["7a883df5-68db-5b06-9248-a2a18d4d1b9a"]
+    },
+    {
+      "number": 2,
+      "document_id": "d875dd9a-4b58-414c-a79b-bdd4a858a19c",
+      "document_name": "tm-5-3431-201-10-welding-machine-scanned.pdf",
+      "pages": [18],
+      "unit_ids": ["cd375a7a-a749-5925-9c08-dfbb856270ca"]
+    }
+  ],
+  "sources": [
+    {
+      "unit_id": "cd375a7a-a749-5925-9c08-dfbb856270ca",
+      "rank": 1,
+      "similarity": 0.7743408,
+      "document_id": "d875dd9a-4b58-414c-a79b-bdd4a858a19c",
+      "document_name": "tm-5-3431-201-10-welding-machine-scanned.pdf",
+      "section": ["11. Controls and Instruments"],
+      "pages": [18],
+      "content_type": "text",
+      "excerpt": "This section describes, locates, illustrates, and furnishes the operator sufficient information about the various controls and instruments for proper operation of the welding machine.\nThe purpose of the controls and instruments and the normal and maximum readings of the instruments are illustrated i",
+      "cited": true,
+      "citation_number": 2,
+      "low_confidence_text": true,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": []
+    },
+    {
+      "unit_id": "f015f406-7e30-58a0-9361-b716a84824f5",
+      "rank": 2,
+      "similarity": 0.64946944,
+      "document_id": "d875dd9a-4b58-414c-a79b-bdd4a858a19c",
+      "document_name": "tm-5-3431-201-10-welding-machine-scanned.pdf",
+      "section": ["3. Description"],
+      "pages": [11],
+      "content_type": "text",
+      "excerpt": "frame near front. The welding machine manufacturer's data plate is located on the control panel. The engine manufacturer's plate is located on the valve cover. The welder manufacturer's data plate is located on the right side of the welder. The heater manufacturer's data plate is located on the back",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": []
+    },
+    {
+      "unit_id": "37a3e6be-0c27-5ecd-9059-b0b602dcc595",
+      "rank": 3,
+      "similarity": 0.29234064,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": [
+        "Reciprocating Engine Ignition Systems",
+        "Engine Indicating & Crew Alerting System (EICAS)"
+      ],
+      "pages": [17],
+      "content_type": "text",
+      "excerpt": "and nonengine system status are displayed on the bottom screen. The lower screen is also used for maintenance diagnosis when the aircraft is on the ground. Color coding is used, as well as message prioritizing.\nThe display select panel allows the pilot to choose which computer is actively supplying ",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": ["0eb8087c-56c1-5438-915e-0bb6a0d61219"]
+    },
+    {
+      "unit_id": "68d2dcd9-f063-548d-8782-55c7bed2540f",
+      "rank": 4,
+      "similarity": 0.67171574,
+      "document_id": "d875dd9a-4b58-414c-a79b-bdd4a858a19c",
+      "document_name": "tm-5-3431-201-10-welding-machine-scanned.pdf",
+      "section": [
+        "WELDING MACHINE, ARC: GENERATOR; DIESEL DRIVEN SINGLE OPERATOR; REMOTE CONTROL; 30O AMP DC ARC; SKID MTD; 60 AMP 20 V MIN, 375 AMP AT 40 V MAX, CURRENT 115 V, 3 KW AUXILIARY POWER (LIBBY MODEL ODW-3OO) FSN 3431-894-1573"
+      ],
+      "pages": [8],
+      "content_type": "table",
+      "excerpt": "|                                                                              | Paragraph   | Pago   |\n|------------------------------------------------------------------------------|-------------|--------|\n| CHAPTER 1. INTRODUCTION                                                      |            ",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [
+        {
+          "page": 8,
+          "rows": [
+            ["", "Paragraph", "Pago"],
+            ["CHAPTER 1. INTRODUCTION", "", ""],
+            ["Section I. General", "1,2", "3"],
+            ["II. Description and data", "3-5", "6"],
+            ["CHAPTER 2. INSTALLATION AND OPERATION INSTRUCTIONS", "", ""],
+            ["Section I. Service upon receipt of equipment", "6-9", "9"],
+            ["II. Controls and instruments", "10,11", "11"],
+            ["III. Operation of equipment", "12-21", "15"],
+            [
+              "IV. Operation of auxiliary materiel used in conjunction with welding machine",
+              "22-24",
+              "20"
+            ],
+            ["CHAPTER 3. MAINTENANCE INSTRUCTIONS", "", ""],
+            ["Section I. Operator's tools and equipment", "25,26", "23"],
+            ["II. Lubrication", "27,28", "23"],
+            ["III. Preventive maintenance services", "29,30", "28,29"],
+            ["IV. Troubleshooting", "31-41", "32"],
+            ["V. Field expedient repairs", "42-46", "33"],
+            ["VI. Engine accessories", "47-52", "33"],
+            ["VII. Lamps and fuse -", "53,54", "40"],
+            ["VIII. Winterization heater", "5557", "41"],
+            ["CDH N L    J   DHS", "58-62", "43"],
+            ["APPENDIX I. REFERENCES", "", "45"],
+            ["II. BASIS ISSUE ITEMS", "", "47"],
+            ["", "", "51"]
+          ]
+        }
+      ],
+      "figure_ids": []
+    },
+    {
+      "unit_id": "9160ff9d-8e98-5515-8ffd-fd48f9b3cd04",
+      "rank": 5,
+      "similarity": 0.65617955,
+      "document_id": "d875dd9a-4b58-414c-a79b-bdd4a858a19c",
+      "document_name": "tm-5-3431-201-10-welding-machine-scanned.pdf",
+      "section": ["3. Description"],
+      "pages": [11],
+      "content_type": "figure",
+      "excerpt": "Figure 1. Welding machine, right front, three-quarter view, with shipping dimensions.\nTOP PANEL WELDER SIDE PANEL (2) ENGINE SIDE PANEL.(2 FUEL TANK WINTERIZATION HEATER BAT R RCLE in HEATER EXHAUST CAP SHIPPING DIMENSIONS LENGTH 101 INCHES HEIGHT 48%INCHES WIDTH 3E INCHES WEIGHT 3,193 POUNDS EMC343",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": true,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": ["9adc180e-390a-5454-b9d3-f0a25eb3378c"]
+    },
+    {
+      "unit_id": "1a106dff-e91a-550d-bea0-89f41d8d7590",
+      "rank": 6,
+      "similarity": 0.56832415,
+      "document_id": "d875dd9a-4b58-414c-a79b-bdd4a858a19c",
+      "document_name": "tm-5-3431-201-10-welding-machine-scanned.pdf",
+      "section": ["3. Description"],
+      "pages": [10, 11],
+      "content_type": "text",
+      "excerpt": "a. General. The Libby Welding Company Inc., Welding Machine (figs. 1 and 2), Model ODW-300, is a self-contained, skid-mounted, inclosed unit, and is completely winterized. The welding machine is equipped with the necessary controls, instruments, and accessories for operation. All accessories of the ",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": ["9adc180e-390a-5454-b9d3-f0a25eb3378c"]
+    },
+    {
+      "unit_id": "2850ac21-bd54-57b5-b1fe-b374e4bfb7bf",
+      "rank": 7,
+      "similarity": 0.6258868,
+      "document_id": "d875dd9a-4b58-414c-a79b-bdd4a858a19c",
+      "document_name": "tm-5-3431-201-10-welding-machine-scanned.pdf",
+      "section": ["15. Welder Operation"],
+      "pages": [22, 23],
+      "content_type": "text",
+      "excerpt": "Welding Machine.\nOperate the welding machine as shown by figure 9.\nAttach the welding cables (fig. 9).\nWarning: Do not operate the welding machine in an inclosed building unless the exhaust fumes are piped to the outside. Continued breathing of exhaust fumes is dangerous and can be fatal.\nUse the po",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": ["fb5d36f5-d4b1-57f1-9f50-8fdbe5805cce"]
+    },
+    {
+      "unit_id": "7a883df5-68db-5b06-9248-a2a18d4d1b9a",
+      "rank": 8,
+      "similarity": 0.65117985,
+      "document_id": "d875dd9a-4b58-414c-a79b-bdd4a858a19c",
+      "document_name": "tm-5-3431-201-10-welding-machine-scanned.pdf",
+      "section": ["15. Welder Operation"],
+      "pages": [24],
+      "content_type": "figure",
+      "excerpt": "POLARITY SWITCH CONTINUOUS CURRENT CONTRCI JOB SELECTOR. IDLE CONTROL SWITCH AUXILIARY.CENERATOR SWITCH 115-V RECEPTACL ELECTRODE TERMINAL ELECTRODE CABLE WOR CABLE\nThe figure shows a control panel with multiple gauges, switches, and terminals. Visible components include a large dial labeled “JOB SE",
+      "cited": true,
+      "citation_number": 1,
+      "low_confidence_text": false,
+      "generated_description": true,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": ["fde0235d-532d-5f34-9f9f-da3e7c077e5a"]
+    }
+  ],
+  "primary_image": {
+    "element_id": "fde0235d-532d-5f34-9f9f-da3e7c077e5a",
+    "document_id": "d875dd9a-4b58-414c-a79b-bdd4a858a19c",
+    "document_name": "tm-5-3431-201-10-welding-machine-scanned.pdf",
+    "page": 24,
+    "bbox": {
+      "left": 77.1980057837977,
+      "top": 49.391127294309285,
+      "right": 529.2899243966717,
+      "bottom": 479.45727060707503,
+      "origin": "top_left"
+    },
+    "caption": null,
+    "unit_id": "7a883df5-68db-5b06-9248-a2a18d4d1b9a",
+    "url": "/api/v1/documents/d875dd9a-4b58-414c-a79b-bdd4a858a19c/images/fde0235d-532d-5f34-9f9f-da3e7c077e5a"
+  },
+  "related_images": []
+}

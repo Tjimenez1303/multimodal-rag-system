@@ -66,6 +66,10 @@ class FilesystemBlobStorage:
     async def save_bytes(self, key: str, data: bytes) -> None:
         """Write a small payload atomically under a key.
 
+        Args:
+            key: Destination key.
+            data: Content to write.
+
         Raises:
             InvalidBlobKeyError: If the key is not a safe relative path.
         """
@@ -81,6 +85,12 @@ class FilesystemBlobStorage:
     async def read_bytes(self, key: str) -> bytes:
         """Return the content stored under a key.
 
+        Args:
+            key: Key of the object.
+
+        Returns:
+            The stored bytes.
+
         Raises:
             BlobNotFoundError: If nothing is stored under the key.
         """
@@ -90,6 +100,10 @@ class FilesystemBlobStorage:
     async def move(self, source: str, destination: str) -> None:
         """Rename a stored object, replacing any object at the destination.
 
+        Args:
+            source: Key of the object to rename.
+            destination: New key of the object.
+
         Raises:
             BlobNotFoundError: If nothing is stored under the source key.
         """
@@ -98,11 +112,22 @@ class FilesystemBlobStorage:
         await asyncio.to_thread(os.replace, source_path, destination_path)
 
     async def delete(self, key: str) -> None:
-        """Remove a stored object if it exists."""
+        """Remove a stored object if it exists.
+
+        Args:
+            key: Key of the object.
+        """
         await asyncio.to_thread(self._path(key).unlink, missing_ok=True)
 
     async def exists(self, key: str) -> bool:
-        """Return whether an object is stored under a key."""
+        """Return whether an object is stored under a key.
+
+        Args:
+            key: Key to look up.
+
+        Returns:
+            Whether the object exists.
+        """
         return await asyncio.to_thread(self._path(key).is_file)
 
     async def check_writable(self) -> None:
@@ -118,6 +143,12 @@ class FilesystemBlobStorage:
     @contextlib.contextmanager
     def materialize(self, key: str) -> Generator[Path]:
         """Yield the local path of a stored object.
+
+        Args:
+            key: Key of the object.
+
+        Yields:
+            The path of the file, valid for the duration of the block.
 
         Raises:
             BlobNotFoundError: If nothing is stored under the key.

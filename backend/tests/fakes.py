@@ -10,6 +10,7 @@ from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from multimodal_rag.adapters.postgres.pagination import decode_cursor, encode_cursor
 from multimodal_rag.ingestion.domain import (
     Document,
     ElementKind,
@@ -31,7 +32,10 @@ from multimodal_rag.ingestion.errors import (
     UnsupportedMediaTypeError,
 )
 from multimodal_rag.ingestion.ports import ExtractionBatch, Page, PdfInfo, SearchHit
-from multimodal_rag.shared.errors import ProviderUnavailableError
+from multimodal_rag.shared.errors import (
+    DataInconsistencyError,
+    ProviderUnavailableError,
+)
 
 EMBEDDING_DIMENSIONS = 1024
 
@@ -49,12 +53,61 @@ class FrozenClock:
         self.current += timedelta(seconds=seconds)
 
 
+def pending_job(
+    clock: FrozenClock,
+    *,
+    document_id: uuid.UUID | None = None,
+    correlation_id: str = "req-1",
+    max_attempts: int = 3,
+) -> IngestionJob:
+    """Build a pending job created at the clock's current time."""
+    return IngestionJob.create(
+        job_id=uuid.uuid4(),
+        document_id=document_id or uuid.uuid4(),
+        max_attempts=max_attempts,
+        correlation_id=correlation_id,
+        now=clock.now(),
+    )
+
+
+async def claim_next(jobs: InMemoryJobQueue) -> IngestionJob:
+    """Claim the oldest pending job, failing the test when there is none."""
+    job = await jobs.claim(worker_id="worker-1", lease_seconds=90)
+    assert job is not None and job.lease_token is not None
+    return job
+
+
+async def finish_next(
+    jobs: InMemoryJobQueue, *, succeed: bool, pages: int = 12
+) -> IngestionJob:
+    """Claim the oldest pending job and complete it, or fail it as encrypted."""
+    job = await claim_next(jobs)
+    assert job.lease_token is not None
+    if succeed:
+        return await jobs.complete(
+            job_id=job.id, lease_token=job.lease_token, summary=JobSummary(pages=pages)
+        )
+    return await jobs.fail(
+        job_id=job.id,
+        lease_token=job.lease_token,
+        code=FailureCode.ENCRYPTED_DOCUMENT,
+        reason="The PDF is password protected or encrypted.",
+    )
+
+
+def _offset(parts: list[str]) -> int:
+    [position] = parts
+    return int(position)
+
+
 def _page_of[T](items: list[T], *, limit: int, cursor: str | None) -> Page[T]:
-    start = int(cursor) if cursor else 0
+    # Opaque cursors like the Postgres adapters, so invalid ones fail the same way.
+    start = 0 if cursor is None else decode_cursor(cursor, _offset)
     chunk = items[start : start + limit]
     has_more = start + limit < len(items)
     return Page(
-        items=tuple(chunk), next_cursor=str(start + limit) if has_more else None
+        items=tuple(chunk),
+        next_cursor=encode_cursor(str(start + limit)) if has_more else None,
     )
 
 
@@ -90,9 +143,16 @@ class InMemoryJobQueue:
         self.jobs: dict[uuid.UUID, IngestionJob] = {}
         self.notifications = 0
 
-    async def enqueue(self, job: IngestionJob) -> None:
+    async def enqueue(self, job: IngestionJob) -> tuple[IngestionJob, bool]:
+        for existing in self.jobs.values():
+            if (
+                existing.document_id == job.document_id
+                and existing.status is not JobStatus.FAILED
+            ):
+                return existing, False
         self.jobs[job.id] = job
         self.notifications += 1
+        return job, True
 
     async def get(self, job_id: uuid.UUID) -> IngestionJob:
         try:
@@ -102,20 +162,15 @@ class InMemoryJobQueue:
 
     async def latest_for_document(self, document_id: uuid.UUID) -> IngestionJob | None:
         jobs = [job for job in self.jobs.values() if job.document_id == document_id]
-        return max(jobs, key=lambda job: job.created_at, default=None)
+        return max(jobs, key=lambda job: (job.created_at, job.id), default=None)
 
-    async def claim(
-        self, *, worker_id: str, lease_seconds: int, now: datetime
-    ) -> IngestionJob | None:
+    async def claim(self, *, worker_id: str, lease_seconds: int) -> IngestionJob | None:
+        now = self.clock.now()
         for job in sorted(self.jobs.values(), key=lambda j: j.created_at):
             if not self._claimable(job, now):
                 continue
             if job.attempts_exhausted:
-                self.jobs[job.id] = job.fail(
-                    code=FailureCode.INTERRUPTED_REPEATEDLY,
-                    reason=f"Processing was interrupted {job.attempt} times",
-                    now=now,
-                )
+                self.jobs[job.id] = job.fail_interrupted(now=now)
                 continue
             claimed = job.claim(
                 lease_token=uuid.uuid4(),
@@ -134,6 +189,7 @@ class InMemoryJobQueue:
         self.jobs[job_id] = replace(
             job,
             lease_expires_at=self.clock.now() + timedelta(seconds=lease_seconds),
+            updated_at=self.clock.now(),
         )
 
     async def update_progress(
@@ -172,8 +228,8 @@ class InMemoryJobQueue:
         self.jobs[job_id] = job.fail(code=code, reason=reason, now=self.clock.now())
         return self.jobs[job_id]
 
-    def check_lease(self, job_id: uuid.UUID, lease_token: uuid.UUID) -> None:
-        self._fenced(job_id, lease_token)
+    def check_lease(self, job_id: uuid.UUID, lease_token: uuid.UUID) -> IngestionJob:
+        return self._fenced(job_id, lease_token)
 
     @staticmethod
     def _claimable(job: IngestionJob, now: datetime) -> bool:
@@ -207,7 +263,9 @@ class InMemoryElementRepository:
         elements: Sequence[ExtractedElement],
         relationships: Sequence[ElementRelationship],
     ) -> None:
-        self.queue.check_lease(job_id, lease_token)
+        job = self.queue.check_lease(job_id, lease_token)
+        if job.document_id != document_id:
+            raise DataInconsistencyError(f"Job {job_id} ingests another document")
         self.elements[document_id] = sorted(elements, key=lambda e: e.reading_order)
         self.relationships[document_id] = list(relationships)
 

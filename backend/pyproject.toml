@@ -39,19 +39,24 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "asgi-lifespan>=2.1.0",
     "asyncpg-stubs>=0.31.3",
     "httpx2>=2.13.1",
     "import-linter>=2.15",
+    "jsonschema[format-nongpl]>=4.26.0",
     "mypy>=2.3.1",
     "pre-commit>=4.6.2",
     "pypdf>=6.19.0",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
+    "pyyaml>=6.0.3",
     "reportlab>=5.0.1",
     "respx>=0.23.1",
     "ruff>=0.16.9",
     "testcontainers[postgres,qdrant]>=4.15.0",
+    "types-jsonschema>=4.26.0.20260518",
+    "types-pyyaml>=6.0.12.20260906",
     "types-reportlab>=5.0.0.20260911",
 ]
 
@@ -87,6 +92,16 @@ files = ["src", "tests", "migrations"]
 mypy_path = "src"
 plugins = ["pydantic.mypy"]
 
+# docling-core documents imports from its package root, which re-exports implicitly.
+[[tool.mypy.overrides]]
+module = ["docling_core.*"]
+implicit_reexport = true
+
+# pypdfium2 ships neither type hints nor a py.typed marker.
+[[tool.mypy.overrides]]
+module = ["pypdfium2", "pypdfium2.*"]
+ignore_missing_imports = true
+
 [tool.pydantic-mypy]
 init_forbid_extra = true
 init_typed = true
@@ -97,7 +112,13 @@ testpaths = ["tests"]
 addopts = ["--strict-markers", "--strict-config"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-filterwarnings = ["error"]
+filterwarnings = [
+    "error",
+    # Docling's own stages still touch fields Docling deprecated, such as
+    # force_full_page_ocr and annotations. The project never calls them. The
+    # trailing dot keeps docling_core and docling_parse warnings visible.
+    "ignore::DeprecationWarning:docling\\.",
+]
 markers = [
     "integration: needs real services started with testcontainers",
     "slow: takes more than a few seconds, such as model-backed extraction",

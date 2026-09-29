@@ -27,6 +27,8 @@ def test_codes_are_unique_across_the_hierarchy() -> None:
         errors.ProviderUnavailableError,
         errors.ProviderTimeoutError,
         errors.ProviderResponseError,
+        errors.StorageUnavailableError,
+        errors.StorageTimeoutError,
     ]
     codes = [cls.code for cls in classes]
 
@@ -45,6 +47,15 @@ def test_provider_errors_belong_to_the_provider_family(
     error: type[errors.MultimodalRagError],
 ) -> None:
     assert issubclass(error, errors.ProviderError)
+
+
+@pytest.mark.parametrize(
+    "error", [errors.StorageUnavailableError, errors.StorageTimeoutError]
+)
+def test_transient_storage_errors_belong_to_the_storage_family(
+    error: type[errors.MultimodalRagError],
+) -> None:
+    assert issubclass(error, errors.StorageError)
 
 
 def test_an_error_keeps_its_message() -> None:

@@ -115,13 +115,19 @@ class WorkerSettings(CommonSettings):
         lease_seconds: Lease granted to a worker for one job.
         heartbeat_seconds: Interval between lease renewals.
         poll_seconds: Fallback polling interval when no notification arrives.
+        claim_retry_max_wait_seconds: Longest wait between two failed claims.
+        claim_retry_jitter_seconds: Largest random amount added to each wait
+            between failed claims.
         worker_max_jobs: Jobs processed before the process exits to be restarted.
         extraction_page_batch: Pages converted per extraction batch.
         extraction_threads: CPU threads used by the extraction models.
+        extraction_batch_timeout_seconds: Longest conversion of one page batch.
         docling_artifacts_path: Directory with pre-downloaded extraction models, or
             ``None`` to let the extractor download them on first use.
         liveness_file: File the worker touches to prove it is alive.
         liveness_interval_seconds: Interval between two touches of the liveness file.
+        liveness_max_age_seconds: Age after which the healthcheck reports the worker
+            as stuck.
         figure_description_enabled: Whether figures are described by the model.
         figure_concurrency: Figures described in parallel.
         max_unit_tokens: Token ceiling of a retrieval unit.
@@ -148,12 +154,16 @@ class WorkerSettings(CommonSettings):
     lease_seconds: PositiveInt = 90
     heartbeat_seconds: PositiveInt = 30
     poll_seconds: PositiveFloat = 2.0
+    claim_retry_max_wait_seconds: PositiveFloat = 30.0
+    claim_retry_jitter_seconds: float = Field(default=1.0, ge=0)
     worker_max_jobs: PositiveInt = 20
     extraction_page_batch: PositiveInt = 4
     extraction_threads: PositiveInt = 4
+    extraction_batch_timeout_seconds: PositiveFloat = 120.0
     docling_artifacts_path: Path | None = None
     liveness_file: Path = Path("/tmp/multimodal-rag-worker.alive")
     liveness_interval_seconds: PositiveFloat = 10.0
+    liveness_max_age_seconds: PositiveFloat = 60.0
     figure_description_enabled: bool = True
     figure_concurrency: PositiveInt = 2
     max_unit_tokens: PositiveInt = 480
@@ -162,7 +172,12 @@ class WorkerSettings(CommonSettings):
     near_text_max_points: PositiveFloat = 72.0
 
     @pydantic.model_validator(mode="after")
-    def _heartbeat_fits_in_lease(self) -> Self:
+    def _intervals_fit_their_limits(self) -> Self:
         if self.heartbeat_seconds >= self.lease_seconds:
             raise ValueError("HEARTBEAT_SECONDS must be shorter than LEASE_SECONDS")
+        if self.liveness_interval_seconds >= self.liveness_max_age_seconds:
+            raise ValueError(
+                "LIVENESS_INTERVAL_SECONDS must be shorter than "
+                "LIVENESS_MAX_AGE_SECONDS"
+            )
         return self

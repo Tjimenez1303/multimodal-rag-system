@@ -134,7 +134,7 @@ backend/
 ├── pyproject.toml
 ├── uv.lock
 ├── .python-version
-├── Dockerfile                    # multi-stage; targets api and worker; Docling weights baked
+├── Dockerfile                    # multi-stage; one image for api, worker and migrate; Docling weights baked
 ├── alembic.ini
 ├── migrations/                   # Alembic revisions
 ├── src/multimodal_rag/
@@ -150,12 +150,13 @@ backend/
 │   │   ├── retrieval_units.py    # structure-aware unit builder and figure units
 │   │   ├── relationships.py      # caption, proximity and table-continuation rules
 │   │   ├── figures.py            # relevance filter and identifier verification
-│   │   └── use_cases.py          # SubmitDocument, GetJob, ListDocuments, ListElements, ProcessJob
+│   │   └── use_cases/            # intake.py (SubmitDocument, GetJob), processing.py (ProcessJob),
+│   │                             # library.py (ListDocuments, GetDocument, ListDocumentElements)
 │   ├── adapters/
 │   │   ├── http/                 # FastAPI app, routes, schemas, problem details, request id
 │   │   ├── worker/               # claim loop, heartbeat, process recycling
 │   │   ├── postgres/             # repositories and SKIP LOCKED job queue
-│   │   ├── docling/              # DocumentExtractor and PdfInspector (pypdfium2)
+│   │   ├── docling/              # extractor.py, mapping.py, headings.py, pdfium.py (PdfInspector)
 │   │   ├── openai_compatible/    # FigureDescriber and Embedder over httpx (DMR or Ollama)
 │   │   ├── qdrant/               # VectorIndex with dense and BM25 vectors
 │   │   ├── tokenizer/            # TokenCounter over Hugging Face tokenizers

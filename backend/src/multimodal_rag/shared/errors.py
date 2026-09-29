@@ -69,6 +69,18 @@ class StorageError(MultimodalRagError):
     code = "storage_error"
 
 
+class StorageUnavailableError(StorageError):
+    """A storage service is unreachable or dropped its connection."""
+
+    code = "storage_unavailable"
+
+
+class StorageTimeoutError(StorageError):
+    """A storage service did not answer within its configured timeout."""
+
+    code = "storage_timeout"
+
+
 class ConcurrencyError(MultimodalRagError):
     """An operation conflicts with the current state of a resource."""
 

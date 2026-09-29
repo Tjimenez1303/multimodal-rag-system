@@ -28,6 +28,18 @@ class PageLimitExceededError(ValidationError):
     code = "page_limit_exceeded"
 
 
+class InvalidFileNameError(ValidationError):
+    """The uploaded file name is empty or longer than the documented limit."""
+
+    code = "invalid_file_name"
+
+
+class InvalidCursorError(ValidationError):
+    """A pagination cursor was not issued by the system or is damaged."""
+
+    code = "invalid_cursor"
+
+
 class DocumentNotFoundError(NotFoundError):
     """No document exists with the requested id."""
 
@@ -86,6 +98,12 @@ class IngestionNotCompletedError(ConcurrencyError):
     """The document has no completed ingestion yet."""
 
     code = "ingestion_not_completed"
+
+
+class JobNotLeasedError(DataInconsistencyError):
+    """A job was handed to processing without the lease of a claim."""
+
+    code = "job_not_leased"
 
 
 class InvalidBoundingBoxError(DataInconsistencyError):

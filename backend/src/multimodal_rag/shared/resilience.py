@@ -25,18 +25,19 @@ class RetryPolicy:
     """How often and how patiently a transient failure is retried.
 
     Attributes:
-        attempts: Total attempts, including the first one.
+        attempts: Total attempts, including the first one, or ``None`` for no limit.
         initial_wait_seconds: Wait before the second attempt, before jitter.
-        max_wait_seconds: Longest wait between two attempts.
+        max_wait_seconds: Longest wait between two attempts, jitter included.
         jitter_seconds: Largest random amount added to each wait.
-        timeout_seconds: Total time budget across all attempts and waits.
+        timeout_seconds: Total time budget across all attempts and waits, or
+            ``None`` for no limit.
     """
 
-    attempts: int
+    attempts: int | None
     initial_wait_seconds: float
     max_wait_seconds: float
     jitter_seconds: float
-    timeout_seconds: float
+    timeout_seconds: float | None
 
     @classmethod
     def for_providers(cls, settings: WorkerSettings) -> Self:
@@ -56,27 +57,53 @@ class RetryPolicy:
             timeout_seconds=settings.provider_retry_timeout_seconds,
         )
 
+    @classmethod
+    def for_claims(cls, settings: WorkerSettings) -> Self:
+        """Build the policy of the worker when claiming a job fails.
+
+        The database is the worker's only source of work, so claims are retried
+        until it answers again, starting at the poll interval.
+
+        Args:
+            settings: Worker settings holding the poll interval and the bounds.
+
+        Returns:
+            A policy without attempt or time limits.
+        """
+        return cls(
+            attempts=None,
+            initial_wait_seconds=settings.poll_seconds,
+            max_wait_seconds=settings.claim_retry_max_wait_seconds,
+            jitter_seconds=settings.claim_retry_jitter_seconds,
+            timeout_seconds=None,
+        )
+
 
 async def call_with_retry[T](
-    policy: RetryPolicy, operation: Callable[[], Awaitable[T]]
+    policy: RetryPolicy,
+    operation: Callable[[], Awaitable[T]],
+    *,
+    on: tuple[type[Exception], ...] = TRANSIENT_ERRORS,
 ) -> T:
-    """Run an async operation, retrying it on transient provider errors.
+    """Run an async operation, retrying it on transient errors.
+
+    stamina computes each wait: exponential with jitter, capped at the maximum
+    wait, which it also returns once the exponential no longer fits in a float.
 
     Args:
         policy: Attempts and backoff bounds to apply.
         operation: Zero-argument coroutine factory that performs one attempt.
+        on: Errors worth retrying. Defaults to transient provider errors.
 
     Returns:
         The result of the first successful attempt.
 
     Raises:
-        ProviderUnavailableError: If the service stays unreachable after every
-            attempt.
-        ProviderTimeoutError: If the service keeps timing out after every attempt.
-        Exception: Any non-transient error, raised on the attempt that produced it.
+        Exception: One of the ``on`` errors once the attempts or the time budget
+            run out, or any other error on the attempt that produced it.
     """
     async for attempt in stamina.retry_context(
-        on=TRANSIENT_ERRORS,
+        on=on,
         attempts=policy.attempts,
         timeout=policy.timeout_seconds,
         wait_initial=policy.initial_wait_seconds,

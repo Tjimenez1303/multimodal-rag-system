@@ -160,7 +160,7 @@ the server).
 |---|---|
 | File is a PDF by content and within the size and page limits (FR-002) | API, through `PdfInspector` before any job exists |
 | One document per `sha256`, including concurrent uploads (FR-016) | `UNIQUE(sha256)` with `ON CONFLICT DO NOTHING` |
-| Forward-only job states (FR-004) | Domain `IngestionJob` transition methods. SQL updates filter on the expected current status |
+| Forward-only job states (FR-004) | Domain `IngestionJob` transition methods. Every SQL write first locks the job row by id and current lease token, then saves the transition the domain computed |
 | At most `max_attempts` attempts, never two workers at once (FR-025) | Claim query, lease token and fencing on every write |
 | Every element has a page and a box (FR-008, SC-004) | Domain constructor. The adapter raises `DataInconsistencyError` otherwise |
 | No duplicates on re-processing (FR-015, SC-008) | Deterministic element and point ids. Elements are replaced in one fenced transaction |

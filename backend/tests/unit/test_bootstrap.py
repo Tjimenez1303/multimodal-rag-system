@@ -2,6 +2,8 @@ import asyncio
 import io
 import json
 import logging
+import os
+import time
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -58,6 +60,16 @@ def test_api_reports_liveness_and_an_unreachable_database(
     assert ready.json()["detail"] == "Unavailable: database"
 
 
+def test_api_answers_503_while_the_database_is_unreachable(
+    api_env: pytest.MonkeyPatch,
+) -> None:
+    with TestClient(bootstrap.create_api_app()) as client:
+        response = client.get("/api/v1/jobs/7f9d1c3e-0b1a-4c55-9a3e-6f0f6a8e2b11")
+
+    assert response.status_code == 503
+    assert response.json()["code"] == "storage_unavailable"
+
+
 def test_api_refuses_to_start_without_required_settings(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -86,7 +98,7 @@ async def test_worker_logs_readiness_and_stops_on_request(
     await bootstrap.run_worker(stop=stop)
 
     events = [json.loads(line)["message"] for line in stream.getvalue().splitlines()]
-    assert events[0].startswith("worker ready")
+    assert events[0].startswith("worker starting")
     assert "ai/qwen3.5:9b" in events[0]
     assert events[-1] == "worker stopped"
 
@@ -114,3 +126,39 @@ def test_main_serves_the_api_with_uvicorn_and_json_logging(
 def test_main_rejects_unknown_roles() -> None:
     with pytest.raises(SystemExit):
         main(["scheduler"])
+
+
+@pytest.fixture
+def worker_env(api_env: pytest.MonkeyPatch, tmp_path: Path) -> Path:
+    for name, value in WORKER_ENV.items():
+        api_env.setenv(name, value)
+    liveness = tmp_path / "alive"
+    api_env.setenv("LIVENESS_FILE", str(liveness))
+    api_env.setenv("LIVENESS_MAX_AGE_SECONDS", "30")
+    return liveness
+
+
+def test_worker_health_passes_while_the_liveness_file_is_fresh(
+    worker_env: Path,
+) -> None:
+    worker_env.touch()
+
+    with pytest.raises(SystemExit) as exit_info:
+        main(["worker-health"])
+
+    assert exit_info.value.code == 0
+
+
+@pytest.mark.parametrize("age_seconds", [None, 31])
+def test_worker_health_fails_when_the_liveness_file_is_stale_or_missing(
+    worker_env: Path, age_seconds: int | None
+) -> None:
+    if age_seconds is not None:
+        worker_env.touch()
+        stale = time.time() - age_seconds
+        os.utime(worker_env, (stale, stale))
+
+    with pytest.raises(SystemExit) as exit_info:
+        main(["worker-health"])
+
+    assert exit_info.value.code == 1

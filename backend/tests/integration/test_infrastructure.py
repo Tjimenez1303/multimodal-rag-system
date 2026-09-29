@@ -1,10 +1,12 @@
 import asyncio
 import logging
+import re
 import uuid
 from datetime import UTC, datetime
 
 import asyncpg
 import httpx
+import sqlalchemy as sa
 from alembic import command
 from alembic.autogenerate import compare_metadata
 from alembic.config import Config
@@ -14,6 +16,15 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from multimodal_rag.adapters.postgres.engine import check_database
 from multimodal_rag.adapters.postgres.tables import documents, ingestion_jobs, metadata
+from multimodal_rag.ingestion.domain import (
+    DescriptionStatus,
+    ElementKind,
+    FailureCode,
+    JobStage,
+    JobStatus,
+    RelationshipKind,
+    TextOrigin,
+)
 from tests.integration.conftest import BACKEND_ROOT
 
 
@@ -90,3 +101,42 @@ def test_running_migrations_keeps_application_loggers_enabled(
     command.upgrade(config, "head")
 
     assert not application_logger.disabled
+
+
+ENUM_CHECKS = {
+    "ck_ingestion_jobs_valid_status": JobStatus,
+    "ck_ingestion_jobs_valid_stage": JobStage,
+    "ck_ingestion_jobs_valid_failure_code": FailureCode,
+    "ck_extracted_elements_valid_kind": ElementKind,
+    "ck_extracted_elements_valid_origin": TextOrigin,
+    "ck_extracted_elements_valid_description_status": DescriptionStatus,
+    "ck_element_relationships_valid_kind": RelationshipKind,
+}
+
+
+async def test_check_constraints_accept_exactly_the_domain_enum_values(
+    engine: AsyncEngine,
+) -> None:
+    # Alembic autogenerate does not compare CHECK constraints, so a new enum member
+    # without a migration would only fail at insert time.
+    async with engine.connect() as connection:
+        rows = await connection.execute(
+            sa.text(
+                "SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint "
+                "WHERE conname = ANY(:names)"
+            ),
+            {"names": list(ENUM_CHECKS)},
+        )
+        definitions: dict[str, str] = dict(rows.all())
+
+    for name, enum in ENUM_CHECKS.items():
+        allowed = set(re.findall(r"'([a-z_]+)'::", definitions[name]))
+        assert allowed == {member.value for member in enum}, name
+
+
+def test_migrations_downgrade_to_base_and_upgrade_again(database_url: str) -> None:
+    config = Config(str(BACKEND_ROOT / "alembic.ini"))
+    config.set_main_option("sqlalchemy.url", database_url)
+
+    command.downgrade(config, "base")
+    command.upgrade(config, "head")

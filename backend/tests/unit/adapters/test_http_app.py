@@ -2,13 +2,17 @@ import asyncio
 import io
 import json
 import logging
+import time
 from collections.abc import Iterator
 
 import pytest
 from fastapi import APIRouter, FastAPI
 from fastapi.testclient import TestClient
+from starlette.types import Message, Receive, Scope, Send
 
 from multimodal_rag.adapters.http.app import create_app
+from multimodal_rag.adapters.http.body_limit import BodyLimits, BodySizeLimitMiddleware
+from multimodal_rag.adapters.http.dependencies import RequestIdDep
 from multimodal_rag.adapters.http.problems import (
     PROBLEM_CODE_PATTERN,
     http_problem_code,
@@ -45,6 +49,16 @@ async def raise_inconsistency() -> None:
 @probe_router.get("/probe/crash")
 async def crash() -> None:
     raise RuntimeError("unexpected")
+
+
+@probe_router.get("/probe/request-id")
+async def echo_request_id(request_id: RequestIdDep) -> dict[str, str]:
+    return {"request_id": request_id}
+
+
+@probe_router.post("/probe/upload")
+async def accept_upload() -> dict[str, str]:
+    return {"status": "stored"}
 
 
 @probe_router.get("/probe/items/{item_id}")
@@ -223,6 +237,8 @@ def test_plain_http_errors_use_status_phrase_codes(client: TestClient) -> None:
     response = client.post("/health/live")
 
     assert response.status_code == 405
+    # RFC 9110 section 15.5.6: a 405 must list the methods the resource allows.
+    assert response.headers["allow"] == "GET"
     assert response.json()["code"] == "method_not_allowed"
     assert response.json()["title"] == "Method Not Allowed"
 
@@ -322,3 +338,78 @@ def test_health_probes_are_logged_below_info(
 
     [line] = request_lines(stream)
     assert line["level"] == "debug"
+
+
+def test_readiness_probes_run_concurrently() -> None:
+    app = create_app(
+        readiness_checks={"database": hanging, "blob_storage": hanging},
+        readiness_timeout_seconds=0.3,
+    )
+
+    with TestClient(app) as client:
+        started = time.perf_counter()
+        response = client.get("/health/ready")
+        elapsed = time.perf_counter() - started
+
+    assert response.json()["detail"] == "Unavailable: blob_storage, database"
+    assert elapsed < 0.55
+
+
+async def test_a_content_length_that_is_not_ascii_digits_is_ignored() -> None:
+    reached: list[bool] = []
+
+    async def app(scope: Scope, receive: Receive, send: Send) -> None:
+        reached.append(True)
+
+    async def receive() -> Message:
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(message: Message) -> None:
+        return None
+
+    scope: Scope = {
+        "type": "http",
+        "method": "POST",
+        "path": "/",
+        "headers": [(b"content-length", "\u00b2".encode("latin-1"))],
+    }
+    limits = BodyLimits(default_bytes=10)
+    await BodySizeLimitMiddleware(app, limits=limits)(scope, receive, send)
+
+    assert reached == [True]
+
+
+def test_an_upload_route_works_without_the_request_id_middleware() -> None:
+    app = create_app(readiness_checks={}, routers=(probe_router,))
+
+    with TestClient(app) as client:
+        response = client.get("/probe/request-id")
+
+    assert response.status_code == 200
+    assert len(response.json()["request_id"]) == 32
+
+
+def test_an_unexpected_error_is_answered_once_and_not_raised_again() -> None:
+    # The problem handler already logged it with the request id, so re-raising
+    # would make the server log the same traceback a second time.
+    app = create_app(readiness_checks={}, routers=(probe_router,))
+
+    with TestClient(served(app)) as client:
+        response = client.get("/probe/crash")
+
+    assert response.status_code == 500
+
+
+def test_routes_without_their_own_limit_get_the_default_body_limit() -> None:
+    app = create_app(
+        readiness_checks={},
+        routers=(probe_router,),
+        body_limits=BodyLimits(default_bytes=10, by_path={"/probe/upload": 1_000}),
+    )
+
+    with TestClient(served(app)) as client:
+        small_route = client.post("/probe/items/1", content=b"x" * 100)
+        upload_route = client.post("/probe/upload", content=b"x" * 100)
+
+    assert small_route.status_code == 413
+    assert upload_route.status_code == 200

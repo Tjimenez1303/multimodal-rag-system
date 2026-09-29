@@ -90,3 +90,16 @@ def test_heartbeat_must_be_shorter_than_the_lease(
 
     with pytest.raises(ConfigurationError, match="HEARTBEAT_SECONDS"):
         WorkerSettings.load()
+
+
+def test_liveness_interval_must_be_shorter_than_its_maximum_age(
+    clean_env: pytest.MonkeyPatch,
+) -> None:
+    set_env(
+        clean_env,
+        WORKER_ENV
+        | {"LIVENESS_INTERVAL_SECONDS": "60", "LIVENESS_MAX_AGE_SECONDS": "60"},
+    )
+
+    with pytest.raises(ConfigurationError, match="LIVENESS_INTERVAL_SECONDS"):
+        WorkerSettings.load()

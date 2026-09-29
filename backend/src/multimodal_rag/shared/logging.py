@@ -24,6 +24,10 @@ _SHARED_PROCESSORS: list[structlog.types.Processor] = [
     structlog.processors.StackInfoRenderer(),
 ]
 
+# Libraries that log every conversion step at INFO. Below DEBUG only their warnings
+# and errors are kept, because the worker already logs each job transition.
+STEP_BY_STEP_LOGGERS = ("docling",)
+
 # Fields of the per-request log line, passed through the stdlib ``extra`` argument.
 # Named after the OpenTelemetry HTTP semantic conventions.
 REQUEST_LOG_FIELDS = (
@@ -42,7 +46,8 @@ def configure_logging(
     Args:
         log_format: ``json`` renders one JSON object per record, ``console`` renders
             human-readable lines.
-        level: Minimum level of emitted records, such as ``INFO``.
+        level: Minimum level of emitted records, such as ``INFO``. Libraries in
+            ``STEP_BY_STEP_LOGGERS`` emit only warnings unless it is ``DEBUG``.
         stream: Destination of the rendered records. Defaults to standard output.
     """
     renderer: structlog.types.Processor = (
@@ -70,6 +75,9 @@ def configure_logging(
     root = logging.getLogger()
     root.handlers = [handler]
     root.setLevel(level)
+    verbose = logging.getLevelNamesMapping()[level.upper()] <= logging.DEBUG
+    for name in STEP_BY_STEP_LOGGERS:
+        logging.getLogger(name).setLevel(logging.NOTSET if verbose else logging.WARNING)
 
     structlog.configure(
         processors=[

@@ -53,6 +53,46 @@ stalled worker can never overwrite a job another worker took over. Workers wake 
 Its known limits (dead tuples, autovacuum tuning, polling load) matter at millions of jobs
 per day, far above this workload.
 
+**Implementation details**:
+
+- **One active job per document.** A partial unique index on
+  `ingestion_jobs(document_id) WHERE status <> 'failed'` makes concurrent uploads of
+  identical content share one job, with `INSERT … ON CONFLICT … DO NOTHING` falling back to
+  the existing job, as PostgreSQL documents for partial unique indexes (example 11.3).
+  GitLab uses the same pattern for "one pending row per entity". The predicate is rendered
+  as a literal, because a bound parameter stops PostgreSQL from matching the partial index
+  once asyncpg switches to a generic plan (MagicStack/asyncpg#1137).
+- **Clock.** Leases, claims and job timestamps written by the worker use the
+  database's `now()`, the one clock every replica shares, as River does, so clock skew
+  between workers cannot expire a lease early or keep a dead one alive. The claim that
+  would exceed the attempt limit fails the job with `interrupted_repeatedly` instead.
+- **Failed claims.** While the database is unavailable, the worker retries its claim
+  with stamina, the library of every other retry in the system, without an attempt or
+  time limit: exponential backoff from `POLL_SECONDS` up to
+  `CLAIM_RETRY_MAX_WAIT_SECONDS`, plus up to `CLAIM_RETRY_JITTER_SECONDS` of jitter.
+  stamina caps the wait with the jitter included and falls back to the maximum wait
+  once the exponential no longer fits in a float. Any other claim error is not
+  transient, so the worker stops and compose restarts it.
+- **Wake-ups.** The worker listens on a dedicated asyncpg connection outside the
+  SQLAlchemy pool, reconnects when it is lost, and still polls every `POLL_SECONDS`, as
+  Prefect's Postgres listener and procrastinate do. A notification is only a wake-up
+  signal, so a missed one delays a job by one poll interval at most.
+- **Database outages.** The Postgres adapter translates refused or lost connections
+  (SQLSTATE class 08 and 57P0x) into `StorageUnavailableError`, and statement or pool
+  timeouts (SQLSTATE 57014) into `StorageTimeoutError`. The API answers both with 503
+  (RFC 9110 §15.6.4), and the worker abandons the attempt instead of failing the job.
+  asyncpg raises a refused connection as a plain `OSError` that SQLAlchemy does not wrap,
+  so the translation runs around every repository call rather than in the engine's
+  `handle_error` event. Other database errors are defects and stay internal errors.
+
+Implementation sources:
+
+- https://www.postgresql.org/docs/current/indexes-partial.html
+- https://www.postgresql.org/docs/current/errcodes-appendix.html
+- https://github.com/MagicStack/asyncpg/issues/1137
+- https://github.com/PrefectHQ/prefect/blob/main/src/prefect/server/utilities/postgres_listener.py
+- https://docs.sqlalchemy.org/en/21/core/pooling.html#dealing-with-disconnects
+
 **Alternatives considered**:
 
 - **Celery with Redis.** Kombu emulates acknowledgements with a fixed `visibility_timeout`
@@ -123,22 +163,35 @@ Sources: https://github.com/minio/minio, https://github.com/seaweedfs/seaweedfs
 
 ## 5. Upload handling
 
-**Decision**: FastAPI 0.141 with `multipart/form-data` uploads. The endpoint rejects early
-when `Content-Length` exceeds 200 MB. It then copies the spooled upload into blob storage
-in chunks, updating a SHA-256 hash and a byte counter on the way. A `PdfInspector` port
-backed by pypdfium2 validates the file by content and reads its page count before the job
-is created.
+**Decision**: FastAPI 0.141 with `multipart/form-data` uploads. A pure ASGI middleware
+rejects the request with 413 problem details when `Content-Length` exceeds the upload limit
+plus 64 KiB of multipart overhead, before the body is read. It also counts the bytes of
+bodies sent without that header. The route then streams the spooled upload to
+`SubmitDocument` in 1 MiB chunks, which hashes and counts them while blob storage writes
+them. A `PdfInspector` port backed by pypdfium2 validates the file by content and reads
+its page count before the job is created. The upload answers 202 while the job is pending
+or processing and 200 when identical content already completed, with a `Location` header
+that points to the job status (RFC 9110 §15.3.3). Routes that take an id in the path also
+answer 400 when the id is not a UUID, and the contract declares it.
 
 **Rationale**: multipart is what browsers and HTTP clients send by default. Starlette spools
 the file to disk while parsing, so the extra hashing pass reads from local disk, which
 takes well under a second for 200 MB and keeps SC-001 within reach. pypdfium2 is already a
 Docling dependency and needs no rendering to count pages.
 
+FastAPI parses the whole multipart body before any dependency or route runs, so the size
+check cannot live in the route. Starlette's `RequestBodyLimitMiddleware` answers in plain
+text, which breaks the problem details contract, so the project follows the same pure ASGI
+approach with its own response, as Polar's `MaxBodySizeMiddleware` does. Starlette
+recommends pure ASGI middleware over `BaseHTTPMiddleware` for streamed bodies.
+
 **Alternatives considered**: a raw `application/pdf` body read with `request.stream()`,
 which hashes in a single pass but is less conventional for clients.
 
 Sources: https://fastapi.tiangolo.com/tutorial/request-files/,
-https://starlette.dev/requests/, https://pypi.org/project/pypdfium2/
+https://starlette.dev/requests/, https://starlette.dev/middleware/,
+https://github.com/polarsource/polar/blob/main/server/polar/middlewares.py,
+https://www.rfc-editor.org/rfc/rfc9110.html, https://pypi.org/project/pypdfium2/
 
 ## 6. Document extraction and OCR
 
@@ -178,6 +231,47 @@ offline.
 If the benchmark shows weak tables or scanned pages, a later iteration can route only
 those crops to PaddleOCR-VL-1.6 on the host, keeping Docling's page and box.
 
+**Implementation details**:
+
+- **One image.** The API, the worker and the migrations share one image and differ only
+  in their command, as Mastodon, Sentry self-hosted and Dify do. The Docling models (732 MB)
+  are downloaded at build time into `/opt/docling-models`, owned by the non-root user, as
+  docling-serve's Containerfile does, and `DOCLING_ARTIFACTS_PATH` points to them. The
+  worker loads them offline in about 5 seconds. The API process never imports Docling,
+  because loading it pulls torch and about 300 MB of memory.
+- **System libraries.** RapidOCR depends on the full `opencv-python` build, which links X11,
+  GL and GLib at import time. The image installs `libgl1`, `libglib2.0-0t64`, `libice6`,
+  `libsm6`, `libx11-6`, `libxcb1` and `libxext6`, following Docling's own Dockerfile. The
+  image weighs 4.3 GB.
+- **Page batches.** One `DocumentConverter` per worker converts `EXTRACTION_PAGE_BATCH`
+  pages at a time with `page_range`, as docling-serve's split processing example does.
+  Page numbers stay absolute across batches. Model and parser threads both come from
+  `EXTRACTION_THREADS`, because the docling-parse backend reads `parser_threads` and ignores
+  the pipeline's accelerator options.
+- **Heading levels.** Docling's heading hierarchy renumbers levels inside each conversion,
+  so batches of one document would disagree. The adapter applies the precedence Docling
+  documents, the PDF outline first and section numbering second, once for the whole
+  document. An outline with a single top-level bookmark is treated as a wrapper.
+- **Text origin.** Docling exposes no OCR flag per item, and its OCR also runs inside
+  figures on digital pages. A page whose text layer has no characters, read with
+  pypdfium2, marks its text elements `recognized`, with the page's `ocr_score` from
+  Docling's confidence scores as their confidence.
+- **Unreadable files.** Docling reports encrypted and damaged PDFs with the same
+  `ConversionError`, so the adapter first opens the file with pypdfium2, whose error codes
+  distinguish a password (`FPDF_ERR_PASSWORD`) from a damaged file.
+- **PDFium threads.** PDFium is not thread-safe, not even across documents, so every
+  pypdfium2 call in the API and the worker holds Docling's `pypdfium2_lock`, the lock
+  Docling takes for its own PDFium calls.
+- **Batch timeout.** Docling recommends a conversion timeout for production, 90 to 120
+  seconds. Each page batch gets `EXTRACTION_BATCH_TIMEOUT_SECONDS` (120), and a batch
+  Docling returns as a partial success, after a timeout or a failed page, fails the job
+  as damaged instead of silently missing pages.
+- **Nested text.** Docling nests the text it finds inside a figure or a table cell under
+  that item at any depth, for example in a list group. That text becomes the figure's
+  labels or stays part of the table, and only captions and footnotes become elements.
+- **Logs.** Docling logs every conversion step at INFO. Below `LOG_LEVEL=DEBUG` only its
+  warnings and errors are kept, since the worker logs each job transition itself.
+
 Sources:
 
 - Docling:
@@ -186,6 +280,12 @@ Sources:
   - https://github.com/docling-project/docling/blob/main/docling/models/base_ocr_model.py
   - https://github.com/docling-project/docling-core/blob/main/docling_core/types/doc/base.py
   - https://arxiv.org/abs/2501.17887
+  - https://docling-project.github.io/docling/usage/advanced_options/
+  - https://docling-project.github.io/docling/usage/heading_levels/
+  - https://docling-project.github.io/docling/concepts/confidence_scores/
+  - https://github.com/docling-project/docling/blob/main/Dockerfile
+  - https://github.com/docling-project/docling-serve/blob/main/Containerfile
+  - https://github.com/docling-project/docling-serve/blob/main/docs/examples.md
 - Benchmarks and alternatives:
   - https://github.com/opendatalab/OmniDocBench
   - https://huggingface.co/PaddlePaddle/PaddleOCR-VL-1.6

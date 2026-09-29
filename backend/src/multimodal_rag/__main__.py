@@ -1,24 +1,25 @@
-"""Command-line entry point: ``python -m multimodal_rag {api,worker}``."""
+"""Command-line entry point: ``python -m multimodal_rag {api,worker,worker-health}``."""
 
 import argparse
 import asyncio
+import sys
 from collections.abc import Sequence
 
 import uvicorn
 
-from multimodal_rag.bootstrap import run_worker
+from multimodal_rag.bootstrap import run_worker, worker_is_alive
 from multimodal_rag.shared.config import ApiSettings
 
 
 def main(argv: Sequence[str] | None = None) -> None:
-    """Start the API or the worker, as selected on the command line.
+    """Start the API or the worker, or check the worker's health.
 
     Args:
         argv: Command-line arguments without the program name. Defaults to
             ``sys.argv[1:]``.
     """
     parser = argparse.ArgumentParser(prog="python -m multimodal_rag")
-    parser.add_argument("role", choices=["api", "worker"])
+    parser.add_argument("role", choices=["api", "worker", "worker-health"])
     role = parser.parse_args(argv).role
     if role == "api":
         settings = ApiSettings.load()
@@ -33,8 +34,10 @@ def main(argv: Sequence[str] | None = None) -> None:
             access_log=False,
             proxy_headers=False,
         )
-    else:
+    elif role == "worker":
         asyncio.run(run_worker())
+    else:
+        sys.exit(0 if worker_is_alive() else 1)
 
 
 if __name__ == "__main__":

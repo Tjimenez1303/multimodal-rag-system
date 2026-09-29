@@ -7,14 +7,17 @@ extension member and, for client errors, in ``detail``.
 
 import logging
 import re
+from collections.abc import Mapping
 from http import HTTPStatus
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from multimodal_rag.adapters.http.request_context import request_id_of
 from multimodal_rag.ingestion.errors import (
     FileTooLargeError,
     PageLimitExceededError,
@@ -35,7 +38,6 @@ from multimodal_rag.shared.errors import (
 logger = logging.getLogger(__name__)
 
 PROBLEM_MEDIA_TYPE = "application/problem+json"
-PROBLEM_TYPE = "about:blank"
 # Same pattern as Problem.code in the OpenAPI contract.
 PROBLEM_CODE_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
 NOT_READY_CODE = "not_ready"
@@ -55,6 +57,58 @@ _STATUS_BY_ERROR: dict[type[MultimodalRagError], int] = {
     DataInconsistencyError: 500,
     MultimodalRagError: 500,
 }
+
+
+class ProblemHTTPException(StarletteHTTPException):
+    """HTTP error raised outside a route that carries its own problem code.
+
+    Middleware raises it while the request body is being read, where FastAPI only
+    propagates HTTP exceptions.
+
+    Args:
+        status_code: HTTP status code.
+        code: Stable machine-readable code.
+        detail: Explanation safe to share with the client.
+    """
+
+    def __init__(self, *, status_code: int, code: str, detail: str) -> None:
+        super().__init__(status_code=status_code, detail=detail)
+        self.code = code
+
+
+class Problem(BaseModel):
+    """RFC 9457 problem details, the body of every error response.
+
+    Attributes:
+        type: Always ``about:blank``, so ``title`` is the phrase of the status.
+        title: Standard phrase of the HTTP status.
+        status: HTTP status code.
+        detail: Explanation of this occurrence, sent for client errors only.
+        instance: Path of the request.
+        code: Stable machine-readable code in lowercase snake case.
+        request_id: Correlation id of the request.
+    """
+
+    type: Literal["about:blank"] = "about:blank"
+    title: str
+    status: int
+    detail: str | None = None
+    instance: str
+    code: str = Field(pattern=PROBLEM_CODE_PATTERN.pattern)
+    request_id: str
+
+
+def problem_responses(*statuses: int) -> dict[int | str, dict[str, Any]]:
+    """Document problem responses for a route's ``responses`` argument.
+
+    Args:
+        statuses: HTTP statuses the route can answer with problem details.
+
+    Returns:
+        The OpenAPI response entries, whose media type ``create_app`` rewrites to
+        ``application/problem+json``.
+    """
+    return {status: {"model": Problem} for status in statuses}
 
 
 def status_for(error: MultimodalRagError) -> int:
@@ -90,6 +144,7 @@ def problem_response(
     status: int,
     code: str,
     detail: str | None = None,
+    headers: Mapping[str, str] | None = None,
 ) -> JSONResponse:
     """Build an RFC 9457 response.
 
@@ -98,21 +153,25 @@ def problem_response(
         status: HTTP status code.
         code: Stable machine-readable code.
         detail: Explanation specific to this occurrence, if safe to share.
+        headers: Headers the status requires, such as ``Allow`` on a 405.
 
     Returns:
         A JSON response with the ``application/problem+json`` media type.
     """
-    body: dict[str, Any] = {
-        "type": PROBLEM_TYPE,
-        "title": HTTPStatus(status).phrase,
-        "status": status,
-        "code": code,
-        "instance": request.url.path,
-        "request_id": getattr(request.state, "request_id", ""),
-    }
-    if detail:
-        body["detail"] = detail
-    return JSONResponse(body, status_code=status, media_type=PROBLEM_MEDIA_TYPE)
+    problem = Problem(
+        title=HTTPStatus(status).phrase,
+        status=status,
+        detail=detail or None,
+        instance=request.url.path,
+        code=code,
+        request_id=request_id_of(request),
+    )
+    return JSONResponse(
+        problem.model_dump(exclude_none=True),
+        status_code=status,
+        media_type=PROBLEM_MEDIA_TYPE,
+        headers=headers,
+    )
 
 
 async def _handle_domain_error(request: Request, error: Exception) -> JSONResponse:
@@ -140,10 +199,15 @@ async def _handle_validation_error(request: Request, error: Exception) -> JSONRe
 
 async def _handle_http_error(request: Request, error: Exception) -> JSONResponse:
     assert isinstance(error, StarletteHTTPException)
+    if isinstance(error, ProblemHTTPException):
+        return problem_response(
+            request, status=error.status_code, code=error.code, detail=error.detail
+        )
     return problem_response(
         request,
         status=error.status_code,
         code=http_problem_code(error.status_code),
+        headers=error.headers,
     )
 
 

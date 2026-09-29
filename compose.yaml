@@ -106,12 +106,8 @@ services:
         endpoint_var: EMBEDDER_URL
         model_var: EMBEDDER_MODEL
     healthcheck:
-      # The worker touches its liveness file every 10 s; older than 60 s means stuck.
-      test:
-        - CMD
-        - python
-        - -c
-        - "import os, sys, time; sys.exit(time.time() - os.path.getmtime('/tmp/multimodal-rag-worker.alive') > 60)"
+      # Healthy while the worker's liveness file is younger than LIVENESS_MAX_AGE_SECONDS.
+      test: ["CMD", "python", "-m", "multimodal_rag", "worker-health"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -121,7 +117,12 @@ services:
         condition: service_completed_successfully
       qdrant:
         condition: service_healthy
-    # The worker exits after WORKER_MAX_JOBS jobs to release memory; compose restarts it.
+    # A stop cancels the running attempt, whose page batch can take up to
+    # EXTRACTION_BATCH_TIMEOUT_SECONDS (120 s) to return. The default 10 s grace
+    # would kill the worker before it exits cleanly.
+    stop_grace_period: 150s
+    # The worker also exits after WORKER_MAX_JOBS jobs to release memory, and is
+    # restarted here.
     restart: unless-stopped
 
 models:

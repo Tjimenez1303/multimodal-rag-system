@@ -528,6 +528,27 @@ class IngestionJob:
             updated_at=now,
         )
 
+    def fail_interrupted(self, *, now: datetime) -> IngestionJob:
+        """Finish a job whose every allowed attempt was interrupted.
+
+        Args:
+            now: Failure time.
+
+        Returns:
+            The job in ``failed`` with ``interrupted_repeatedly``.
+
+        Raises:
+            InvalidJobTransitionError: If the job is already terminal.
+        """
+        return self.fail(
+            code=FailureCode.INTERRUPTED_REPEATEDLY,
+            reason=(
+                "Processing was interrupted repeatedly. "
+                f"Attempts used: {self.attempt} of {self.max_attempts}."
+            ),
+            now=now,
+        )
+
     def _require_open(self, action: str) -> None:
         if self.is_terminal:
             raise InvalidJobTransitionError(
@@ -617,6 +638,35 @@ class ExtractedElement:
             raise InvalidElementError(
                 f"Element {self.id}: image fields on a {self.kind}"
             )
+
+    @staticmethod
+    def image_key_for(*, document_id: uuid.UUID, element_id: uuid.UUID) -> str:
+        """Return the storage key of an image element's crop.
+
+        Args:
+            document_id: Document the image belongs to.
+            element_id: Id of the image element.
+
+        Returns:
+            The key ``figures/{document_id}/{element_id}.png``.
+        """
+        return f"figures/{document_id}/{element_id}.png"
+
+    def with_image_key(self, image_key: str) -> ExtractedElement:
+        """Return the image with the storage key of its crop.
+
+        Args:
+            image_key: Key under which the crop is stored.
+
+        Returns:
+            A copy of the element that references its crop.
+
+        Raises:
+            InvalidElementError: If the element is not an image.
+        """
+        if self.kind is not ElementKind.IMAGE:
+            raise InvalidElementError(f"Element {self.id} is not an image")
+        return replace(self, image_key=image_key)
 
     def with_description(
         self,

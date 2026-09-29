@@ -19,12 +19,17 @@ from multimodal_rag.ingestion.domain import (
 metadata = sa.MetaData(
     naming_convention={
         "ix": "ix_%(table_name)s_%(column_0_N_name)s",
-        "uq": "uq_%(table_name)s_%(column_0_name)s",
+        "uq": "uq_%(table_name)s_%(column_0_N_name)s",
         "ck": "ck_%(table_name)s_%(constraint_name)s",
         "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
         "pk": "pk_%(table_name)s",
     }
 )
+
+
+# Literal SQL, because a bound parameter in an ON CONFLICT predicate stops PostgreSQL
+# from matching the partial index once it switches to a generic plan.
+ACTIVE_JOB_PREDICATE = "status <> 'failed'"
 
 
 def _one_of(column: str, values: type[StrEnum]) -> str:
@@ -98,6 +103,21 @@ ingestion_jobs = sa.Table(
     ),
     sa.Index(None, "status", "lease_expires_at"),
     sa.Index(None, "document_id", "created_at"),
+    # Serves the claim, which takes the oldest pending job first.
+    sa.Index(
+        "ix_ingestion_jobs_pending_created_at",
+        "created_at",
+        "id",
+        postgresql_where=sa.text("status = 'pending'"),
+    ),
+    # At most one job that has not failed per document, so concurrent uploads of
+    # identical content share one job.
+    sa.Index(
+        "uq_ingestion_jobs_document_id_active",
+        "document_id",
+        unique=True,
+        postgresql_where=sa.text(ACTIVE_JOB_PREDICATE),
+    ),
 )
 
 extracted_elements = sa.Table(
@@ -149,7 +169,8 @@ extracted_elements = sa.Table(
         "confidence IS NULL OR (confidence >= 0 AND confidence <= 1)",
         name="confidence_in_range",
     ),
-    sa.Index(None, "document_id", "reading_order"),
+    # Keyset pagination of elements relies on one element per reading position.
+    sa.UniqueConstraint("document_id", "reading_order"),
     sa.Index(None, "document_id", "page"),
 )
 

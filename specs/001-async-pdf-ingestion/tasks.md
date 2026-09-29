@@ -197,65 +197,81 @@ code yet beyond a package skeleton and one smoke test.
 
 > Write these tests first and confirm they fail before implementation.
 
-- [ ] T034 [P] [US1] Unit tests for `SubmitDocument` in `backend/tests/unit/ingestion/test_submit_document.py`, using the fakes:
+- [x] T034 [P] [US1] Unit tests for `SubmitDocument` in `backend/tests/unit/ingestion/test_submit_document.py`, using the fakes:
   - A new file creates a document and a pending job.
   - Identical content that already completed returns the existing ids with `already_ingested=true`.
+  - Identical content still pending or processing returns the existing ids with `already_ingested=false`, and a job enqueued concurrently for the same document is reused.
   - Identical content whose last job failed creates a new job.
   - Rejections for a non-PDF, for more than 200 MB and for more than 500 pages create no job.
-- [ ] T035 [P] [US1] Unit tests for `GetJob` and for the job progress update in `backend/tests/unit/ingestion/test_get_job.py`, covering unknown ids (`JobNotFoundError`) and stage and page progress.
-- [ ] T036 [P] [US1] Unit tests for `ProcessJob`, stages 1 to 2, in `backend/tests/unit/ingestion/test_process_job_extraction.py`:
+- [x] T035 [P] [US1] Unit tests for `GetJob` and for the job progress update in `backend/tests/unit/ingestion/test_get_job.py`, covering unknown ids (`JobNotFoundError`) and stage and page progress.
+- [x] T036 [P] [US1] Unit tests for `ProcessJob`, stages 1 to 2, in `backend/tests/unit/ingestion/test_process_job_extraction.py`:
   - Extraction progress is reported per page batch, and elements are persisted with page and box.
   - Encrypted, corrupt and no-text documents end `failed` with the matching `FailureCode` and no retry.
   - A write with a stale lease token aborts.
-- [ ] T037 [P] [US1] Contract tests in `backend/tests/contract/test_upload_and_job_contract.py`. They validate `POST /api/v1/documents` (202, 200 and every error) and `GET /api/v1/jobs/{job_id}` against `specs/001-async-pdf-ingestion/contracts/openapi.yaml`, using the FastAPI test client with fakes injected through bootstrap overrides.
-- [ ] T038 [P] [US1] Integration tests for the Postgres adapters in `backend/tests/integration/test_postgres_documents_and_jobs.py`:
+- [x] T037 [P] [US1] Contract tests in `backend/tests/contract/test_upload_and_job_contract.py`. They validate `POST /api/v1/documents` (202, 200 and every error) and `GET /api/v1/jobs/{job_id}` against `specs/001-async-pdf-ingestion/contracts/openapi.yaml`:
+  - The FastAPI test client runs the app from `create_app` with the ingestion router, and the use case providers are replaced by fakes through `app.dependency_overrides`.
+  - Response bodies are validated with `jsonschema` (`Draft202012Validator` and a `referencing` registry over the contract), declared in the `dev` group with `pyyaml`.
+  - A body declared larger than the limit is answered 413 before the endpoint runs.
+- [x] T038 [P] [US1] Integration tests for the Postgres adapters in `backend/tests/integration/test_postgres_documents_and_jobs.py`:
   - 10 concurrent registrations of the same sha256 yield one document (`ON CONFLICT`).
   - A claim uses `FOR UPDATE SKIP LOCKED`, so two concurrent claimers never get the same job.
   - A write guarded by an old lease token affects zero rows.
-- [ ] T039 [P] [US1] Integration test for the Docling extractor and the pypdfium2 inspector in `backend/tests/integration/test_docling_extractor.py`, marked `slow`:
-  - On `digital.pdf`, it yields headings, paragraphs, a table and an image, each with page and a top-left box.
-  - On `scanned.pdf`, it yields recognized text with a confidence.
+  - Two concurrent enqueues for the same document keep one job that has not failed, and a failed job does not block a new one.
+- [x] T039 [P] [US1] Integration test for the Docling extractor and the pypdfium2 inspector in `backend/tests/integration/test_docling_extractor.py`, marked `slow`:
+  - On `digital.pdf`, it yields headings, paragraphs, a table and an image with its PNG crop, each with page and a top-left box.
+  - On `scanned.pdf`, it yields recognized text with a confidence, and reports the page as recognized.
+  - `encrypted.pdf` raises `EncryptedDocumentError`, and a truncated PDF raises `CorruptDocumentError`.
   - The inspector reports the page count, detects `encrypted.pdf`, and rejects `not_a_pdf.pdf` by content.
   - `digital.pdf` converted with a page batch of 1 yields the same reading order and heading levels as a batch of 3.
 
 ### Implementation for User Story 1
 
-- [ ] T040 [P] [US1] Implement the `PdfInspector` adapter in `backend/src/multimodal_rag/adapters/docling/pdf_inspector.py` with pypdfium2. It validates by content, returns the page count and flags encrypted files, without rendering.
-- [ ] T041 [P] [US1] Implement the Postgres `DocumentRepository` in `backend/src/multimodal_rag/adapters/postgres/documents.py`, with `register` via `INSERT … ON CONFLICT (sha256) DO NOTHING RETURNING id` falling back to a select, plus `get`.
-- [ ] T042 [US1] Implement the Postgres `JobQueue` in `backend/src/multimodal_rag/adapters/postgres/job_queue.py`:
-  - `enqueue`.
+- [x] T040 [P] [US1] Implement the `PdfInspector` adapter in `backend/src/multimodal_rag/adapters/docling/pdfium.py` with pypdfium2. It validates by content, returns the page count and flags encrypted files, without rendering.
+- [x] T041 [P] [US1] Implement the Postgres `DocumentRepository` in `backend/src/multimodal_rag/adapters/postgres/documents.py`, with `register` via `INSERT … ON CONFLICT (sha256) DO NOTHING RETURNING id` falling back to a select, plus `get`. `list_page` arrives with T075.
+- [x] T042 [US1] Implement the Postgres `JobQueue` in `backend/src/multimodal_rag/adapters/postgres/job_queue.py`:
+  - Migration `backend/migrations/versions/0002_one_active_job_per_document.py` adds the partial unique index `ingestion_jobs(document_id) WHERE status <> 'failed'` (PostgreSQL docs, "Partial Indexes", example 11.3).
+  - `enqueue` returns the stored job, using `INSERT … ON CONFLICT (document_id) WHERE status <> 'failed' DO NOTHING` with the predicate rendered as a literal, and falling back to the existing job.
   - `claim(worker_id)` with `SELECT … FOR UPDATE SKIP LOCKED` over pending jobs. It sets `processing`, increments `attempt` and issues `lease_token` and `lease_expires_at`.
-  - `update_progress`, `complete` and `fail`, each conditioned on `lease_token`.
+  - `heartbeat`, `update_progress`, `complete` and `fail`, each conditioned on `lease_token`.
   - `get` and `latest_for_document`.
-- [ ] T043 [P] [US1] Implement the Postgres `ElementRepository` in `backend/src/multimodal_rag/adapters/postgres/elements.py`. `replace_for_document(document_id, elements, relationships, lease_token)` runs in one transaction guarded by the lease token.
-- [ ] T044 [US1] Implement the Docling `DocumentExtractor` in `backend/src/multimodal_rag/adapters/docling/extractor.py`:
-  - RapidOCR on onnxruntime, TableFormer, the picture classifier, and `generate_picture_images` with `images_scale=2.0`.
-  - Artifacts from `DOCLING_ARTIFACTS_PATH` and threads from settings.
-  - Converts in page batches of `EXTRACTION_PAGE_BATCH` and yields progress per batch. `reading_order` is offset by the count of previous batches, and the heading level stack carries over between batches.
-  - Maps Docling items to domain `ExtractedElement`: boxes via `to_top_left_origin(page_height)`, `origin` and `confidence` for recognized text, picture labels from children with `traverse_pictures`, and `image_class` from the classifier.
-  - Stores crops through `BlobStorage`.
-  - Raises `EncryptedDocumentError`, `CorruptDocumentError` or `NoExtractableTextError`.
-- [ ] T045 [US1] Implement the use cases `SubmitDocument` and `GetJob` in `backend/src/multimodal_rag/ingestion/use_cases.py`:
-  - `SubmitDocument` hashes and stores through `BlobStorage` while copying.
+  - Reclaiming expired leases stays in T070, so until Phase 5 an interrupted job keeps `processing`.
+- [x] T043 [P] [US1] Implement the Postgres `ElementRepository` in `backend/src/multimodal_rag/adapters/postgres/elements.py`. `replace_for_document(document_id, elements, relationships, lease_token)` runs in one transaction guarded by the lease token.
+- [x] T044 [US1] Implement the Docling `DocumentExtractor` in `backend/src/multimodal_rag/adapters/docling/extractor.py`:
+  - One `DocumentConverter` per worker process, warmed at startup, with RapidOCR on onnxruntime, TableFormer, the picture classifier, and `generate_picture_images` with `images_scale=2.0`.
+  - Artifacts from `DOCLING_ARTIFACTS_PATH`. Threads from `EXTRACTION_THREADS` for both `AcceleratorOptions.num_threads` and the docling-parse `parser_threads`.
+  - Converts in page batches of `EXTRACTION_PAGE_BATCH` with `page_range`, as in docling-serve's split processing example, and yields one batch at a time. `reading_order` continues across batches.
+  - Heading levels come from document-wide signals read once before the first batch: the PDF outline, then section numbering, then level 1. Docling's heading hierarchy renumbers levels inside each conversion, so it is not used per batch.
+  - Maps Docling items to domain `ExtractedElement` in `backend/src/multimodal_rag/adapters/docling/mapping.py`: boxes via `to_top_left_origin(page_height)`, page furniture from the furniture layer, text nested at any depth inside a figure as its labels and inside a table as part of it, and `image_class` from `meta.classification`.
+  - Each batch has the conversion timeout Docling recommends (`EXTRACTION_BATCH_TIMEOUT_SECONDS`), and a batch that Docling returns as a partial success fails the job instead of dropping pages.
+  - Text elements on pages without a text layer are `recognized`, with the page's `ocr_score` as confidence (Docling's confidence scores API).
+  - Returns crops as PNG bytes in `ExtractionBatch.images`. `ProcessJob` stores them.
+  - Classifies unreadable files with pypdfium2 before conversion, because Docling reports encrypted and corrupt files with the same error: `EncryptedDocumentError` or `CorruptDocumentError`.
+- [x] T045 [US1] Implement the use cases `SubmitDocument` and `GetJob` in `backend/src/multimodal_rag/ingestion/use_cases/intake.py`:
+  - `SubmitDocument` hashes and counts the chunks it receives while `BlobStorage` stores them under a staging key, then moves the file to its content-addressed key.
   - It enforces the limits through `PdfInspector` before registration.
-  - It returns `already_ingested` per FR-016.
-- [ ] T046 [US1] Implement `ProcessJob` stages `extracting` and `finalizing` in `backend/src/multimodal_rag/ingestion/use_cases.py`:
-  - Runs the extractor.
+  - It returns `already_ingested` per FR-016 and reuses the job of identical content that has not failed.
+  - It logs `document uploaded` with `document_id`, `job_id`, `size_bytes`, `page_count` and `already_ingested`. The file name and content are never logged (FR-021).
+- [x] T046 [US1] Implement `ProcessJob` stages `extracting` and `finalizing` in `backend/src/multimodal_rag/ingestion/use_cases/processing.py`:
+  - Runs the extractor, advancing it one batch at a time with `asyncio.to_thread`.
+  - Stores figure crops under `figures/{document_id}/{element_id}.png`.
+  - Fails with `no_extractable_text` when no element carries text.
   - Persists elements through `ElementRepository`.
   - Builds `JobSummary`, including `recognized_pages`.
   - Completes or fails the job with `FailureCode`.
   - Logs every transition with `job_id` and never logs document content.
-- [ ] T047 [US1] Implement the upload and job routes in `backend/src/multimodal_rag/adapters/http/routes_ingestion.py`, with schemas in `backend/src/multimodal_rag/adapters/http/schemas.py`:
-  - `POST /api/v1/documents` rejects early on `Content-Length`, copies the spooled upload into blob storage in 1 MiB chunks while hashing, and returns 202 or 200.
+- [x] T047 [US1] Implement the upload and job routes in `backend/src/multimodal_rag/adapters/http/routes_ingestion.py`, with schemas in `backend/src/multimodal_rag/adapters/http/schemas.py`:
+  - A pure ASGI middleware in `backend/src/multimodal_rag/adapters/http/body_limit.py` answers 413 problem details with `file_too_large` when `Content-Length` exceeds the upload limit, before the body is read, and counts the bytes of bodies without that header. FastAPI parses the multipart body before any dependency or endpoint runs, so the check cannot live in the route.
+  - `POST /api/v1/documents` streams the spooled upload to `SubmitDocument` in 1 MiB chunks and returns 202 while the job is pending or processing, or 200 when identical content already completed, with a `Location` header pointing to the job.
   - `GET /api/v1/jobs/{job_id}`.
+  - Routes receive their use cases through `Annotated[..., Depends(...)]` providers that read the lifespan state.
   - Responses match the OpenAPI contract.
-  - Logs `document_uploaded` at info level with `request_id`, `document_id`, `job_id`, `size_bytes`, `page_count` and `already_ingested`. The file name and content are never logged (FR-021).
-- [ ] T048 [US1] Implement the worker entry point in `backend/src/multimodal_rag/adapters/worker/main.py`:
-  - `LISTEN ingestion_jobs` with a `POLL_SECONDS` fallback, and claims one job at a time.
+- [x] T048 [US1] Implement the worker loop in `backend/src/multimodal_rag/adapters/worker/loop.py`, started by `bootstrap.run_worker` through `python -m multimodal_rag worker`:
+  - Wakes on `LISTEN ingestion_jobs` from a dedicated asyncpg connection with reconnection, in `backend/src/multimodal_rag/adapters/postgres/job_notifications.py`, with a `POLL_SECONDS` fallback, and claims one job at a time.
   - Binds the job's `correlation_id` and `job_id` for logging.
-  - Runs `ProcessJob`, with blocking extraction in `asyncio.to_thread`.
-  - Shuts down gracefully on SIGTERM.
-- [ ] T049 [US1] Add a `worker` Dockerfile target in `backend/Dockerfile` that runs `docling-tools models download -o /opt/docling-models` at build time and sets `DOCLING_ARTIFACTS_PATH` and `HF_HUB_OFFLINE=1`. Wire `api` and `worker` targets in `compose.yaml`.
+  - Runs `ProcessJob`.
+  - On SIGTERM it stops claiming and cancels the running attempt, whose lease then expires.
+  - Unit tests in `backend/tests/unit/adapters/test_worker_loop.py`.
+- [x] T049 [US1] Bake the Docling models into the single backend image in `backend/Dockerfile`: `docling-tools models download layout tableformer picture_classifier rapidocr --rapidocr-backend-lang onnxruntime:ch -o /opt/docling-models`, owned by the non-root user, with `DOCLING_ARTIFACTS_PATH=/opt/docling-models`. `api`, `worker` and `migrate` keep sharing one image with different commands.
 
 **Checkpoint**: Quickstart scenarios 1 and 4 pass. The job completes with a summary, and the elements are stored.
 
@@ -330,18 +346,18 @@ code yet beyond a package skeleton and one smoke test.
   - `publish`, `delete_document`, and `search_hybrid`, which runs `prefetch` on `dense` and `bm25` with RRF fusion and filters `visible=true`.
   - The client uses `timeout=QDRANT_TIMEOUT_SECONDS`, and every call is wrapped in the stamina policy from T019 for connection errors and 5xx.
   - Verify the exact BM25 option names for lowercase, ASCII folding and no stemming, and record them in research.md §12.
-- [ ] T063 [US2] Extend `ProcessJob` in `backend/src/multimodal_rag/ingestion/use_cases.py` with the stages `describing_figures`, `building_units`, `embedding` and `indexing`:
+- [ ] T063 [US2] Extend `ProcessJob` in `backend/src/multimodal_rag/ingestion/use_cases/processing.py` with the stages `describing_figures`, `building_units`, `embedding` and `indexing`:
   - Relationships are computed after extraction.
   - Descriptions are persisted per figure.
   - The summary is updated.
   - Each attempt starts with `VectorIndex.delete_document(document_id)` before any upsert.
   - Points are published on completion and deleted on failure.
   - When a provider exhausts its retry budget, `failure_reason` names the service (`embedding model`, `vector index`) and never includes document content (FR-017).
-- [ ] T064 [US2] Implement `ListDocumentElements` and the image route in `backend/src/multimodal_rag/ingestion/use_cases.py` and `backend/src/multimodal_rag/adapters/http/routes_documents.py`:
+- [ ] T064 [US2] Implement `ListDocumentElements` and the image route in `backend/src/multimodal_rag/ingestion/use_cases/library.py` and `backend/src/multimodal_rag/adapters/http/routes_documents.py`:
   - Cursor pagination with a page and kind filter.
   - 409 `ingestion_not_completed` when no completed job exists.
   - PNG served from `BlobStorage`.
-- [ ] T065 [US2] Add the Qwen3-Embedding tokenizer download to the worker Dockerfile target in `backend/Dockerfile`, and call `ensure_collection` at worker startup in `backend/src/multimodal_rag/adapters/worker/main.py`.
+- [ ] T065 [US2] Add the Qwen3-Embedding tokenizer download to `backend/Dockerfile`, and call `ensure_collection` at worker startup in `backend/src/multimodal_rag/bootstrap.py`.
 
 **Checkpoint**: Quickstart scenarios 2 and 3 pass. SC-004, SC-005 and SC-012 can be checked on the sample set.
 
@@ -355,12 +371,12 @@ code yet beyond a package skeleton and one smoke test.
 
 ### Tests for User Story 3 (REQUIRED) ⚠️
 
-- [ ] T066 [P] [US3] Integration tests for lease recovery in `backend/tests/integration/test_job_queue_recovery.py`:
+- [x] T066 [P] [US3] Integration tests for lease recovery in `backend/tests/integration/test_postgres_documents_and_jobs.py` (`TestLeaseRecovery`), next to the other queue tests:
   - An expired lease is reclaimed with `attempt` incremented and a new token, and status stays `processing`.
   - The claim that would exceed `max_attempts` sets `failed` with `interrupted_repeatedly`.
   - A heartbeat keeps a lease alive, and a heartbeat with an old token fails.
-- [ ] T067 [P] [US3] Unit tests for the worker loop in `backend/tests/unit/adapters/test_worker_loop.py`, using `InMemoryJobQueue` and `FrozenClock`:
-  - The heartbeat task renews every `HEARTBEAT_SECONDS`.
+- [x] T067 [P] [US3] Unit tests for the worker loop in `backend/tests/unit/adapters/test_worker_loop.py`, using `InMemoryJobQueue` and `FrozenClock`:
+  - The heartbeat task renews every `HEARTBEAT_SECONDS`, and a transient renewal failure does not stop the job.
   - A lost lease stops processing.
   - The process exits after `WORKER_MAX_JOBS` so compose restarts it.
 - [ ] T068 [P] [US3] End-to-end crash test in `backend/tests/integration/test_crash_recovery.py`, marked `slow`: it kills a worker subprocess with SIGKILL mid-job and asserts the job completes on attempt 2 with the same retrieval unit count as a clean run (SC-008).
@@ -368,12 +384,12 @@ code yet beyond a package skeleton and one smoke test.
 
 ### Implementation for User Story 3
 
-- [ ] T070 [US3] Extend `claim` in `backend/src/multimodal_rag/adapters/postgres/job_queue.py`:
+- [x] T070 [US3] Extend `claim` in `backend/src/multimodal_rag/adapters/postgres/job_queue.py`:
   - Include `processing` jobs whose `lease_expires_at < now()`.
   - Fail at the attempt limit with `interrupted_repeatedly`.
-  - Add `heartbeat(job_id, lease_token)`.
-- [ ] T071 [US3] Add the heartbeat task and lease-loss handling to `backend/src/multimodal_rag/adapters/worker/main.py`, plus process recycling after `WORKER_MAX_JOBS` with `restart: unless-stopped` in `compose.yaml`.
-- [ ] T072 [US3] Ensure the API stays independent of worker load: run the upload hashing copy without blocking the event loop (`anyio.to_thread` for file I/O) in `backend/src/multimodal_rag/adapters/http/routes_ingestion.py`, and set the database pool sizes in `backend/src/multimodal_rag/adapters/postgres/engine.py`.
+  - Measure leases on the database clock, shared by every worker, so the claim port takes no caller time.
+- [x] T071 [US3] Add the heartbeat task and lease-loss handling to `backend/src/multimodal_rag/adapters/worker/loop.py`, plus process recycling after `WORKER_MAX_JOBS` with `restart: unless-stopped` in `compose.yaml`. The container healthcheck runs `python -m multimodal_rag worker-health`, which reads `LIVENESS_FILE` and `LIVENESS_MAX_AGE_SECONDS`.
+- [x] T072 [US3] Ensure the API stays independent of worker load: hash each upload chunk in a thread in `backend/src/multimodal_rag/ingestion/use_cases/intake.py`, while `UploadFile.read` and the blob writes already run in threads, and set the database pool sizes (`DB_POOL_SIZE`) in `backend/src/multimodal_rag/adapters/postgres/engine.py`.
 
 **Checkpoint**: Quickstart scenarios 5 and 7 pass, and FR-025 and SC-006 are demonstrated.
 
@@ -392,7 +408,7 @@ code yet beyond a package skeleton and one smoke test.
 
 ### Implementation for User Story 4
 
-- [ ] T075 [US4] Implement `ListDocuments` and `GetDocument` in `backend/src/multimodal_rag/ingestion/use_cases.py`, plus the repository queries (latest job via `DISTINCT ON`) in `backend/src/multimodal_rag/adapters/postgres/documents.py`.
+- [ ] T075 [US4] Implement `ListDocuments` and `GetDocument` in `backend/src/multimodal_rag/ingestion/use_cases/library.py`, plus the repository queries (latest job via `DISTINCT ON`) in `backend/src/multimodal_rag/adapters/postgres/documents.py`.
 - [ ] T076 [US4] Add the library routes to `backend/src/multimodal_rag/adapters/http/routes_documents.py`, with an opaque cursor that encodes `(created_at, id)`.
 
 **Checkpoint**: All four stories work independently.

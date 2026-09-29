@@ -137,6 +137,15 @@ are these:
 
 ## Choosing patterns
 
+- Never reimplement logic that already exists. Before writing any helper, class or
+  utility, check in this order and report the result:
+  1. The project's own modules.
+  2. The dependencies already installed, by reading their source in
+     `backend/.venv/lib/python3.14/site-packages` or their official documentation.
+  3. The Python standard library.
+
+  New code is written only when all three come up empty, and the pull request states
+  why. Retries, for example, go through `shared/resilience.py`, which wraps stamina.
 - Before introducing a usage pattern (an entry point, a startup command, a settings
   layout, middleware, error handling, a project layout), check how the official
   documentation of the framework or library does it. For FastAPI that is

@@ -62,6 +62,29 @@ def test_records_below_the_configured_level_are_dropped() -> None:
     assert [record["message"] for record in records(stream)] == ["shown"]
 
 
+def test_step_by_step_library_logs_are_hidden_at_info() -> None:
+    stream = io.StringIO()
+    configure_logging(log_format="json", level="INFO", stream=stream)
+
+    logging.getLogger("docling.document_converter").info("converting batch")
+    logging.getLogger("docling.document_converter").warning("page skipped")
+    logging.getLogger("multimodal_rag.test").info("job completed")
+
+    assert [record["message"] for record in records(stream)] == [
+        "page skipped",
+        "job completed",
+    ]
+
+
+def test_debug_level_shows_step_by_step_library_logs() -> None:
+    stream = io.StringIO()
+    configure_logging(log_format="json", level="DEBUG", stream=stream)
+
+    logging.getLogger("docling.document_converter").info("converting batch")
+
+    assert [record["message"] for record in records(stream)] == ["converting batch"]
+
+
 def test_exceptions_are_rendered_in_the_json_record() -> None:
     stream = io.StringIO()
     configure_logging(log_format="json", stream=stream)

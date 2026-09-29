@@ -101,6 +101,17 @@ class TestBoundingBox:
                 left=0, top=0, right=700, bottom=100, page_width=612, page_height=792
             )
 
+    def test_a_box_starting_beyond_the_page_edge_is_rejected(self) -> None:
+        with pytest.raises(InvalidBoundingBoxError):
+            BoundingBox.on_page(
+                left=612.5,
+                top=10,
+                right=612.9,
+                bottom=20,
+                page_width=612,
+                page_height=792,
+            )
+
 
 class TestDocument:
     def document(self, **overrides: Any) -> Document:
@@ -215,6 +226,18 @@ class TestIngestionJob:
         assert job.failure_code is FailureCode.ENCRYPTED_DOCUMENT
         assert job.failure_reason == "PDF is encrypted"
 
+    def test_a_job_interrupted_on_every_attempt_fails_with_a_fixed_reason(
+        self,
+    ) -> None:
+        job = claim(new_job(max_attempts=1))
+
+        failed = job.fail_interrupted(now=NOW)
+
+        assert failed.failure_code is FailureCode.INTERRUPTED_REPEATEDLY
+        assert failed.failure_reason == (
+            "Processing was interrupted repeatedly. Attempts used: 1 of 1."
+        )
+
     def test_fail_requires_a_reason(self) -> None:
         with pytest.raises(InvalidJobTransitionError):
             claim(new_job()).fail(code=FailureCode.INTERNAL_ERROR, reason=" ", now=NOW)
@@ -298,6 +321,20 @@ class TestExtractedElement:
     def test_only_images_can_be_described(self) -> None:
         with pytest.raises(InvalidElementError):
             element().with_description(status=DescriptionStatus.SKIPPED)
+
+    def test_image_references_its_crop_by_a_key_derived_from_its_ids(self) -> None:
+        image = element(kind=ElementKind.IMAGE, text=None)
+        key = ExtractedElement.image_key_for(
+            document_id=image.document_id, element_id=image.id
+        )
+
+        assert image.with_image_key(key).image_key == (
+            f"figures/{image.document_id}/{image.id}.png"
+        )
+
+    def test_only_images_reference_a_crop(self) -> None:
+        with pytest.raises(InvalidElementError):
+            element().with_image_key("figures/x/y.png")
 
 
 def test_relationships_cannot_link_an_element_to_itself() -> None:

@@ -233,7 +233,7 @@ still pass.
 - [x] T082 Read `finish_reason` in `backend/src/multimodal_rag/adapters/openai_compatible/chat.py` and `answerer.py`.
 - [x] T083 Add `distinct_hits` to `backend/src/multimodal_rag/answering/relevance.py` and use it in `AnswerQuestion` (research section 3).
 - [x] T084 Build the answering clients inside the lifespan in `backend/src/multimodal_rag/bootstrap.py`, as Starlette's lifespan state documentation and Polar do.
-- [ ] T085 Rebuild the API and re-run quickstart Scenarios 1 to 3 and the 12 audit questions against the running system.
+- [x] T085 Rebuild the API and re-run quickstart Scenarios 1 to 3 and the 12 audit questions against the running system.
 
 **Checkpoint**: the MVP keeps correct answers whose markers the model forgot, with every
 citation still pointing to a supplied unit.

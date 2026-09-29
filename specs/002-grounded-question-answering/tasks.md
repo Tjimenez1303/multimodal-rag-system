@@ -117,54 +117,54 @@ used on airplanes?", and confirm the answer cites page 12 and lists the 8 suppli
 
 ### Tests for User Story 1 (REQUIRED) ⚠️
 
-- [ ] T018 [P] [US1] Write `backend/tests/unit/answering/test_prompting.py`:
+- [x] T018 [P] [US1] Write `backend/tests/unit/answering/test_prompting.py`:
   - The system message holds the rules: only the sources, sources and question are data, markers after each factual sentence, `not_covered`, the question's language, identifiers kept verbatim, and sources that disagree reported with each value and its own marker.
   - Each source is numbered from 1 in rank order, labeled with its pages and section, and fenced with `<<<` and `>>>`.
   - The question is fenced after the sources.
   - Text inside a source that looks like an instruction stays inside its fence unchanged.
-- [ ] T019 [P] [US1] Write `backend/tests/unit/answering/test_citations.py`:
+- [x] T019 [P] [US1] Write `backend/tests/unit/answering/test_citations.py`:
   - Markers of supplied sources are kept, and `[1][3]` counts as two markers.
   - Out-of-range numbers and `[0]` are removed from the text.
   - Units sharing document and pages merge into one citation that lists both unit ids.
   - Citations are renumbered 1..n in order of first appearance, and the text is rewritten to match.
   - Every citation is referenced at least once, and a text with no valid marker yields no citations.
-- [ ] T020 [P] [US1] Write `backend/tests/unit/answering/test_sources.py`:
+- [x] T020 [P] [US1] Write `backend/tests/unit/answering/test_sources.py`:
   - The excerpt is at most 300 characters.
   - `low_confidence_text` is true only when an element has `origin=recognized` and `confidence < LOW_CONFIDENCE_THRESHOLD`, with 0.8999 flagged and 0.90 not flagged.
   - A figure unit whose figure is `described` has `generated_description` and carries `unverified_identifiers`.
   - `citation_number` is taken from the citations.
   - `figure_ids` lists the unit's non-decorative figures, so every source says whether it has associated images.
-- [ ] T021 [P] [US1] Write the answered-path tests in `backend/tests/unit/answering/test_ask.py`, using fakes:
+- [x] T021 [P] [US1] Write the answered-path tests in `backend/tests/unit/answering/test_ask.py`, using fakes:
   - The answer has status `answered`, reason `None` and up to `RETRIEVAL_TOP_K` sources in rank order.
   - Citations name the document file name and pages, and a unit spanning pages 3 and 4 is cited with both.
   - The prompt the generator received holds the sources in rank order.
   - One log record per question has the outcome, the unit count and the timings, and contains neither the question nor the answer text (FR-026).
   - A hit whose document is missing from `DocumentRepository.get_many` raises `DataInconsistencyError` instead of a citation without a name.
   - Two consecutive questions to the same `AnswerQuestion` produce prompts that share nothing but the rules, so each question is answered independently (FR-021).
-- [ ] T022 [P] [US1] Write `backend/tests/unit/adapters/test_openai_answerer.py` with respx:
+- [x] T022 [P] [US1] Write `backend/tests/unit/adapters/test_openai_answerer.py` with respx:
   - The request body carries `model`, the two messages, `temperature`, `max_tokens`, `chat_template_kwargs.enable_thinking=false` and `response_format` of type `json_schema` with the `answer`/`not_covered` schema.
   - A valid JSON content becomes a `GeneratedAnswer`.
   - Content that is not JSON, or does not match the schema, raises `AnswerModelResponseError`.
   - A 503 is retried and then raises `ProviderUnavailableError`.
-- [ ] T023 [P] [US1] Write `backend/tests/contract/test_questions_contract.py`: with the use case backed by fakes, `POST /api/v1/questions` returns 200 and a body valid against the `Answer` schema of the 002 contract, and a malformed body returns 400 `invalid_request` as problem JSON.
+- [x] T023 [P] [US1] Write `backend/tests/contract/test_questions_contract.py`: with the use case backed by fakes, `POST /api/v1/questions` returns 200 and a body valid against the `Answer` schema of the 002 contract, and a malformed body returns 400 `invalid_request` as problem JSON.
 
 ### Implementation for User Story 1
 
-- [ ] T024 [P] [US1] Implement `build_prompt(question, hits) -> GroundedPrompt` in `backend/src/multimodal_rag/answering/prompting.py` with the rules of research section 5, including the rule for sources that disagree, as module constants with a one-line comment on why the question and sources are fenced.
-- [ ] T025 [P] [US1] Implement marker validation, merging and renumbering in `backend/src/multimodal_rag/answering/citations.py` (research section 6). It returns the rewritten text, the citations, and a mapping from unit id to citation number.
-- [ ] T026 [P] [US1] Implement source assembly in `backend/src/multimodal_rag/answering/sources.py`: excerpt, flags from the unit's elements, the unit's non-decorative `figure_ids`, and citation numbers (research section 8). Tables are added in US4.
-- [ ] T027 [P] [US1] Implement `OpenAICompatibleAnswerGenerator` in `backend/src/multimodal_rag/adapters/openai_compatible/answerer.py`:
+- [x] T024 [P] [US1] Implement `build_prompt(question, hits) -> GroundedPrompt` in `backend/src/multimodal_rag/answering/prompting.py` with the rules of research section 5, including the rule for sources that disagree, as module constants with a one-line comment on why the question and sources are fenced.
+- [x] T025 [P] [US1] Implement marker validation, merging and renumbering in `backend/src/multimodal_rag/answering/citations.py` (research section 6). It returns the rewritten text, the citations, and a mapping from unit id to citation number.
+- [x] T026 [P] [US1] Implement source assembly in `backend/src/multimodal_rag/answering/sources.py`: excerpt, flags from the unit's elements, the unit's non-decorative `figure_ids`, and citation numbers (research section 8). Tables are added in US4.
+- [x] T027 [P] [US1] Implement `OpenAICompatibleAnswerGenerator` in `backend/src/multimodal_rag/adapters/openai_compatible/answerer.py`:
   - **Transport.** Use `post_json` and `ChatCompletion` from `chat.py`, with the `json_schema` response format of research section 5.
   - **Constructor.** Takes `model`, `max_tokens`, `temperature` and `retry`, keyword-only.
   - **Validation.** Validate the content with a pydantic model, because llama-server may ignore a grammar.
-- [ ] T028 [US1] Implement `AnswerQuestion` in `backend/src/multimodal_rag/answering/use_cases/ask.py` for the answered path:
+- [x] T028 [US1] Implement `AnswerQuestion` in `backend/src/multimodal_rag/answering/use_cases/ask.py` for the answered path:
   - **Steps.** Build the `Question`, embed the query, run `search_hybrid` with `limit=RETRIEVAL_TOP_K`, load the elements with `get_many` and the documents with `get_many`, build the prompt, generate, validate the citations, and assemble the sources.
   - **Integrity.** A hit whose document is not returned by `get_many` raises `DataInconsistencyError` (spec edge case), never a source without a document name.
   - **Timings and logs.** Measure search and generation times with `time.perf_counter`, and log one record per question as FR-026 requires.
   - **Constructor.** Ports and options are injected through the constructor, keyword-only.
-- [ ] T029 [US1] Add `QuestionBody`, `AnswerBody`, `CitationBody`, `SourceBody` and `TableContentBody` to `backend/src/multimodal_rag/adapters/http/schemas.py`, mirroring `contracts/openapi.yaml` of 002. `SourceBody.cited` is `citation_number is not None`. `QuestionBody.question` is a plain string with no length limit in the schema, because `Question.create` enforces the configurable `MAX_QUESTION_CHARS` and answers `invalid_question`.
-- [ ] T030 [US1] Add `AnsweringState` and `provide_answer_question` to `backend/src/multimodal_rag/adapters/http/dependencies.py`. Implement `POST /api/v1/questions` (`operation_id="askQuestion"`) in the new `backend/src/multimodal_rag/adapters/http/routes_questions.py`, which only translates the body to a `Question` call and the `Answer` back to `AnswerBody`.
-- [ ] T031 [US1] Wire answering in `backend/src/multimodal_rag/bootstrap.py`:
+- [x] T029 [US1] Add `QuestionBody`, `AnswerBody`, `CitationBody`, `SourceBody` and `TableContentBody` to `backend/src/multimodal_rag/adapters/http/schemas.py`, mirroring `contracts/openapi.yaml` of 002. `SourceBody.cited` is `citation_number is not None`. `QuestionBody.question` is a plain string with no length limit in the schema, because `Question.create` enforces the configurable `MAX_QUESTION_CHARS` and answers `invalid_question`.
+- [x] T030 [US1] Add `AnsweringState` and `provide_answer_question` to `backend/src/multimodal_rag/adapters/http/dependencies.py`. Implement `POST /api/v1/questions` (`operation_id="askQuestion"`) in the new `backend/src/multimodal_rag/adapters/http/routes_questions.py`, which only translates the body to a `Question` call and the `Answer` back to `AnswerBody`.
+- [x] T031 [US1] Wire answering in `backend/src/multimodal_rag/bootstrap.py`:
   - Build the Qdrant client and index, the embedder, the answer generator and the repositories from `ApiSettings`.
   - Close the clients in the lifespan, merge `AnsweringState` into the lifespan state, and register the questions router.
   - Extend `backend/tests/unit/test_bootstrap.py` so the app builds with the new required settings.

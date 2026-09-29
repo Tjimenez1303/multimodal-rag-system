@@ -90,6 +90,27 @@ def test_api_answers_503_while_the_database_is_unreachable(
     assert response.json()["code"] == "storage_unavailable"
 
 
+def test_questions_are_served_and_fail_while_search_is_unreachable(
+    api_env: pytest.MonkeyPatch,
+) -> None:
+    api_env.setenv("PROVIDER_RETRY_ATTEMPTS", "1")
+
+    with TestClient(bootstrap.create_api_app()) as client:
+        response = client.post("/api/v1/questions", json={"question": "What is V-12?"})
+
+    assert response.status_code == 503
+
+
+@pytest.mark.parametrize("name", ["ANSWER_MODEL_URL", "QDRANT_URL", "EMBEDDER_MODEL"])
+def test_api_refuses_to_start_without_the_answering_settings(
+    api_env: pytest.MonkeyPatch, name: str
+) -> None:
+    api_env.delenv(name)
+
+    with pytest.raises(ConfigurationError, match=name):
+        bootstrap.create_api_app()
+
+
 def test_api_refuses_to_start_without_required_settings(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

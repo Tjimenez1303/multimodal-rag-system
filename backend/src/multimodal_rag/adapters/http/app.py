@@ -126,9 +126,7 @@ def create_app(
         The FastAPI application. The composition root wraps it with the request id
         middleware.
     """
-    app = FastAPI(
-        title="Multimodal RAG ingestion API", version=version, lifespan=lifespan
-    )
+    app = FastAPI(title="Multimodal RAG API", version=version, lifespan=lifespan)
     install_problem_handlers(app)
     app.include_router(
         health_router(

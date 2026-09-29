@@ -26,7 +26,7 @@ _LOCATION: dict[str, Any] = {
 API_PREFIX = "/api/v1"
 UPLOAD_PATH = f"{API_PREFIX}/documents"
 # The request context middleware reads this header, the contract documents it here.
-_REQUEST_ID_PARAMETER = {
+REQUEST_ID_PARAMETER = {
     "name": "X-Request-ID",
     "in": "header",
     "required": False,
@@ -45,7 +45,7 @@ ingestion_router = APIRouter(prefix=API_PREFIX, tags=["ingestion"])
         "processing, and 200 when identical content already completed."
     ),
     status_code=202,
-    openapi_extra={"parameters": [_REQUEST_ID_PARAMETER]},
+    openapi_extra={"parameters": [REQUEST_ID_PARAMETER]},
     responses={
         202: {"description": "Job pending or processing", "headers": _LOCATION},
         200: {

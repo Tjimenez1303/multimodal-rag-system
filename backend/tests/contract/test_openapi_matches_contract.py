@@ -7,10 +7,12 @@ import pytest
 from multimodal_rag.adapters.http.app import create_app
 from multimodal_rag.adapters.http.routes_documents import documents_router
 from multimodal_rag.adapters.http.routes_ingestion import ingestion_router
+from multimodal_rag.adapters.http.routes_questions import questions_router
 from tests.contract.contract import PATHS, resolve
 
 SERVED: dict[str, Any] = create_app(
-    readiness_checks={}, routers=(ingestion_router, documents_router)
+    readiness_checks={},
+    routers=(ingestion_router, documents_router, questions_router),
 ).openapi()
 OPERATIONS = [
     (path, method)

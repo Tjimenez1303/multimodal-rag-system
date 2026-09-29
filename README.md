@@ -29,13 +29,23 @@ its sources by document and page and shows the figure it relies on beside the te
   sentence or a table. Tables that continue on the next page stay together.
 - Every unit is indexed for both semantic and exact keyword search, which matters for
   part numbers and valve codes.
-- Answers cite their sources, and every numbered marker leads to its source line. Each
-  source opens the original page of the PDF, and sources recognized from a scan with
-  low confidence are marked for checking.
+- Questions are answered only from the ingested manuals. Each statement carries a
+  numbered citation to the document and page it comes from, and the response lists every
+  passage the answer was built from.
+- When the manuals do not contain the answer, the response says so instead of guessing,
+  and a question unrelated to them is answered in under a tenth of a second.
+- An answer that relies on a diagram comes with the figure closest to the cited text,
+  its page and its caption. Tables among the sources come with their rows.
+- Questions can be asked in English or Spanish about manuals in either language. Codes
+  and values keep the form they have in the manual.
+- A slow or unavailable model fails with an error that names it, within a fixed
+  deadline, while uploads keep working. A client that disconnects cancels its question.
+- In the chat, every numbered marker leads to its source line, each source opens the
+  original page of the PDF, and sources recognized from a scan with low confidence are
+  marked for checking.
 - The figure an answer depends on sits next to it, with its caption and page, and opens
   at full size.
-- When the manuals do not contain the answer, the chat says so instead of guessing.
-  Failures explain what went wrong in plain words, with a reference to find the request
+- Failures explain what went wrong in plain words, with a reference to find the request
   in the logs and a retry.
 - The document panel uploads manuals and follows their processing, page by page, until
   they are ready to be asked about.
@@ -50,6 +60,11 @@ queries and questions, and serves figures and pages. Heavy work happens in the w
 which you can scale out with more replicas. PostgreSQL stores documents and extracted
 elements and also acts as the job queue. Qdrant holds the searchable units, and Docker
 Model Runner serves both models on the host GPU.
+
+A question is embedded, searched by meaning and by keywords, and sent to the answer model
+only when a retrieved passage is relevant enough. The citations in the answer are then
+checked against the passages the model was given, so an answer can never cite a page that
+was not retrieved.
 
 The diagram is an editable draw.io file. Open it in [draw.io](https://app.diagrams.net)
 to change it.
@@ -116,6 +131,51 @@ curl -H 'Content-Type: application/json' \
   http://localhost:8000/api/v1/questions
 ```
 
+The upload answers with a `job_id` and a `document_id`. The job moves from `pending` to
+`processing` to `completed`, and a completed job includes a summary of what was
+captured.
+
+The answer marks each statement with the number of its citation, and names the figure it
+relies on. The response below is trimmed to one source:
+
+```json
+{
+  "status": "answered",
+  "reason": null,
+  "answer": "A shunt generator has a field winding connected in parallel with the external circuit [1]. The output voltage of a shunt generator can be controlled by inserting a rheostat in series with the field windings [1].",
+  "not_covered": null,
+  "citations": [
+    {
+      "number": 1,
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "pages": [12]
+    }
+  ],
+  "sources": [
+    {
+      "rank": 1,
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": ["Reciprocating Engine Ignition Systems", "Parallel (Shunt) Wound DC Generators"],
+      "pages": [12],
+      "content_type": "figure",
+      "cited": true,
+      "citation_number": 1,
+      "generated_description": true
+    }
+  ],
+  "primary_image": {
+    "page": 12,
+    "caption": "Figure 4-22. Shunt wound generator.",
+    "url": "/api/v1/documents/5d3ff0f9-f671-4a1b-b3e6-3258071fa024/images/d9b34abe-b2e5-52e8-8b3a-96a9c9ccf6cb"
+  },
+  "related_images": []
+}
+```
+
+When the manuals do not cover the question, `status` is `not_enough_information`,
+`reason` says why, and there are no citations or images. The full response schema is in
+the interactive documentation.
+
 | Endpoint | Description |
 |---|---|
 | `POST /api/v1/documents` | Upload a PDF. Uploading the same file twice returns the existing document |
@@ -125,7 +185,7 @@ curl -H 'Content-Type: application/json' \
 | `GET /api/v1/documents/{document_id}/elements` | Extracted text, tables and images, filterable by page and kind |
 | `GET /api/v1/documents/{document_id}/images/{element_id}` | The image of a figure |
 | `GET /api/v1/documents/{document_id}/pages/{page_number}/image` | The rendered page, once the document is ready |
-| `POST /api/v1/questions` | Ask a question and get the answer with its citations, sources and images |
+| `POST /api/v1/questions` | Answer a question with citations, sources and the related figure |
 
 Every setting lives in [`.env.example`](.env.example) with its default. Two you will
 probably want:
@@ -134,6 +194,16 @@ probably want:
   several times faster.
 - `docker compose up -d --scale worker=2` adds a second worker.
 - `FRONTEND_PUBLISHED_PORT` changes the chat's port, 3000 by default.
+
+Question answering has its own settings, all with defaults:
+
+| Setting | Default | What it controls |
+|---|---|---|
+| `RETRIEVAL_TOP_K` | 8 | Passages given to the answer model |
+| `MIN_SIMILARITY` | 0.60 | How close a passage must be to the question before the model is asked |
+| `ANSWER_CONCURRENCY` | 2 | Questions answered at the same time |
+| `ANSWER_QUEUE_LIMIT` | 6 | Questions waiting. Further ones get `answering_busy` with `Retry-After` |
+| `ANSWER_DEADLINE_SECONDS` | 90 | Longest time a question may take, waiting included |
 
 To stop the stack, run `docker compose down`. Add `-v` to delete the stored data as
 well.
@@ -195,13 +265,18 @@ Each major decision has a record in [`docs/adr`](docs/adr):
 3. [Local models served by Docker Model Runner](docs/adr/0003-local-models-on-docker-model-runner.md)
 4. [Structure-aware retrieval units](docs/adr/0004-structure-aware-retrieval-units.md),
    which describes the chunking strategy
-5. [A browser chat client served next to the API](docs/adr/0006-chat-client-stack-and-serving.md)
-6. [Page images kept from ingestion](docs/adr/0007-page-images-at-ingestion.md)
+5. [Grounded answers and a relevance gate](docs/adr/0005-grounded-answers-and-relevance-gate.md)
+6. [A browser chat client served next to the API](docs/adr/0006-chat-client-stack-and-serving.md)
+7. [Page images kept from ingestion](docs/adr/0007-page-images-at-ingestion.md)
 
 The backend stack is FastAPI, SQLAlchemy with asyncpg, PostgreSQL 18, Qdrant 1.19 with
 server-side BM25, Docling 2.130, and the Qwen3.5 9B and Qwen3 Embedding 0.6B models. The
-chat client is React 19 with Vite, shadcn/ui and Vercel AI Elements, served by nginx.
-Specifications, research notes and validation scenarios are in [`specs`](specs).
+same Qwen3.5 9B instance describes figures and writes answers. The chat client is React
+19 with Vite, shadcn/ui and Vercel AI Elements, served by nginx. Specifications, research
+notes and validation scenarios are in [`specs`](specs), one folder per feature:
+[ingestion](specs/001-async-pdf-ingestion),
+[question answering](specs/002-grounded-question-answering) and
+[the chat client](specs/003-visual-chat-client).
 
 ## Contributing
 
@@ -216,6 +291,8 @@ Licensed under the [Apache License 2.0](LICENSE).
 
 - Origen de los datos: INSST, for the electrical risk guide used in testing.
 - [Docling](https://github.com/docling-project/docling) for layout-aware PDF extraction.
-- [Qwen](https://github.com/QwenLM) for the vision and embedding models.
+- [Qwen](https://github.com/QwenLM) for the vision, answer and embedding models.
+- [RAGFlow](https://github.com/infiniflow/ragflow) and [Onyx](https://github.com/onyx-dot-app/onyx), whose
+  citation handling shaped how answers are tied to their sources.
 - [shadcn/ui](https://ui.shadcn.com) and [AI Elements](https://ai-sdk.dev/elements) for
   the chat interface.

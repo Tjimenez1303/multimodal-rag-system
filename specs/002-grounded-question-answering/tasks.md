@@ -40,12 +40,12 @@ tested and demonstrated on its own.
 
 **Purpose**: dependency, package skeleton and import boundaries
 
-- [ ] T001 Add `py3langid` (BSD-3, research section 9) as a runtime dependency with `uv add --project backend py3langid`, updating `backend/pyproject.toml` and `backend/uv.lock`.
-- [ ] T002 Create the package skeleton with Google-style module docstrings:
+- [x] T001 Add `py3langid` (BSD-3, research section 9) as a runtime dependency with `uv add --project backend py3langid`, updating `backend/pyproject.toml` and `backend/uv.lock`.
+- [x] T002 Create the package skeleton with Google-style module docstrings:
   - `backend/src/multimodal_rag/answering/__init__.py` and `backend/src/multimodal_rag/answering/use_cases/__init__.py`
   - `backend/src/multimodal_rag/adapters/concurrency/__init__.py` and `backend/src/multimodal_rag/adapters/language/__init__.py`
   - `backend/tests/unit/answering/__init__.py` and `backend/tests/evaluation/__init__.py`
-- [ ] T003 Update the import-linter contracts in `backend/pyproject.toml`:
+- [x] T003 Update the import-linter contracts in `backend/pyproject.toml`:
   - Add a `forbidden` contract for `multimodal_rag.answering` with the same forbidden modules as the ingestion contract, plus `anyio` and `py3langid`.
   - Change the `layers` contract to `(multimodal_rag.bootstrap)`, `multimodal_rag.adapters`, `multimodal_rag.answering`, `multimodal_rag.ingestion`, `multimodal_rag.shared`.
   - Confirm `uv run --directory backend lint-imports` passes.

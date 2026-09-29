@@ -427,21 +427,21 @@ code yet beyond a package skeleton and one smoke test.
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T077 [P] Create `compose.ollama.yaml`: `ollama` (0.34, model volume, `ollama list` healthcheck), a one-shot `ollama-pull` for both models, and the worker env pointing `VLM_URL` and `EMBEDDER_URL` at `http://ollama:11434/v1`. Document it in `.env.example` (research §13).
+- [ ] ~~T077 [P] Create `compose.ollama.yaml`: `ollama` (0.34, model volume, `ollama list` healthcheck), a one-shot `ollama-pull` for both models, and the worker env pointing `VLM_URL` and `EMBEDDER_URL` at `http://ollama:11434/v1`. Document it in `.env.example` (research §13).~~
 - [x] T078 [P] Write `docs/adr/0001-postgres-job-queue.md` in business language with a technical annex. The annex covers the Celery with Redis `visibility_timeout` analysis and its sources (research §2).
 - [x] T079 [P] Write `docs/adr/0002-document-extraction-with-docling.md`, with the OmniDocBench and license comparison in the annex (research §6).
 - [x] T080 [P] Write `docs/adr/0003-local-models-on-docker-model-runner.md`, with the measurements table in the annex (research §10, §11, §13, §15).
 - [x] T081 [P] Write `docs/adr/0004-structure-aware-retrieval-units.md`, covering chunking, figure units and table chains (research §7, §8).
 - [x] T082 Rewrite `README.md`:
-  - A logical architecture diagram (Mermaid) of API, worker, Postgres queue, Qdrant, blob volume and Docker Model Runner.
+  - A logical architecture diagram (draw.io) of API, worker, Postgres queue, Qdrant, blob volume and Docker Model Runner.
   - Prerequisites, including the DMR enable command.
   - Setup with `docker compose up`, and how to run the tests.
   - A technical decision log that links the ADRs.
   - The sample documents and their licenses. The INSST guide requires "Origen de los datos: INSST".
-- [ ] T083 Create the evaluation harness in `backend/tests/evaluation/`. It is not part of CI because the samples are not versioned.
-  - `annotations.yaml` lists, for each sample in `docs/samples/`, figures with their expected caption and 2 or 3 labels printed inside them.
-  - `evaluate.py` prints a table with SC-005 (share of annotated captions linked to their figure), SC-009 (OCR word recall on the 10-page rendered Spanish scan against its text layer, as in research §15) and SC-012 (share of annotated labels whose figure appears in the top 5 of `search_hybrid`).
-- [ ] T084 Run every scenario in `specs/001-async-pdf-ingestion/quickstart.md` against `docs/samples/`, record the timings and the T083 results against SC-001 to SC-012 in the pull request "Test plan" section, and update research.md §15 if any number changes.
+- [ ] ~~T083 Create the evaluation harness in `backend/tests/evaluation/`. It is not part of CI because the samples are not versioned.~~
+  - ~~`annotations.yaml` lists, for each sample in `docs/samples/`, figures with their expected caption and 2 or 3 labels printed inside them.~~
+  - ~~`evaluate.py` prints a table with SC-005 (share of annotated captions linked to their figure), SC-009 (OCR word recall on the 10-page rendered Spanish scan against its text layer, as in research §15) and SC-012 (share of annotated labels whose figure appears in the top 5 of `search_hybrid`).~~
+- [ ] ~~T084 Run every scenario in `specs/001-async-pdf-ingestion/quickstart.md` against `docs/samples/`, record the timings and the T083 results against SC-001 to SC-012 in the pull request "Test plan" section, and update research.md §15 if any number changes.~~
 - [x] T085 Run the full gate (`ruff`, `mypy`, `lint-imports`, `pytest --cov` at or above 90%, `pre-commit run --all-files` and zizmor), then fix root causes instead of suppressing checks.
 
 ---
@@ -499,7 +499,7 @@ Task: "Integration test for Qdrant VectorIndex in backend/tests/integration/test
 2. US2: multimodal capture and indexing, the core of the challenge
 3. US3: crash recovery and bulk load
 4. US4: document library
-5. Polish: the Ollama fallback, ADRs, README and full quickstart evidence
+5. Polish: ADRs and README
 
 ---
 

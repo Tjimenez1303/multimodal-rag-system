@@ -8,7 +8,7 @@ in section 15.
 All runtime components run locally. The reference machine is an Apple M4 Pro (12 CPU
 cores, 16 GPU cores, 48 GB) with Docker Desktop limited to 12 CPUs and 20 GB. Containers on
 macOS get no GPU. Extraction therefore runs on container CPU, while the models run on the
-host GPU through Docker Model Runner, with an Ollama container as the portable fallback.
+host GPU through Docker Model Runner.
 
 ## 1. Language and packaging
 
@@ -620,10 +620,8 @@ DMR must be enabled once per machine:
 - **macOS and Windows.** `docker desktop enable model-runner --tcp 12434 --cors none`.
 - **Linux.** Install the `docker-model-plugin` package.
 
-Without DMR, Compose stops at startup with an explicit error. An override file,
-`compose.ollama.yaml`, replaces the models with an Ollama container plus a one-shot pull
-service. Because the adapter speaks the OpenAI-compatible API, the same adapter works with
-both providers, and only the base URL and model names change.
+Docker Model Runner is required. Without it, Compose stops at startup with an explicit
+error.
 
 **Rationale**:
 

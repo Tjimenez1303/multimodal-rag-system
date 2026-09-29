@@ -39,13 +39,6 @@ docker compose ps
 curl -s http://localhost:8000/health/ready
 ```
 
-On a machine without Docker Model Runner, start with the Ollama fallback instead. It
-runs the models on CPU, so figure descriptions are several times slower:
-
-```bash
-docker compose -f compose.yaml -f compose.ollama.yaml up -d
-```
-
 ## Scenario 1: upload and follow a digital manual (US1, SC-001, SC-002, SC-003)
 
 ```bash

@@ -22,8 +22,7 @@ as the queue.
 - **Index.** Qdrant stores each unit with a dense vector and a server-side BM25 sparse
   vector.
 - **Startup.** After a one-time `docker desktop enable model-runner`, a single
-  `docker compose up` starts everything and pulls the models. `compose.ollama.yaml` is
-  the fallback for machines without Docker Model Runner.
+  `docker compose up` starts everything and pulls the models.
 
 Decisions and sources are in [research.md](research.md).
 
@@ -56,8 +55,7 @@ Decisions and sources are in [research.md](research.md).
 
 **Target Platform**: Linux containers (arm64 and amd64) through Docker Compose. The
 reference machine is an Apple M4 Pro with Docker Desktop at 12 CPUs and 20 GB. Models run
-on the host GPU through Docker Model Runner (llama.cpp with Metal). An Ollama container is
-the CPU fallback.
+on the host GPU through Docker Model Runner (llama.cpp with Metal).
 
 **Project Type**: web service (REST API plus background worker). The chat client belongs to
 a later feature.
@@ -157,7 +155,7 @@ backend/
 │   │   ├── worker/               # claim loop, heartbeat, process recycling
 │   │   ├── postgres/             # repositories and SKIP LOCKED job queue
 │   │   ├── docling/              # extractor.py, mapping.py, headings.py, pdfium.py (PdfInspector)
-│   │   ├── openai_compatible/    # FigureDescriber and Embedder over httpx (DMR or Ollama)
+│   │   ├── openai_compatible/    # FigureDescriber and Embedder over httpx
 │   │   ├── qdrant/               # VectorIndex with dense and BM25 vectors
 │   │   ├── tokenizer/            # TokenCounter over Hugging Face tokenizers
 │   │   └── storage/              # filesystem BlobStorage
@@ -170,7 +168,6 @@ backend/
     └── fixtures/                 # small generated PDFs (digital, scanned, split table)
 
 compose.yaml                      # api, worker, migrate, postgres, qdrant + models (vlm, embedder)
-compose.ollama.yaml               # fallback: ollama and ollama-pull instead of the models element
 .env.example
 docs/adr/                         # 0001 queue, 0002 extractor, 0003 local models, 0004 chunking
 ```

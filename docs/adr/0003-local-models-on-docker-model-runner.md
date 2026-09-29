@@ -45,8 +45,6 @@ provider only needs a different address and model name.
   needs a separate package.
 - Bad, because every worker shares the same graphics processor, so adding workers does
   not make figure descriptions faster.
-- Neutral, because a machine without Docker Model Runner can still use Ollama by
-  changing the model addresses and names, at several times the processing time.
 
 ## Annex: technical evidence
 

@@ -99,6 +99,10 @@ function classify<T>(result: SdkResult<T>, requestId: string): ServiceResult<T> 
   }
   if (response.ok) {
     reportReachable();
+    // A deletion answers 204 with no body, so there is nothing to read.
+    if (response.status === 204) {
+      return { ok: true, data: undefined as T, requestId };
+    }
     const isJson = response.headers.get("Content-Type")?.includes("json") ?? false;
     if (result.error !== undefined || !isJson) {
       return { ok: false, failure: { kind: "unreadable", requestId } };

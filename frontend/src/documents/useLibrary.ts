@@ -42,6 +42,8 @@ export interface Library {
   loadMore: () => Promise<unknown>;
   /** Read the library again, as after an upload. */
   refresh: () => Promise<unknown>;
+  /** Drop a deleted document from the list at once, then read the library again. */
+  remove: (documentId: string) => Promise<unknown>;
 }
 
 function unfinished(document: DocumentBody): boolean {
@@ -118,11 +120,29 @@ export function useLibrary(): Library {
   const { fetchNextPage, refetch } = library;
   const loadMore = useCallback(() => fetchNextPage(), [fetchNextPage]);
   const refresh = useCallback(() => refetch(), [refetch]);
+  const remove = useCallback(
+    (documentId: string) => {
+      queryClient.setQueryData<InfiniteData<DocumentPageBody>>(LIBRARY_KEY, (data) =>
+        data === undefined
+          ? data
+          : {
+              ...data,
+              pages: data.pages.map((page) => ({
+                ...page,
+                items: page.items.filter((item) => item.id !== documentId),
+              })),
+            },
+      );
+      return refetch();
+    },
+    [queryClient, refetch],
+  );
   return {
     documents,
     isLoading: library.isPending,
     hasMore: library.hasNextPage,
     loadMore,
     refresh,
+    remove,
   };
 }

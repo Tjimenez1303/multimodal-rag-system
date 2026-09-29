@@ -86,3 +86,27 @@ test("Escape closes the page view and returns focus to the opener", async () => 
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   await waitFor(() => expect(opener).toHaveFocus());
 });
+
+test("a whole document steps through every page with a page counter", async () => {
+  const user = userEvent.setup();
+  render(
+    <PageDialog
+      trigger={<button type="button">View document</button>}
+      documentId={DOCUMENT_ID}
+      documentName={NAME}
+      pages={[1, 2, 3]}
+      scope="document"
+    />,
+  );
+
+  await user.click(screen.getByRole("button", { name: "View document" }));
+  const dialog = screen.getByRole("dialog", { name: `${NAME}, page 1` });
+  expect(within(dialog).getByText("Page 1 of 3")).toBeVisible();
+
+  await user.click(within(dialog).getByRole("button", { name: "Next page" }));
+  await user.click(within(dialog).getByRole("button", { name: "Next page" }));
+
+  expect(dialog).toHaveAccessibleName(`${NAME}, page 3`);
+  expect(within(dialog).getByText("Page 3 of 3")).toBeVisible();
+  expect(within(dialog).getByRole("button", { name: "Next page" })).toBeDisabled();
+});

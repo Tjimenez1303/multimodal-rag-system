@@ -180,3 +180,64 @@ test("the same file uploaded twice at once ends as one document", async () => {
     documentRows().filter((row) => row.textContent?.includes("new-manual.pdf")),
   ).toHaveLength(1);
 });
+
+function rowOf(name: string): HTMLElement {
+  return documentRows().find((row) => row.textContent?.includes(name))!;
+}
+
+test("only finished documents offer viewing and deletion", async () => {
+  renderPanel();
+  await waitFor(() => expect(documentRows()).toHaveLength(4));
+
+  const actions = (name: string) =>
+    within(rowOf(name))
+      .queryAllByRole("button")
+      .map((button) => button.textContent);
+
+  expect(actions("faa-powerplant")).toEqual(["View document", "Delete"]);
+  expect(actions("damaged-manual.pdf")).toEqual(["Upload again", "Delete"]);
+  expect(actions("insst-guia")).toEqual([]);
+  expect(actions("tm-5-3431")).toEqual([]);
+});
+
+test("a ready document opens on its first page and steps through all of them", async () => {
+  const user = userEvent.setup();
+  renderPanel();
+  await waitFor(() => expect(documentRows()).toHaveLength(4));
+
+  await user.click(
+    within(rowOf("faa-powerplant")).getByRole("button", { name: "View document" }),
+  );
+
+  const dialog = screen.getByRole("dialog", {
+    name: "faa-powerplant-ch4-ignition-electrical.pdf, page 1",
+  });
+  expect(within(dialog).getByText("Page 1 of 71")).toBeVisible();
+});
+
+test("a deleted document leaves the list", async () => {
+  const user = userEvent.setup();
+  let deleted = false;
+  server.use(
+    http.delete(`/api/v1/documents/${libraryPage.items[0]!.id}`, () => {
+      deleted = true;
+      return new HttpResponse(null, { status: 204 });
+    }),
+    http.get("/api/v1/documents", () =>
+      HttpResponse.json({
+        items: deleted ? libraryPage.items.slice(1) : libraryPage.items,
+        next_cursor: null,
+      }),
+    ),
+  );
+  renderPanel();
+  await waitFor(() => expect(documentRows()).toHaveLength(4));
+
+  await user.click(
+    within(rowOf("faa-powerplant")).getByRole("button", { name: "Delete" }),
+  );
+  await user.click(screen.getByRole("button", { name: "Delete document" }));
+
+  await waitFor(() => expect(documentRows()).toHaveLength(3));
+  expect(screen.queryByText(/faa-powerplant/)).not.toBeInTheDocument();
+});

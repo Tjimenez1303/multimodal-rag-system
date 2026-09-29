@@ -1,7 +1,7 @@
 import { delay, http, HttpResponse } from "msw";
 
 import { callService, SERVICE_CALL_TIMEOUT_SECONDS } from "@/api/http";
-import { getDocument, listDocuments } from "@/client";
+import { deleteDocument, getDocument, listDocuments } from "@/client";
 
 import { libraryPage } from "../../tests/fixtures/documents/library";
 import { problem } from "../../tests/msw/handlers";
@@ -137,6 +137,22 @@ test("a success that is not JSON is unreadable", async () => {
   const result = await callService((options) => listDocuments(options));
 
   expect(!result.ok && result.failure.kind).toBe("unreadable");
+});
+
+test("a success with no content succeeds without a body", async () => {
+  const id = libraryPage.items[0]!.id;
+  server.use(
+    http.delete(
+      `/api/v1/documents/${id}`,
+      () => new HttpResponse(null, { status: 204 }),
+    ),
+  );
+
+  const result = await callService((options) =>
+    deleteDocument({ ...options, path: { document_id: id } }),
+  );
+
+  expect(result.ok).toBe(true);
 });
 
 test("a call that gets no answer times out after the service call timeout", async () => {

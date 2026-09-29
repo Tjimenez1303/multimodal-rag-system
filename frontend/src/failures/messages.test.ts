@@ -1,5 +1,10 @@
 import type { ServiceFailure } from "@/api/http";
-import { NOT_A_PDF, toTurnFailure, toUploadFailure } from "@/failures/messages";
+import {
+  NOT_A_PDF,
+  toDeletionFailure,
+  toTurnFailure,
+  toUploadFailure,
+} from "@/failures/messages";
 
 const ID = "3f1c2d7e-1111-4222-8333-444455556666";
 
@@ -196,6 +201,48 @@ describe("upload failures (contracts/client.md section 3)", () => {
       message: "Only PDF files can be uploaded.",
       reference: null,
       action: "none",
+    });
+  });
+});
+
+describe("deletion failures (contracts/client.md section 3)", () => {
+  test("a document already gone is not a failure", () => {
+    expect(toDeletionFailure(problem(404, "document_not_found"))).toBeNull();
+  });
+
+  test("a document being processed cannot be deleted again yet", () => {
+    expect(toDeletionFailure(problem(409, "ingestion_in_progress"))).toEqual({
+      message:
+        "This document is being processed. It can be deleted once processing ends.",
+      reference: ID,
+      retryable: false,
+    });
+  });
+
+  test.each([
+    [
+      problem(400, "invalid_request", "Bad id."),
+      "The document could not be deleted. Bad id.",
+    ],
+    [problem(503, "search_unavailable"), "The document could not be deleted."],
+    [problem(500, "internal_error"), "The document could not be deleted."],
+    [
+      { kind: "unreachable", requestId: ID } as const,
+      "The service could not be reached.",
+    ],
+    [
+      { kind: "timed_out", requestId: ID } as const,
+      "The service did not answer in time.",
+    ],
+    [
+      { kind: "unreadable", requestId: ID } as const,
+      "The service sent a response that could not be read.",
+    ],
+  ])("the failure %o can be deleted again", (failure, message) => {
+    expect(toDeletionFailure(failure)).toEqual({
+      message,
+      reference: ID,
+      retryable: true,
     });
   });
 });

@@ -717,6 +717,30 @@ class ExtractedElement:
             )
 
     @staticmethod
+    def figures_prefix_for(document_id: uuid.UUID) -> str:
+        """Return the storage prefix of every figure crop of a document.
+
+        Args:
+            document_id: Document the crops belong to.
+
+        Returns:
+            The prefix ``figures/{document_id}``.
+        """
+        return f"figures/{document_id}"
+
+    @staticmethod
+    def pages_prefix_for(document_id: uuid.UUID) -> str:
+        """Return the storage prefix of every page image of a document.
+
+        Args:
+            document_id: Document the pages belong to.
+
+        Returns:
+            The prefix ``pages/{document_id}``.
+        """
+        return f"pages/{document_id}"
+
+    @staticmethod
     def image_key_for(*, document_id: uuid.UUID, element_id: uuid.UUID) -> str:
         """Return the storage key of an image element's crop.
 
@@ -727,7 +751,7 @@ class ExtractedElement:
         Returns:
             The key ``figures/{document_id}/{element_id}.png``.
         """
-        return f"figures/{document_id}/{element_id}.png"
+        return f"{ExtractedElement.figures_prefix_for(document_id)}/{element_id}.png"
 
     @staticmethod
     def page_image_key_for(*, document_id: uuid.UUID, page_number: int) -> str:
@@ -740,7 +764,7 @@ class ExtractedElement:
         Returns:
             The key ``pages/{document_id}/{page_number}.png``.
         """
-        return f"pages/{document_id}/{page_number}.png"
+        return f"{ExtractedElement.pages_prefix_for(document_id)}/{page_number}.png"
 
     def with_image_key(self, image_key: str) -> ExtractedElement:
         """Return the image with the storage key of its crop.

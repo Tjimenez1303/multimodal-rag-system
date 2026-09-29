@@ -43,7 +43,7 @@ def test_media_types_and_headers_match(path: str, method: str) -> None:
     declared = PATHS[path][method]["responses"]
 
     for status, contract_response in declared.items():
-        expected = resolve(contract_response, path=path)
+        expected = resolve(contract_response, path=path, method=method)
         if "content" in expected:
             assert set(served[status].get("content", {})) == set(expected["content"])
         assert set(served[status].get("headers", {})) == set(
@@ -65,5 +65,9 @@ def test_parameters_match(path: str, method: str) -> None:
     declared = PATHS[path][method].get("parameters", [])
 
     assert {(p["name"], p["in"]) for p in served} == {
-        (resolve(p, path=path)["name"], resolve(p, path=path)["in"]) for p in declared
+        (
+            resolve(p, path=path, method=method)["name"],
+            resolve(p, path=path, method=method)["in"],
+        )
+        for p in declared
     }

@@ -262,13 +262,7 @@ class QdrantVectorIndex:
             ProviderTimeoutError: If Qdrant keeps timing out after retries.
             ProviderResponseError: If Qdrant rejects the request.
         """
-        await self._call(
-            lambda: self._client.delete(
-                self.collection,
-                points_selector=models.FilterSelector(filter=_of_document(document_id)),
-                wait=True,
-            )
-        )
+        await self._call(lambda: self._delete_points(document_id))
 
     async def search_hybrid(
         self,
@@ -374,6 +368,18 @@ class QdrantVectorIndex:
                 return None
             raise
         return response.points
+
+    async def _delete_points(self, document_id: uuid.UUID) -> None:
+        try:
+            await self._client.delete(
+                self.collection,
+                points_selector=models.FilterSelector(filter=_of_document(document_id)),
+                wait=True,
+            )
+        except UnexpectedResponse as error:
+            # No document was ever indexed, so there is nothing to delete.
+            if error.status_code != _NOT_FOUND:
+                raise
 
     async def _create_collection(self) -> None:
         try:

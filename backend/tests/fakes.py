@@ -37,6 +37,7 @@ from multimodal_rag.ingestion.errors import (
     BlobNotFoundError,
     DocumentNotFoundError,
     ElementNotFoundError,
+    IngestionInProgressError,
     JobNotFoundError,
     LeaseLostError,
     UnsupportedMediaTypeError,
@@ -47,6 +48,7 @@ from multimodal_rag.shared.errors import (
 )
 
 EMBEDDING_DIMENSIONS = 1024
+_ACTIVE = {JobStatus.PENDING, JobStatus.PROCESSING}
 
 
 class FrozenClock:
@@ -121,8 +123,11 @@ def _page_of[T](items: list[T], *, limit: int, cursor: str | None) -> Page[T]:
 
 
 class InMemoryDocumentRepository:
-    def __init__(self) -> None:
+    """Document store whose deletion checks and cascades to ``jobs`` when given."""
+
+    def __init__(self, *, jobs: InMemoryJobQueue | None = None) -> None:
         self.documents: dict[uuid.UUID, Document] = {}
+        self.jobs = jobs
 
     async def register(self, document: Document) -> tuple[Document, bool]:
         for existing in self.documents.values():
@@ -149,6 +154,16 @@ class InMemoryDocumentRepository:
             for document_id in dict.fromkeys(document_ids)
             if document_id in self.documents
         )
+
+    async def delete(self, document_id: uuid.UUID) -> None:
+        await self.get(document_id)
+        if self.jobs is not None:
+            owned = [j for j in self.jobs.jobs.values() if j.document_id == document_id]
+            if any(job.status in _ACTIVE for job in owned):
+                raise IngestionInProgressError(f"Document {document_id} is in use")
+            for job in owned:
+                del self.jobs.jobs[job.id]
+        del self.documents[document_id]
 
 
 class InMemoryJobQueue:
@@ -366,6 +381,10 @@ class InMemoryBlobStorage:
 
     async def delete(self, key: str) -> None:
         self.blobs.pop(key, None)
+
+    async def delete_tree(self, prefix: str) -> None:
+        for key in [key for key in self.blobs if key.startswith(f"{prefix}/")]:
+            del self.blobs[key]
 
     async def exists(self, key: str) -> bool:
         return key in self.blobs

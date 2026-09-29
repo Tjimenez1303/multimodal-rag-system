@@ -66,6 +66,7 @@ from multimodal_rag.ingestion.use_cases.intake import (
     UploadLimits,
 )
 from multimodal_rag.ingestion.use_cases.library import (
+    DeleteDocument,
     GetDocument,
     GetElementImage,
     GetPageImage,
@@ -100,13 +101,16 @@ def create_api_app() -> ASGIApp:
     configure_logging(log_format=settings.log_format, level=settings.log_level)
     engine = create_engine(settings)
     storage = FilesystemBlobStorage(settings.blob_root)
-    ingestion = _ingestion_state(settings, engine, storage)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncGenerator[ApiState]:
         async with AsyncExitStack() as resources:
             resources.push_async_callback(engine.dispose)
-            answering = await _answering_state(settings, engine, storage, resources)
+            index = _vector_index(settings, resources)
+            ingestion = _ingestion_state(settings, engine, storage, index=index)
+            answering = await _answering_state(
+                settings, engine, storage, resources, index=index
+            )
             logger.info("api ready, version %s", __version__)
             yield ApiState(**ingestion, **answering)
 
@@ -128,8 +132,31 @@ def create_api_app() -> ASGIApp:
     return RequestContextMiddleware(app)
 
 
+def _vector_index(
+    settings: ApiSettings, resources: AsyncExitStack
+) -> QdrantVectorIndex:
+    # No client connects here, so the API starts while Qdrant is down.
+    qdrant = AsyncQdrantClient(
+        url=str(settings.qdrant_url),
+        timeout=math.ceil(settings.qdrant_timeout_seconds),
+        # The version check would call Qdrant from a thread at startup.
+        check_compatibility=False,
+    )
+    resources.push_async_callback(qdrant.close)
+    return QdrantVectorIndex(
+        qdrant,
+        collection=settings.qdrant_collection,
+        dimensions=settings.embedder_dimensions,
+        retry=RetryPolicy.for_providers(settings),
+    )
+
+
 def _ingestion_state(
-    settings: ApiSettings, engine: AsyncEngine, storage: FilesystemBlobStorage
+    settings: ApiSettings,
+    engine: AsyncEngine,
+    storage: FilesystemBlobStorage,
+    *,
+    index: QdrantVectorIndex,
 ) -> IngestionState:
     clock = SystemClock()
     jobs = PostgresJobQueue(engine)
@@ -156,6 +183,9 @@ def _ingestion_state(
         get_page_image=GetPageImage(documents=documents, jobs=jobs, blobs=storage),
         list_documents=ListDocuments(documents=documents, jobs=jobs),
         get_document=GetDocument(documents=documents, jobs=jobs),
+        delete_document=DeleteDocument(
+            documents=documents, jobs=jobs, index=index, blobs=storage
+        ),
     )
 
 
@@ -164,16 +194,11 @@ async def _answering_state(
     engine: AsyncEngine,
     storage: FilesystemBlobStorage,
     resources: AsyncExitStack,
+    *,
+    index: QdrantVectorIndex,
 ) -> AnsweringState:
-    # No client connects here, so the API starts while Qdrant or the models are down.
+    # No client connects here, so the API starts while the models are down.
     retry = RetryPolicy.for_providers(settings)
-    qdrant = AsyncQdrantClient(
-        url=str(settings.qdrant_url),
-        timeout=math.ceil(settings.qdrant_timeout_seconds),
-        # The version check would call Qdrant from a thread at startup.
-        check_compatibility=False,
-    )
-    resources.push_async_callback(qdrant.close)
     embedder_client = await resources.enter_async_context(
         httpx.AsyncClient(
             base_url=str(settings.embedder_url),
@@ -196,12 +221,7 @@ async def _answering_state(
                 query_instruction=settings.embedder_query_instruction,
                 retry=retry,
             ),
-            index=QdrantVectorIndex(
-                qdrant,
-                collection=settings.qdrant_collection,
-                dimensions=settings.embedder_dimensions,
-                retry=retry,
-            ),
+            index=index,
             documents=PostgresDocumentRepository(engine),
             elements=PostgresElementRepository(engine),
             generator=OpenAICompatibleAnswerGenerator(

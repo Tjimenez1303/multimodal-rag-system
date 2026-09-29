@@ -3,8 +3,8 @@
 
 import { type Client, type ClientMeta, formDataBodySerializer, type Options as Options2, type RequestResult, type TDataShape } from './client';
 import { client } from './client.gen';
-import type { AskQuestionData, AskQuestionErrors, AskQuestionResponses, GetDocumentData, GetDocumentErrors, GetDocumentImageData, GetDocumentImageErrors, GetDocumentImageResponses, GetDocumentPageImageData, GetDocumentPageImageErrors, GetDocumentPageImageResponses, GetDocumentResponses, GetJobData, GetJobErrors, GetJobResponses, ListDocumentElementsData, ListDocumentElementsErrors, ListDocumentElementsResponses, ListDocumentsData, ListDocumentsErrors, ListDocumentsResponses, LivenessData, LivenessResponses, ReadinessData, ReadinessErrors, ReadinessResponses, UploadDocumentData, UploadDocumentErrors, UploadDocumentResponses } from './types.gen';
-import { zAskQuestionResponse, zGetDocumentImageResponse, zGetDocumentPageImageResponse, zGetDocumentResponse, zGetJobResponse, zListDocumentElementsResponse, zListDocumentsResponse, zLivenessResponse, zUploadDocumentResponse } from './zod.gen';
+import type { AskQuestionData, AskQuestionErrors, AskQuestionResponses, DeleteDocumentData, DeleteDocumentErrors, DeleteDocumentResponses, GetDocumentData, GetDocumentErrors, GetDocumentImageData, GetDocumentImageErrors, GetDocumentImageResponses, GetDocumentPageImageData, GetDocumentPageImageErrors, GetDocumentPageImageResponses, GetDocumentResponses, GetJobData, GetJobErrors, GetJobResponses, ListDocumentElementsData, ListDocumentElementsErrors, ListDocumentElementsResponses, ListDocumentsData, ListDocumentsErrors, ListDocumentsResponses, LivenessData, LivenessResponses, ReadinessData, ReadinessErrors, ReadinessResponses, UploadDocumentData, UploadDocumentErrors, UploadDocumentResponses } from './types.gen';
+import { zAskQuestionResponse, zDeleteDocumentResponse, zGetDocumentImageResponse, zGetDocumentPageImageResponse, zGetDocumentResponse, zGetJobResponse, zListDocumentElementsResponse, zListDocumentsResponse, zLivenessResponse, zUploadDocumentResponse } from './zod.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -73,6 +73,17 @@ export const uploadDocument = <ThrowOnError extends boolean = false>(options: Op
 export const getJob = <ThrowOnError extends boolean = false>(options: Options<GetJobData, ThrowOnError>): RequestResult<GetJobResponses, GetJobErrors, ThrowOnError> => (options.client ?? client).get<GetJobResponses, GetJobErrors, ThrowOnError>({
     responseValidator: async (data) => await zGetJobResponse.parseAsync(data),
     url: '/api/v1/jobs/{job_id}',
+    ...options
+});
+
+/**
+ * Delete Document
+ *
+ * Removes the document, its jobs, everything captured from it, its page images and its original file. Refused while the document's latest job is pending or processing.
+ */
+export const deleteDocument = <ThrowOnError extends boolean = false>(options: Options<DeleteDocumentData, ThrowOnError>): RequestResult<DeleteDocumentResponses, DeleteDocumentErrors, ThrowOnError> => (options.client ?? client).delete<DeleteDocumentResponses, DeleteDocumentErrors, ThrowOnError>({
+    responseValidator: async (data) => await zDeleteDocumentResponse.parseAsync(data),
+    url: '/api/v1/documents/{document_id}',
     ...options
 });
 

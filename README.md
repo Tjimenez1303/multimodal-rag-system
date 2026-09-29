@@ -48,7 +48,8 @@ its sources by document and page and shows the figure it relies on beside the te
 - Failures explain what went wrong in plain words, with a reference to find the request
   in the logs and a retry.
 - The document panel uploads manuals and follows their processing, page by page, until
-  they are ready to be asked about.
+  they are ready to be asked about. A ready manual can be read page by page, and a
+  manual that is no longer needed can be deleted with everything captured from it.
 
 ## Architecture
 
@@ -118,6 +119,8 @@ The chat at http://localhost:3000 covers everyday use:
   figure at full size.
 - Collapse the document panel to give the conversation the whole width. It keeps a
   count of the manuals still processing.
+- Choose "View document" on a ready manual to page through it, or "Delete" on a ready or
+  failed one to remove it. A manual still processing cannot be deleted until it ends.
 - The conversation survives a reload of the tab and is cleared when the tab closes or
   you start a new conversation.
 
@@ -182,6 +185,7 @@ the interactive documentation.
 | `GET /api/v1/jobs/{job_id}` | State, stage, page progress and summary of a job |
 | `GET /api/v1/documents` | Document library, newest first, with the latest job of each document |
 | `GET /api/v1/documents/{document_id}` | One document and its latest job |
+| `DELETE /api/v1/documents/{document_id}` | Delete a document and everything captured from it, unless it is still processing |
 | `GET /api/v1/documents/{document_id}/elements` | Extracted text, tables and images, filterable by page and kind |
 | `GET /api/v1/documents/{document_id}/images/{element_id}` | The image of a figure |
 | `GET /api/v1/documents/{document_id}/pages/{page_number}/image` | The rendered page, once the document is ready |
@@ -268,6 +272,7 @@ Each major decision has a record in [`docs/adr`](docs/adr):
 5. [Grounded answers and a relevance gate](docs/adr/0005-grounded-answers-and-relevance-gate.md)
 6. [A browser chat client served next to the API](docs/adr/0006-chat-client-stack-and-serving.md)
 7. [Page images kept from ingestion](docs/adr/0007-page-images-at-ingestion.md)
+8. [Deleting a document](docs/adr/0008-document-deletion.md)
 
 The backend stack is FastAPI, SQLAlchemy with asyncpg, PostgreSQL 18, Qdrant 1.19 with
 server-side BM25, Docling 2.130, and the Qwen3.5 9B and Qwen3 Embedding 0.6B models. The

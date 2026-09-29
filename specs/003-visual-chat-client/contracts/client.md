@@ -82,6 +82,22 @@ service writes in plain English and which names the offending documents or limit
 | Any 5xx | `failed` | "The file could not be stored." | Upload again |
 | No response | `failed` | "The service could not be reached." | Upload again |
 
+### Document deletion
+
+Shown inside the delete confirmation, which stays open so the user can try again or
+cancel (FR-049).
+
+| Status and code | Message | Action |
+|---|---|---|
+| 204 | None | The dialog closes and the document leaves the list |
+| 404 `document_not_found` | None. It was already deleted elsewhere | Same as 204 |
+| 409 `ingestion_in_progress` | "This document is being processed. It can be deleted once processing ends." | Cancel |
+| Another 4xx | "The document could not be deleted." followed by detail when present | Delete again |
+| Any 5xx | "The document could not be deleted." | Delete again |
+| No response (`unreachable`) | "The service could not be reached." | Delete again |
+| No response within 10 s (`timed_out`) | "The service did not answer in time." | Delete again |
+| Body that does not match the contract (`unreadable`) | "The service sent a response that could not be read." | Delete again |
+
 ### Other calls
 
 | Call | Failure | Behavior |

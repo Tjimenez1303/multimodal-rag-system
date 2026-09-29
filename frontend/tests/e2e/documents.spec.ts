@@ -224,3 +224,141 @@ test("in a window narrower than the layout, the panel stays and 'Upload a manual
   await expect(page.getByRole("button", { name: "Upload a PDF" })).toBeFocused();
   await expect(page.getByRole("button", { name: "Upload a PDF" })).toBeVisible();
 });
+
+const READY_ID = "9660318f-9004-4fa9-925c-fb616874f516";
+const BUSY_ID = "73c717ef-eac1-41a0-9ac9-7665a72f4f5f";
+
+/**
+ * A library with a ready and a processing document, whose deletions answer with
+ * `deletion` and, when it is 204, remove the document.
+ */
+async function fakeFinishedLibrary(page: Page, deletion: 204 | 409 = 204) {
+  const documents: DocumentBody[] = [
+    {
+      id: READY_ID,
+      file_name: "faa-manual.pdf",
+      size_bytes: 8,
+      page_count: 3,
+      created_at: CREATED,
+      latest_job: job(READY_ID, {
+        status: "completed",
+        pages_done: 3,
+        pages_total: 3,
+        summary: PROCESSING.at(-1)!.summary!,
+      }),
+    },
+    {
+      id: BUSY_ID,
+      file_name: "welding-manual.pdf",
+      size_bytes: 8,
+      page_count: 65,
+      created_at: CREATED,
+      latest_job: job(BUSY_ID, { status: "processing", stage: "extracting" }),
+    },
+  ];
+  const deleted: string[] = [];
+  await page.route(LIBRARY, (route) =>
+    route.fulfill({ json: { items: documents, next_cursor: null } }),
+  );
+  await page.route(`**/api/v1/documents/${BUSY_ID}`, (route) =>
+    route.fulfill({ json: documents.find((document) => document.id === BUSY_ID) }),
+  );
+  await page.route(`**/api/v1/documents/${READY_ID}`, (route) => {
+    if (route.request().method() !== "DELETE") return route.fallback();
+    if (deletion === 409) {
+      return route.fulfill({
+        status: 409,
+        contentType: "application/problem+json",
+        body: JSON.stringify({
+          title: "Conflict",
+          status: 409,
+          instance: `/api/v1/documents/${READY_ID}`,
+          code: "ingestion_in_progress",
+          request_id: "e2e",
+        }),
+      });
+    }
+    deleted.push(READY_ID);
+    documents.splice(0, 1);
+    return route.fulfill({ status: 204 });
+  });
+  return { deleted };
+}
+
+function documentRow(page: Page, name: string) {
+  return page
+    .getByRole("list", { name: "Documents" })
+    .getByRole("listitem")
+    .filter({ hasText: name });
+}
+
+test("a ready document opens on its first page and steps to its last", async ({
+  page,
+}) => {
+  await fakeService(page, []);
+  await fakeFinishedLibrary(page);
+  await page.goto("/");
+
+  await documentRow(page, "faa-manual.pdf")
+    .getByRole("button", { name: "View document" })
+    .click();
+
+  // The dialog's name follows the page, so it is found by role alone.
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toHaveAccessibleName("faa-manual.pdf, page 1");
+  await expect(dialog.getByText("Page 1 of 3")).toBeVisible();
+  await dialog.getByRole("button", { name: "Next page" }).click();
+  await dialog.getByRole("button", { name: "Next page" }).click();
+  await expect(dialog).toHaveAccessibleName("faa-manual.pdf, page 3");
+  await expect(dialog.getByRole("img")).toHaveAttribute(
+    "src",
+    `/api/v1/documents/${READY_ID}/pages/3/image`,
+  );
+  await expect(dialog.getByRole("button", { name: "Next page" })).toBeDisabled();
+});
+
+test("a confirmed deletion removes the document, and one being processed offers none", async ({
+  page,
+}) => {
+  await fakeService(page, []);
+  const service = await fakeFinishedLibrary(page);
+  await page.goto("/");
+
+  await expect(
+    documentRow(page, "welding-manual.pdf").getByRole("button", { name: "Delete" }),
+  ).toHaveCount(0);
+  await documentRow(page, "faa-manual.pdf")
+    .getByRole("button", { name: "Delete" })
+    .click();
+  const confirmation = page.getByRole("alertdialog", {
+    name: "Delete faa-manual.pdf?",
+  });
+  await expectAccessible(page);
+  await confirmation.getByRole("button", { name: "Delete document" }).click();
+
+  await expect(confirmation).toBeHidden();
+  await expect(documentRow(page, "faa-manual.pdf")).toHaveCount(0);
+  expect(service.deleted).toEqual([READY_ID]);
+});
+
+test("a refused deletion explains why and keeps the document", async ({ page }) => {
+  await fakeService(page, []);
+  await fakeFinishedLibrary(page, 409);
+  await page.goto("/");
+
+  await documentRow(page, "faa-manual.pdf")
+    .getByRole("button", { name: "Delete" })
+    .click();
+  const confirmation = page.getByRole("alertdialog");
+  await confirmation.getByRole("button", { name: "Delete document" }).click();
+
+  await expect(
+    confirmation.getByText(
+      "This document is being processed. It can be deleted once processing ends.",
+    ),
+  ).toBeVisible();
+  await expect(confirmation.getByText("Reference:")).toBeVisible();
+  await expectAccessible(page);
+  await confirmation.getByRole("button", { name: "Cancel" }).click();
+  await expect(documentRow(page, "faa-manual.pdf")).toHaveCount(1);
+});

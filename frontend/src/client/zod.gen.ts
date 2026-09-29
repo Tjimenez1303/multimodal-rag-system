@@ -570,6 +570,15 @@ export const zGetJobPath = z.object({
  */
 export const zGetJobResponse = zJobBody;
 
+export const zDeleteDocumentPath = z.object({
+    document_id: z.uuid()
+});
+
+/**
+ * Successful Response
+ */
+export const zDeleteDocumentResponse = z.void();
+
 export const zGetDocumentPath = z.object({
     document_id: z.uuid()
 });

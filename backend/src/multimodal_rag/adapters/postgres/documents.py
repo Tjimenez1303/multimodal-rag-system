@@ -11,9 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from multimodal_rag.adapters.postgres.engine import connect, transaction
 from multimodal_rag.adapters.postgres.pagination import decode_cursor, encode_cursor
-from multimodal_rag.adapters.postgres.tables import documents
-from multimodal_rag.ingestion.domain import Document
-from multimodal_rag.ingestion.errors import DocumentNotFoundError
+from multimodal_rag.adapters.postgres.tables import documents, ingestion_jobs
+from multimodal_rag.ingestion.domain import Document, JobStatus
+from multimodal_rag.ingestion.errors import (
+    DocumentNotFoundError,
+    IngestionInProgressError,
+)
 from multimodal_rag.ingestion.ports import Page
 
 
@@ -88,6 +91,43 @@ class PostgresDocumentRepository:
         async with connect(self._engine) as connection:
             rows = (await connection.execute(query)).mappings().all()
         return tuple(_document(row) for row in rows)
+
+    async def delete(self, document_id: uuid.UUID) -> None:
+        """Delete a document, whose rows cascade to its jobs and elements.
+
+        The document row is locked before its jobs are checked. A concurrent upload
+        that enqueues a job either commits first, and is seen by the check, or waits
+        on the lock and then finds no document.
+
+        Args:
+            document_id: Id of the document.
+
+        Raises:
+            DocumentNotFoundError: If no document has this id.
+            IngestionInProgressError: If a job of the document is pending or
+                processing.
+        """
+        locked = (
+            sa.select(documents.c.id)
+            .where(documents.c.id == document_id)
+            .with_for_update()
+        )
+        active = sa.select(
+            sa.exists().where(
+                ingestion_jobs.c.document_id == document_id,
+                ingestion_jobs.c.status.in_([JobStatus.PENDING, JobStatus.PROCESSING]),
+            )
+        )
+        async with transaction(self._engine) as connection:
+            if (await connection.execute(locked)).scalar_one_or_none() is None:
+                raise DocumentNotFoundError(f"Document {document_id} not found")
+            if (await connection.execute(active)).scalar_one():
+                raise IngestionInProgressError(
+                    f"Document {document_id} is being ingested"
+                )
+            await connection.execute(
+                sa.delete(documents).where(documents.c.id == document_id)
+            )
 
     async def list_page(self, *, limit: int, cursor: str | None) -> Page[Document]:
         """Return documents newest first.

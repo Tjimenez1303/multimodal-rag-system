@@ -1,0 +1,98 @@
+"""Routes that expose what ingestion captured from each document."""
+
+import uuid
+from typing import Annotated, Any
+
+from fastapi import APIRouter, Query, Request, Response
+
+from multimodal_rag.adapters.http.dependencies import (
+    GetElementImageDep,
+    ListDocumentElementsDep,
+)
+from multimodal_rag.adapters.http.problems import problem_responses
+from multimodal_rag.adapters.http.routes_ingestion import API_PREFIX
+from multimodal_rag.adapters.http.schemas import ElementBody, ElementPageBody
+from multimodal_rag.ingestion.domain import ElementKind
+
+PNG_MEDIA_TYPE = "image/png"
+MAX_PAGE_SIZE = 200
+DEFAULT_PAGE_SIZE = 50
+_PNG_RESPONSE: dict[str, Any] = {
+    "description": "PNG image",
+    "content": {PNG_MEDIA_TYPE: {"schema": {"type": "string", "format": "binary"}}},
+}
+
+documents_router = APIRouter(prefix=API_PREFIX, tags=["documents"])
+
+
+@documents_router.get(
+    "/documents/{document_id}/elements",
+    operation_id="listDocumentElements",
+    description="Captured elements of a completed document, in reading order.",
+    responses=problem_responses(400, 404, 409),
+)
+async def list_document_elements(
+    document_id: uuid.UUID,
+    list_elements: ListDocumentElementsDep,
+    request: Request,
+    page: Annotated[int | None, Query(ge=1)] = None,
+    kind: ElementKind | None = None,
+    limit: Annotated[int, Query(ge=1, le=MAX_PAGE_SIZE)] = DEFAULT_PAGE_SIZE,
+    cursor: str | None = None,
+) -> ElementPageBody:
+    """Return one page of the captured elements of a document.
+
+    Args:
+        document_id: Document whose elements are listed.
+        list_elements: Elements use case.
+        request: Request being handled, used to build image URLs.
+        page: Only elements of this 1-based page, when set.
+        kind: Only elements of this kind, when set.
+        limit: Largest number of elements to return.
+        cursor: Cursor returned by the previous page.
+
+    Returns:
+        The elements with their relationships and the cursor of the next page.
+    """
+    result = await list_elements(
+        document_id, page_number=page, kind=kind, limit=limit, cursor=cursor
+    )
+    items = [
+        ElementBody.from_view(
+            view,
+            image_url=request.url_for(
+                "get_document_image",
+                document_id=str(document_id),
+                element_id=str(view.element.id),
+            ).path
+            if view.element.image_key
+            else None,
+        )
+        for view in result.items
+    ]
+    return ElementPageBody(items=items, next_cursor=result.next_cursor)
+
+
+@documents_router.get(
+    "/documents/{document_id}/images/{element_id}",
+    operation_id="getDocumentImage",
+    description="Stored crop of an image element.",
+    response_class=Response,
+    responses={200: _PNG_RESPONSE, **problem_responses(400, 404)},
+)
+async def get_document_image(
+    document_id: uuid.UUID, element_id: uuid.UUID, get_image: GetElementImageDep
+) -> Response:
+    """Return the PNG crop of an image element.
+
+    Args:
+        document_id: Document the image belongs to.
+        element_id: Id of the image element.
+        get_image: Image use case.
+
+    Returns:
+        The PNG bytes.
+    """
+    return Response(
+        content=await get_image(document_id, element_id), media_type=PNG_MEDIA_TYPE
+    )

@@ -319,10 +319,14 @@ components:
         is_decorative: { type: boolean }
         relationships:
           type: array
+          description: >
+            Every relationship that touches the element, as a directed edge. For example
+            an image lists the caption_of edge whose target it is.
           items:
             type: object
-            required: [target_id, kind]
+            required: [source_id, target_id, kind]
             properties:
+              source_id: { type: string, format: uuid }
               target_id: { type: string, format: uuid }
               kind: { type: string, enum: [caption_of, title_of, describes, near, continues] }
     ElementPage:

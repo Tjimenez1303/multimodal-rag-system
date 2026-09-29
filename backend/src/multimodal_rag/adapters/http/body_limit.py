@@ -111,7 +111,7 @@ class BodySizeLimitMiddleware:
 
 
 def _content_length(scope: Scope) -> int | None:
-    # Only ASCII digits form a valid Content-Length (RFC 9110 section 8.6).
+    # Only ASCII digits form a valid Content-Length.
     value = Headers(scope=scope).get("content-length")
     if value is None or not (value.isascii() and value.isdigit()):
         return None

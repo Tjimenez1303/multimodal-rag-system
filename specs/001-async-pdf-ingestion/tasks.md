@@ -234,7 +234,7 @@ code yet beyond a package skeleton and one smoke test.
   - `claim(worker_id)` with `SELECT … FOR UPDATE SKIP LOCKED` over pending jobs. It sets `processing`, increments `attempt` and issues `lease_token` and `lease_expires_at`.
   - `heartbeat`, `update_progress`, `complete` and `fail`, each conditioned on `lease_token`.
   - `get` and `latest_for_document`.
-  - Reclaiming expired leases stays in T070, so until Phase 5 an interrupted job keeps `processing`.
+  - Reclaiming expired leases is T070.
 - [x] T043 [P] [US1] Implement the Postgres `ElementRepository` in `backend/src/multimodal_rag/adapters/postgres/elements.py`. `replace_for_document(document_id, elements, relationships, lease_token)` runs in one transaction guarded by the lease token.
 - [x] T044 [US1] Implement the Docling `DocumentExtractor` in `backend/src/multimodal_rag/adapters/docling/extractor.py`:
   - One `DocumentConverter` per worker process, warmed at startup, with RapidOCR on onnxruntime, TableFormer, the picture classifier, and `generate_picture_images` with `images_scale=2.0`.
@@ -291,73 +291,78 @@ code yet beyond a package skeleton and one smoke test.
 
 ### Tests for User Story 2 (REQUIRED) ⚠️
 
-- [ ] T050 [P] [US2] Unit tests for the relationship rules in `backend/tests/unit/ingestion/test_relationships.py`:
-  - Caption and title links.
-  - `near` links the closest text block in the same column within `NEAR_TEXT_MAX_POINTS` on the same page, and on the adjacent page when the caption continues there.
-  - `continues` for tables "on consecutive pages with the same column count, the earlier part in the lower part of its page, the later part in the upper part of its page, only page furniture between them", including negative cases for a different column count and body text in between.
+- [x] T050 [P] [US2] Unit tests for the relationship rules in `backend/tests/unit/ingestion/test_relationships.py`:
+  - Caption links from the extractor are kept, and a caption the extractor left alone is linked to the nearest image (`caption_of`) or table (`title_of`) in the same column, or across a page break.
+  - `near` links the closest paragraph or list item in the same column within `NEAR_TEXT_MAX_POINTS` on the same page, and on the next page when the caption continues there.
+  - `continues` for tables "on consecutive pages with the same column count", the earlier part in the lower half of its page and the later part in the upper half, with only page furniture, images or the parts' captions between them (research §8), including negative cases for a different column count and body text in between.
   - Repeated-header detection.
-- [ ] T051 [P] [US2] Unit tests for the retrieval unit builder in `backend/tests/unit/ingestion/test_retrieval_units.py`:
+- [x] T051 [P] [US2] Unit tests for the retrieval unit builder in `backend/tests/unit/ingestion/test_retrieval_units.py`:
   - Breaks at headings, tables and figures.
-  - Merges paragraphs under the same heading up to `MAX_UNIT_TOKENS`.
-  - Splits oversize paragraphs only at sentence boundaries, and never cuts a table or a sentence.
-  - One unit per table chain citing every page, and one figure unit from caption plus labels plus description.
-  - Units carry `heading_path`, `pages`, `element_ids` and `figure_ids`.
-  - Deterministic unit keys.
-- [ ] T052 [P] [US2] Unit tests for figure handling in `backend/tests/unit/ingestion/test_figures.py`:
-  - Skips `logo`, `icon`, `signature`, `stamp`, code and `full_page_image`, figures below 5% of the page area, and images repeated "on at least 3 pages or on at least 20% of the pages" (`is_decorative`).
+  - Merges paragraphs under the same headings up to `MAX_UNIT_TOKENS`, measured on the contextualized text (heading path and text).
+  - Splits oversize paragraphs only at sentence ends, keeps an oversize sentence whole, and never cuts a table.
+  - One unit per table chain citing every page, without the repeated header, and one figure unit from caption plus labels plus description. Decorative images and page furniture yield no content.
+  - The heading path follows heading levels, including skipped levels.
+  - Units carry `heading_path`, `pages`, `element_ids`, `boxes` and `figure_ids`.
+  - Deterministic unit ids.
+- [x] T052 [P] [US2] Unit tests for figure handling in `backend/tests/unit/ingestion/test_figures.py`:
+  - Marks as decorative and skips `logo`, `icon`, `signature`, `stamp`, `bar_code`, `qr_code`, `full_page_image` and `page_thumbnail`, and images repeated "on at least 3 pages or on at least 20% of the pages" (`is_decorative`).
+  - Skips figures below 5% of their page area without marking them decorative.
   - Identifier verification flags tokens mixing letters and digits that are absent from labels and caption (FR-028).
-- [ ] T053 [P] [US2] Unit tests for `ProcessJob` stages `describing_figures` to `indexing` in `backend/tests/unit/ingestion/test_process_job_enrichment.py`:
+  - The description context holds the caption and the nearby text.
+- [x] T053 [P] [US2] Unit tests for `ProcessJob` stages `describing_figures` to `indexing` in `backend/tests/unit/ingestion/test_process_job_enrichment.py`:
   - Descriptions run with concurrency 2.
-  - A `FakeFigureDescriber` failure marks `not_described` and the job still completes (FR-027).
-  - The summary counts described, skipped and not described figures.
+  - A `FakeFigureDescriber` failure marks `not_described` and the job still completes (FR-027). Once the model is unreachable, the remaining figures are not sent to it.
+  - With descriptions disabled every figure is `skipped`.
+  - The summary counts described, skipped and not described figures, table chains and retrieval units.
   - Units are upserted with `visible=false`, then published on completion.
   - On failure, points are deleted by `document_id` (FR-018).
   - Re-processing yields the same point ids (FR-015).
   - Attempt 2 leaves no point that only attempt 1 wrote, because each attempt starts by deleting the document's points.
   - When the embedder exhausts its retries, `failure_reason` names the service and contains no document content.
-- [ ] T054 [P] [US2] respx tests for the OpenAI-compatible adapters in `backend/tests/unit/adapters/test_openai_compatible.py`:
-  - The describer sends the base64 `image_url` data URI, the caption and the neighboring text, `chat_template_kwargs.enable_thinking=false`, and the instruction to answer in the language of the caption and surrounding text, or in English when there is none.
-  - Maps timeouts, 429 and 5xx to transient errors, and 4xx to non-retryable errors.
-  - The embedder batches inputs and validates 1024 dimensions, raising `DataInconsistencyError` otherwise.
-- [ ] T055 [P] [US2] Integration test for the Qdrant `VectorIndex` in `backend/tests/integration/test_qdrant_index.py`:
+  - The embedding input is truncated to `EMBEDDER_MAX_INPUT_TOKENS`.
+- [x] T054 [P] [US2] respx tests for the OpenAI-compatible adapters in `backend/tests/unit/adapters/test_openai_compatible.py`:
+  - The describer sends the base64 `image_url` data URI, the caption and the neighboring text, `chat_template_kwargs.enable_thinking=false`, and the instruction to answer in the language of the caption and surrounding text, or in English when there is none. Images larger than 1280 px are downscaled.
+  - Maps timeouts, connection errors, 429 and 5xx to transient errors, and other 4xx and malformed answers to non-retryable errors.
+  - The embedder batches inputs by `EMBEDDER_BATCH_SIZE`, keeps the input order and validates 1024 dimensions, raising `DataInconsistencyError` otherwise.
+  - Unit tests for the `TokenCounter` adapter in `backend/tests/unit/adapters/test_huggingface_tokenizer.py` with a tokenizer built in the test, plus a check of the baked Qwen3-Embedding tokenizer.
+- [x] T055 [P] [US2] Integration test for the Qdrant `VectorIndex` in `backend/tests/integration/test_qdrant_index.py`:
   - The collection has dense (1024, cosine) and `bm25` sparse (IDF) vectors, plus payload indexes.
   - Upserts are idempotent.
   - `publish` flips `visible`, and `delete_document` removes all points.
   - `search_hybrid` returns a figure unit in the top 5 for one of its labels and never returns points with `visible=false`.
   - An unreachable Qdrant URL raises `ProviderUnavailableError` after the retry budget.
-- [ ] T056 [P] [US2] Contract tests for `GET /api/v1/documents/{document_id}/elements` (200, 404, and 409 before completion) and `GET /api/v1/documents/{document_id}/images/{element_id}` in `backend/tests/contract/test_elements_contract.py`.
+- [x] T056 [P] [US2] Contract tests for `GET /api/v1/documents/{document_id}/elements` (200, 400, 404, and 409 before completion) and `GET /api/v1/documents/{document_id}/images/{element_id}` in `backend/tests/contract/test_elements_contract.py`.
 
 ### Implementation for User Story 2
 
-- [ ] T057 [P] [US2] Implement the relationship rules in `backend/src/multimodal_rag/ingestion/relationships.py`: caption and title, proximity, and table continuation with repeated-header detection (research §8).
-- [ ] T058 [P] [US2] Implement the figure policy in `backend/src/multimodal_rag/ingestion/figures.py`:
+- [x] T057 [P] [US2] Implement the relationship rules in `backend/src/multimodal_rag/ingestion/relationships.py`: the caption fallback, proximity, and table continuation with repeated-header detection (research §8, §9). The Docling adapter emits `caption_of` and `title_of` from Docling's `captions` references, marks those texts as captions, and reports page sizes in `ExtractionBatch`.
+- [x] T058 [P] [US2] Implement the figure policy in `backend/src/multimodal_rag/ingestion/figures.py`:
   - The relevance filter: classes, the 5% area threshold, and images repeated on at least `DECORATIVE_MIN_PAGES` pages or `DECORATIVE_MIN_PAGE_SHARE` of the pages, compared by image content hash.
   - The identifier verifier.
   - The neighbor-context selector that feeds the description prompt.
-- [ ] T059 [US2] Implement the retrieval unit builder in `backend/src/multimodal_rag/ingestion/retrieval_units.py` using the `TokenCounter` port, with unit keys stable across runs (research §7).
-- [ ] T060 [P] [US2] Implement the `TokenCounter` adapter in `backend/src/multimodal_rag/adapters/tokenizer/huggingface.py`, loading the Qwen3-Embedding tokenizer baked into the worker image.
-- [ ] T061 [P] [US2] Implement the OpenAI-compatible `FigureDescriber` and `Embedder` in `backend/src/multimodal_rag/adapters/openai_compatible/`:
-  - httpx with timeouts and stamina retries.
+- [x] T059 [US2] Implement the retrieval unit builder in `backend/src/multimodal_rag/ingestion/retrieval_units.py` using the `TokenCounter` port, with unit keys stable across runs (research §7).
+- [x] T060 [P] [US2] Implement the `TokenCounter` adapter (`count` and `truncate`) in `backend/src/multimodal_rag/adapters/tokenizer/huggingface.py`, loading the Qwen3-Embedding `tokenizer.json` from `EMBEDDER_TOKENIZER_PATH`.
+- [x] T061 [P] [US2] Implement the OpenAI-compatible `FigureDescriber` and `Embedder` in `backend/src/multimodal_rag/adapters/openai_compatible/`:
+  - httpx with timeouts and the provider retry policy.
   - Images downscaled to at most 1280 px on the long side.
   - The prompt asks for a short description in the language of the caption and surrounding text (English when there is none) plus every printed label verbatim (FR-026).
-- [ ] T062 [P] [US2] Implement the Qdrant `VectorIndex` in `backend/src/multimodal_rag/adapters/qdrant/index.py`:
+- [x] T062 [P] [US2] Implement the Qdrant `VectorIndex` in `backend/src/multimodal_rag/adapters/qdrant/index.py`:
   - `ensure_collection`, which creates the payload indexes before inserts.
-  - `upsert_units`, using `uuid5` point ids and server-side `Document(model="qdrant/bm25")` with language-neutral options.
+  - `upsert_units`, using `uuid5` point ids and server-side `Document(model="qdrant/bm25")` with the language-neutral options of research §12.
   - `publish`, `delete_document`, and `search_hybrid`, which runs `prefetch` on `dense` and `bm25` with RRF fusion and filters `visible=true`.
-  - The client uses `timeout=QDRANT_TIMEOUT_SECONDS`, and every call is wrapped in the stamina policy from T019 for connection errors and 5xx.
-  - Verify the exact BM25 option names for lowercase, ASCII folding and no stemming, and record them in research.md §12.
-- [ ] T063 [US2] Extend `ProcessJob` in `backend/src/multimodal_rag/ingestion/use_cases/processing.py` with the stages `describing_figures`, `building_units`, `embedding` and `indexing`:
-  - Relationships are computed after extraction.
-  - Descriptions are persisted per figure.
-  - The summary is updated.
+  - The client uses `timeout=QDRANT_TIMEOUT_SECONDS`, and every call is wrapped in the provider retry policy for connection errors, timeouts and 5xx.
+- [x] T063 [US2] Extend `ProcessJob` in `backend/src/multimodal_rag/ingestion/use_cases/processing.py` with the stages `describing_figures`, `building_units`, `embedding` and `indexing`:
   - Each attempt starts with `VectorIndex.delete_document(document_id)` before any upsert.
-  - Points are published on completion and deleted on failure.
+  - The figure policy and the relationships are computed after extraction.
+  - Descriptions are kept on the figures and persisted with the other elements in the single fenced replacement at the end of the attempt, since an interrupted attempt restarts from scratch (FR-025).
+  - The summary is updated.
+  - Points are published after the elements are stored and before the job completes, and deleted on failure.
   - When a provider exhausts its retry budget, `failure_reason` names the service (`embedding model`, `vector index`) and never includes document content (FR-017).
-- [ ] T064 [US2] Implement `ListDocumentElements` and the image route in `backend/src/multimodal_rag/ingestion/use_cases/library.py` and `backend/src/multimodal_rag/adapters/http/routes_documents.py`:
-  - Cursor pagination with a page and kind filter.
-  - 409 `ingestion_not_completed` when no completed job exists.
+- [x] T064 [US2] Implement `ListDocumentElements` and `GetElementImage` in `backend/src/multimodal_rag/ingestion/use_cases/library.py`, and their routes in `backend/src/multimodal_rag/adapters/http/routes_documents.py`:
+  - Cursor pagination with a page and kind filter, and every relationship that touches each element. Migration `backend/migrations/versions/0004_index_relationships_by_target.py` indexes relationships by target for that lookup.
+  - 409 `ingestion_not_completed` when the latest job has not completed.
   - PNG served from `BlobStorage`.
-- [ ] T065 [US2] Add the Qwen3-Embedding tokenizer download to `backend/Dockerfile`, and call `ensure_collection` at worker startup in `backend/src/multimodal_rag/bootstrap.py`.
+- [x] T065 [US2] Add the Qwen3-Embedding tokenizer download to `backend/Dockerfile` from `backend/embedder_tokenizer.txt` (also cached by CI), with `EMBEDDER_TOKENIZER_PATH`, and wire the adapters in `backend/src/multimodal_rag/bootstrap.py`, calling `ensure_collection` at worker startup.
 
 **Checkpoint**: Quickstart scenarios 2 and 3 pass. SC-004, SC-005 and SC-012 can be checked on the sample set.
 

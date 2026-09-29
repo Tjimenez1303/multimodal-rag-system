@@ -16,8 +16,12 @@ from multimodal_rag.ingestion.domain import (
     JobStage,
     JobStatus,
     JobSummary,
+    PagedBox,
+    PageSize,
     RelationshipKind,
+    RetrievalUnit,
     TextOrigin,
+    UnitType,
     element_id_for,
     unit_id_for,
 )
@@ -27,6 +31,8 @@ from multimodal_rag.ingestion.errors import (
     InvalidDocumentError,
     InvalidElementError,
     InvalidJobTransitionError,
+    InvalidPageSizeError,
+    JobNotLeasedError,
 )
 from multimodal_rag.shared.errors import ConcurrencyError, DataInconsistencyError
 
@@ -260,6 +266,21 @@ class TestIngestionJob:
             else:
                 failed.fail(code=FailureCode.INTERNAL_ERROR, reason="again", now=NOW)
 
+    def test_a_claimed_job_holds_the_token_of_its_lease(self) -> None:
+        token = uuid.uuid4()
+        job = new_job().claim(
+            lease_token=token,
+            lease_expires_at=NOW + timedelta(seconds=90),
+            worker_id="w1",
+            now=NOW,
+        )
+
+        assert job.held_lease() == token
+
+    def test_a_job_without_a_lease_is_an_inconsistency(self) -> None:
+        with pytest.raises(JobNotLeasedError):
+            new_job().held_lease()
+
     def test_pending_job_cannot_complete(self) -> None:
         with pytest.raises(InvalidJobTransitionError):
             new_job().complete(summary=JobSummary(), now=NOW)
@@ -335,6 +356,40 @@ class TestExtractedElement:
     def test_only_images_reference_a_crop(self) -> None:
         with pytest.raises(InvalidElementError):
             element().with_image_key("figures/x/y.png")
+
+    def test_an_image_can_be_flagged_as_decorative(self) -> None:
+        image = element(kind=ElementKind.IMAGE, text=None)
+
+        assert image.as_decorative().is_decorative
+
+    def test_only_images_can_be_decorative(self) -> None:
+        with pytest.raises(InvalidElementError):
+            element().as_decorative()
+
+
+class TestPageSize:
+    def test_area_is_width_times_height(self) -> None:
+        assert PageSize(width=612, height=792).area == 612 * 792
+
+    @pytest.mark.parametrize("width", [0, -1, float("inf"), float("nan")])
+    def test_rejects_sizes_that_are_not_positive_and_finite(self, width: float) -> None:
+        with pytest.raises(InvalidPageSizeError):
+            PageSize(width=width, height=792)
+
+
+def test_a_unit_is_embedded_with_its_heading_path() -> None:
+    unit = RetrievalUnit(
+        id=uuid.uuid4(),
+        document_id=uuid.uuid4(),
+        unit_type=UnitType.TEXT,
+        text="Check the points.",
+        heading_path=("Ignition", "Magneto"),
+        pages=(1,),
+        element_ids=(uuid.uuid4(),),
+        boxes=(PagedBox(page=1, bbox=BOX),),
+    )
+
+    assert unit.embedding_text == "Ignition\nMagneto\nCheck the points."
 
 
 def test_relationships_cannot_link_an_element_to_itself() -> None:

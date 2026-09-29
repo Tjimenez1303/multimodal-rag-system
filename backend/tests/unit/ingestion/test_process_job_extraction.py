@@ -22,27 +22,43 @@ from multimodal_rag.ingestion.errors import (
     EncryptedDocumentError,
     LeaseLostError,
 )
+from multimodal_rag.ingestion.figures import FigurePolicy
 from multimodal_rag.ingestion.ports import ExtractionBatch
-from multimodal_rag.ingestion.use_cases.processing import ProcessJob
+from multimodal_rag.ingestion.use_cases.processing import (
+    EnrichmentOptions,
+    ProcessJob,
+)
 from multimodal_rag.shared.errors import (
     DataInconsistencyError,
     ExtractionError,
     StorageTimeoutError,
     StorageUnavailableError,
 )
+from tests.builders import LETTER
 from tests.fakes import (
+    FakeEmbedder,
     FakeExtractor,
+    FakeFigureDescriber,
     FrozenClock,
     InMemoryBlobStorage,
     InMemoryDocumentRepository,
     InMemoryElementRepository,
     InMemoryJobQueue,
+    InMemoryVectorIndex,
+    WordTokenCounter,
     claim_next,
     pending_job,
 )
 
 SHA = "c" * 64
 PNG = b"\x89PNG\r\n\x1a\n-figure"
+ENRICHMENT = EnrichmentOptions(
+    figure_policy=FigurePolicy(decorative_min_pages=3, decorative_min_page_share=0.2),
+    figure_concurrency=2,
+    near_text_max_points=72,
+    max_unit_tokens=480,
+    embedder_max_input_tokens=2048,
+)
 
 
 class RecordingJobQueue(InMemoryJobQueue):
@@ -89,7 +105,12 @@ class Harness:
             elements=self.elements,
             blobs=self.blobs,
             extractor=self.extractor,
+            describer=FakeFigureDescriber(),
+            embedder=FakeEmbedder(),
+            token_counter=WordTokenCounter(),
+            index=InMemoryVectorIndex(),
             page_batch=4,
+            enrichment=ENRICHMENT,
         )
 
     async def claimed_job(self, *, page_count: int | None = 6) -> IngestionJob:
@@ -152,6 +173,7 @@ def two_batches(document_id: uuid.UUID) -> list[ExtractionBatch]:
             figure,
         ),
         images={figure.id: PNG},
+        page_sizes=dict.fromkeys(range(1, 5), LETTER),
     )
     second = ExtractionBatch(
         first_page=5,
@@ -168,6 +190,7 @@ def two_batches(document_id: uuid.UUID) -> list[ExtractionBatch]:
             element(document_id, 5, kind=ElementKind.PAGE_FURNITURE, page=6),
         ),
         recognized_pages=(5,),
+        page_sizes=dict.fromkeys(range(5, 7), LETTER),
     )
     return [first, second]
 
@@ -187,6 +210,10 @@ async def test_progress_is_reported_after_every_page_batch(harness: Harness) -> 
         (JobStage.EXTRACTING, 0, 6),
         (JobStage.EXTRACTING, 4, 6),
         (JobStage.EXTRACTING, 6, 6),
+        (JobStage.DESCRIBING_FIGURES, 6, 6),
+        (JobStage.BUILDING_UNITS, 6, 6),
+        (JobStage.EMBEDDING, 6, 6),
+        (JobStage.INDEXING, 6, 6),
         (JobStage.FINALIZING, 6, 6),
     ]
 
@@ -208,7 +235,14 @@ async def test_elements_are_stored_with_page_and_box_and_the_job_completes(
     assert await harness.blobs.read_bytes(figure.image_key) == PNG
     assert finished.status is JobStatus.COMPLETED
     assert finished.summary == JobSummary(
-        pages=6, text_elements=3, tables=1, images=1, recognized_pages=1
+        pages=6,
+        text_elements=3,
+        tables=1,
+        images=1,
+        # The figure covers 1.6% of its page, below the 5% described figures need.
+        figures_skipped=1,
+        retrieval_units=4,
+        recognized_pages=1,
     )
     assert (await harness.jobs.get(job.id)).status is JobStatus.COMPLETED
 

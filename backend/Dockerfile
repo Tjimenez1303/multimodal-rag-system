@@ -35,6 +35,13 @@ RUN --mount=type=bind,source=docling_models.txt,target=/tmp/docling_models.txt \
     /app/.venv/bin/docling-tools models download $(cat /tmp/docling_models.txt) \
     --output-dir /opt/docling-models
 
+# The embedding model's tokenizer sizes retrieval units and truncates embedding inputs.
+# It comes from the pinned revision in the list that CI shares, like the models above.
+FROM dependencies AS tokenizer
+RUN --mount=type=bind,source=embedder_tokenizer.txt,target=/tmp/embedder_tokenizer.txt \
+    /app/.venv/bin/hf download $(cat /tmp/embedder_tokenizer.txt) \
+    --local-dir /opt/tokenizers/embedder
+
 FROM dependencies AS builder
 COPY pyproject.toml uv.lock ./
 COPY src ./src
@@ -55,11 +62,14 @@ RUN groupadd --system --gid 999 nonroot \
     && chown nonroot:nonroot /data/blobs
 COPY --from=builder --chown=nonroot:nonroot /app/.venv /app/.venv
 COPY --from=models --chown=nonroot:nonroot /opt/docling-models /opt/docling-models
+COPY --from=tokenizer --chown=nonroot:nonroot \
+    /opt/tokenizers/embedder/tokenizer.json /opt/tokenizers/embedder/tokenizer.json
 COPY --chown=nonroot:nonroot alembic.ini /app/alembic.ini
 COPY --chown=nonroot:nonroot migrations /app/migrations
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
-    DOCLING_ARTIFACTS_PATH=/opt/docling-models
+    DOCLING_ARTIFACTS_PATH=/opt/docling-models \
+    EMBEDDER_TOKENIZER_PATH=/opt/tokenizers/embedder/tokenizer.json
 WORKDIR /app
 USER nonroot
 CMD ["python", "-m", "multimodal_rag", "api"]

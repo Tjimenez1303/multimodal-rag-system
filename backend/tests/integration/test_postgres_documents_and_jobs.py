@@ -377,6 +377,9 @@ class TestElements:
         )
         assert list(page.items) == stored
         assert await elements.relationships_for([stored[0].id]) == tuple(links)
+        # The target of a link sees it too, so an image lists its caption and text.
+        assert await elements.relationships_for([figure.id]) == tuple(links)
+        assert await elements.relationships_for([stored[1].id]) == ()
         assert await elements.get(document_id=doc, element_id=figure.id) == figure
 
     async def test_elements_are_paginated_and_filtered(

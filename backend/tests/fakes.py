@@ -1,5 +1,6 @@
 """In-memory fakes that implement every port, used instead of mocks in unit tests."""
 
+import asyncio
 import hashlib
 import re
 import tempfile
@@ -34,7 +35,6 @@ from multimodal_rag.ingestion.errors import (
 from multimodal_rag.ingestion.ports import ExtractionBatch, Page, PdfInfo, SearchHit
 from multimodal_rag.shared.errors import (
     DataInconsistencyError,
-    ProviderUnavailableError,
 )
 
 EMBEDDING_DIMENSIONS = 1024
@@ -294,7 +294,7 @@ class InMemoryElementRepository:
             relationship
             for relationships in self.relationships.values()
             for relationship in relationships
-            if relationship.source_id in wanted
+            if wanted & {relationship.source_id, relationship.target_id}
         )
 
     async def get(
@@ -384,18 +384,36 @@ class FakeExtractor:
 
 @dataclass
 class FakeFigureDescriber:
-    """Describes figures from their caption, or fails when told to."""
+    """Describes figures from their caption, or raises the configured error.
 
-    fail: bool = False
-    calls: list[tuple[str | None, str | None]] = field(default_factory=list)
+    ``replies`` overrides the text returned for a caption and ``failures`` the error
+    raised for a caption, ``error`` applies to every call. Each call yields to the
+    event loop once, so concurrent calls overlap and ``max_in_flight`` records how
+    many ran at the same time.
+    """
+
+    error: Exception | None = None
+    replies: dict[str | None, str] = field(default_factory=dict)
+    failures: dict[str | None, Exception] = field(default_factory=dict)
+    calls: list[tuple[bytes, str | None, str | None]] = field(default_factory=list)
+    in_flight: int = 0
+    max_in_flight: int = 0
 
     async def describe(
         self, *, image_png: bytes, caption: str | None, context: str | None
     ) -> str:
-        self.calls.append((caption, context))
-        if self.fail:
-            raise ProviderUnavailableError("Vision model unreachable")
-        return f"Figure showing {caption or 'an unlabeled diagram'}"
+        self.calls.append((image_png, caption, context))
+        self.in_flight += 1
+        self.max_in_flight = max(self.max_in_flight, self.in_flight)
+        try:
+            await asyncio.sleep(0)
+            failure = self.failures.get(caption, self.error)
+            if failure is not None:
+                raise failure
+            default = f"Figure showing {caption or 'an unlabeled diagram'}"
+            return self.replies.get(caption, default)
+        finally:
+            self.in_flight -= 1
 
 
 class FakeEmbedder:
@@ -404,6 +422,7 @@ class FakeEmbedder:
     def __init__(self, *, dimensions: int = EMBEDDING_DIMENSIONS) -> None:
         self._dimensions = dimensions
         self.calls: list[list[str]] = []
+        self.error: Exception | None = None
 
     @property
     def dimensions(self) -> int:
@@ -411,6 +430,8 @@ class FakeEmbedder:
 
     async def embed(self, texts: Sequence[str]) -> list[list[float]]:
         self.calls.append(list(texts))
+        if self.error is not None:
+            raise self.error
         return [self._vector(text) for text in texts]
 
     def _vector(self, text: str) -> list[float]:
@@ -425,6 +446,10 @@ class WordTokenCounter:
     def count(self, text: str) -> int:
         return len(text.split())
 
+    def truncate(self, text: str, max_tokens: int) -> str:
+        words = text.split()
+        return text if len(words) <= max_tokens else " ".join(words[:max_tokens])
+
 
 @dataclass
 class _IndexedUnit:
@@ -438,11 +463,20 @@ def _words(text: str) -> set[str]:
 
 
 class InMemoryVectorIndex:
-    """Index that ranks units by word overlap with the query."""
+    """Index that ranks units by word overlap with the query.
+
+    ``failures`` maps a method name to the error that method raises.
+    """
 
     def __init__(self) -> None:
         self.points: dict[uuid.UUID, _IndexedUnit] = {}
         self.collection_ready = False
+        self.failures: dict[str, Exception] = {}
+        self.deletions: list[uuid.UUID] = []
+
+    def _fail(self, operation: str) -> None:
+        if operation in self.failures:
+            raise self.failures[operation]
 
     async def ensure_collection(self) -> None:
         self.collection_ready = True
@@ -450,15 +484,19 @@ class InMemoryVectorIndex:
     async def upsert_units(
         self, units: Sequence[RetrievalUnit], vectors: Sequence[Sequence[float]]
     ) -> None:
+        self._fail("upsert_units")
         for unit, vector in zip(units, vectors, strict=True):
             self.points[unit.id] = _IndexedUnit(unit=unit, vector=list(vector))
 
     async def publish(self, document_id: uuid.UUID) -> None:
+        self._fail("publish")
         for point in self.points.values():
             if point.unit.document_id == document_id:
                 point.visible = True
 
     async def delete_document(self, document_id: uuid.UUID) -> None:
+        self._fail("delete_document")
+        self.deletions.append(document_id)
         self.points = {
             unit_id: point
             for unit_id, point in self.points.items()

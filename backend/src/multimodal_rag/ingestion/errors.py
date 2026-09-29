@@ -5,6 +5,7 @@ from multimodal_rag.shared.errors import (
     DataInconsistencyError,
     ExtractionError,
     NotFoundError,
+    ProviderError,
     StorageError,
     ValidationError,
 )
@@ -82,6 +83,29 @@ class NoExtractableTextError(ExtractionError):
     code = "no_extractable_text"
 
 
+class ServiceFailedError(ProviderError):
+    """An external service used by processing failed after its retries.
+
+    Args:
+        service: Name of the service shown to clients, such as ``embedding model``.
+        transient: Whether the service was unavailable, as opposed to rejecting a
+            request.
+    """
+
+    code = "service_failed"
+
+    def __init__(self, service: str, *, transient: bool) -> None:
+        super().__init__(f"The {service} failed")
+        self.service = service
+        self.transient = transient
+
+
+class ImageNotFoundError(NotFoundError):
+    """The requested element has no stored image."""
+
+    code = "image_not_found"
+
+
 class InvalidJobTransitionError(ConcurrencyError):
     """A job was asked to move to a state its current state does not allow."""
 
@@ -110,6 +134,18 @@ class InvalidBoundingBoxError(DataInconsistencyError):
     """A bounding box has inverted edges or lies outside its page."""
 
     code = "invalid_bounding_box"
+
+
+class InvalidPageSizeError(DataInconsistencyError):
+    """A page size is not a positive, finite number of points."""
+
+    code = "invalid_page_size"
+
+
+class UnknownPageSizeError(DataInconsistencyError):
+    """An element lies on a page whose size the extractor did not report."""
+
+    code = "unknown_page_size"
 
 
 class ElementWithoutPositionError(DataInconsistencyError):

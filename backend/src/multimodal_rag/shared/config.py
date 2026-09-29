@@ -107,6 +107,12 @@ class WorkerSettings(CommonSettings):
         embedder_url: OpenAI-compatible base URL of the embedding model.
         embedder_model: Model reference of the embedding model.
         embedder_timeout_seconds: Timeout of one embedding request.
+        embedder_tokenizer_path: ``tokenizer.json`` of the embedding model, baked
+            into the image.
+        embedder_dimensions: Length of the embedding vectors.
+        embedder_batch_size: Passages sent per embedding request.
+        embedder_max_input_tokens: Longest input the embedding model accepts, the
+            physical batch it runs with.
         provider_retry_attempts: Attempts for a transient provider failure.
         provider_retry_initial_wait_seconds: First backoff wait before jitter.
         provider_retry_max_wait_seconds: Longest backoff wait.
@@ -146,6 +152,10 @@ class WorkerSettings(CommonSettings):
     embedder_url: HttpUrl
     embedder_model: str = Field(min_length=1)
     embedder_timeout_seconds: PositiveFloat = 60.0
+    embedder_tokenizer_path: Path
+    embedder_dimensions: PositiveInt = 1024
+    embedder_batch_size: PositiveInt = 32
+    embedder_max_input_tokens: PositiveInt = 2048
     provider_retry_attempts: PositiveInt = 4
     provider_retry_initial_wait_seconds: PositiveFloat = 0.5
     provider_retry_max_wait_seconds: PositiveFloat = 10.0
@@ -175,6 +185,10 @@ class WorkerSettings(CommonSettings):
     def _intervals_fit_their_limits(self) -> Self:
         if self.heartbeat_seconds >= self.lease_seconds:
             raise ValueError("HEARTBEAT_SECONDS must be shorter than LEASE_SECONDS")
+        if self.embedder_max_input_tokens < self.max_unit_tokens:
+            raise ValueError(
+                "EMBEDDER_MAX_INPUT_TOKENS must hold a whole unit of MAX_UNIT_TOKENS"
+            )
         if self.liveness_interval_seconds >= self.liveness_max_age_seconds:
             raise ValueError(
                 "LIVENESS_INTERVAL_SECONDS must be shorter than "

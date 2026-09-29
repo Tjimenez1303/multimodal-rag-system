@@ -134,16 +134,19 @@ class PostgresElementRepository:
     async def relationships_for(
         self, element_ids: Sequence[uuid.UUID]
     ) -> tuple[ElementRelationship, ...]:
-        """Return the relationships that start from the given elements.
+        """Return the relationships that touch the given elements.
 
         Args:
-            element_ids: Source elements.
+            element_ids: Elements at either end of the relationships.
 
         Returns:
-            Every relationship whose source is one of the elements.
+            Every relationship whose source or target is one of the elements.
         """
         query = sa.select(element_relationships).where(
-            element_relationships.c.source_id.in_(element_ids)
+            sa.or_(
+                element_relationships.c.source_id.in_(element_ids),
+                element_relationships.c.target_id.in_(element_ids),
+            )
         )
         async with connect(self._engine) as connection:
             rows = (await connection.execute(query)).mappings().all()

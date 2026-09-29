@@ -16,7 +16,12 @@ from pypdf import PdfWriter
 from multimodal_rag.adapters.docling.extractor import DoclingExtractor
 from multimodal_rag.adapters.docling.headings import OutlineEntry
 from multimodal_rag.adapters.docling.pdfium import PdfiumInspector, read_layout
-from multimodal_rag.ingestion.domain import ElementKind, ExtractedElement, TextOrigin
+from multimodal_rag.ingestion.domain import (
+    ElementKind,
+    ExtractedElement,
+    PageSize,
+    TextOrigin,
+)
 from multimodal_rag.ingestion.errors import (
     CorruptDocumentError,
     EncryptedDocumentError,
@@ -175,6 +180,17 @@ class TestExtractor:
         assert {"V-12", "P-1"} <= set(figure.labels)
         paragraphs = [e.text for e in elements_of(batches) if e.text]
         assert "V-12" not in paragraphs
+
+    def test_every_page_reports_its_size(self, extractor: DoclingExtractor) -> None:
+        # Which captions Docling assigns depends on its layout model, whose labels on
+        # these synthetic pages differ between macOS and Linux, so the mapping of its
+        # caption references is covered by the unit tests instead.
+        batches = extract(extractor, "split_table.pdf", batch_size=1)
+
+        assert [b.page_sizes for b in batches] == [
+            {1: PageSize(width=612, height=792)},
+            {2: PageSize(width=612, height=792)},
+        ]
 
     def test_numbered_headings_get_their_depth(
         self, extractor: DoclingExtractor

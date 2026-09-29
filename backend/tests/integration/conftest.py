@@ -5,6 +5,8 @@ each service per session. The database is migrated with Alembic exactly as in
 production, so the tests also prove that the migrations apply cleanly.
 """
 
+import os
+import shlex
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 
@@ -12,6 +14,7 @@ import pytest
 import sqlalchemy as sa
 from alembic import command
 from alembic.config import Config
+from huggingface_hub import hf_hub_download
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from testcontainers.community.postgres import PostgresContainer
 from testcontainers.community.qdrant import QdrantContainer
@@ -57,3 +60,17 @@ def qdrant_url() -> Iterator[str]:
     """Start Qdrant and yield its REST URL."""
     with QdrantContainer(QDRANT_IMAGE) as qdrant:
         yield f"http://{qdrant.rest_host_address}"
+
+
+@pytest.fixture(scope="session")
+def embedder_tokenizer_path() -> Path:
+    """The embedding tokenizer from EMBEDDER_TOKENIZER_PATH, or downloaded like the
+    image downloads it, from the repository and revision in embedder_tokenizer.txt.
+    """
+    configured = os.environ.get("EMBEDDER_TOKENIZER_PATH")
+    if configured:
+        return Path(configured)
+    repo, filename, _, revision = shlex.split(
+        (BACKEND_ROOT / "embedder_tokenizer.txt").read_text()
+    )
+    return Path(hf_hub_download(repo, filename, revision=revision))

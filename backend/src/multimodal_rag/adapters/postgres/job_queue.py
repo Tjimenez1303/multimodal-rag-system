@@ -67,7 +67,7 @@ class PostgresJobQueue:
 
         The insert fires the trigger that notifies idle workers. When the insert
         conflicts but the active job fails before it is read, the insert is tried
-        again, as in the retry loop of PostgreSQL's PL/pgSQL documentation.
+        again.
 
         Args:
             job: Pending job to store.

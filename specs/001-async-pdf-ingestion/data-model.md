@@ -127,11 +127,20 @@ Validation requires `left < right`, `top < bottom`, and every value within the p
 
 Rules:
 
-- `continues` links two tables on consecutive pages with the same column count. The
-  earlier part sits in the lower part of its page, the later part in the upper part of its
-  page, and only page furniture lies between them.
-- `near` links an image to text on the same page, or on the adjacent page when its caption
-  continues there.
+- `caption_of` links a caption to its image and `title_of` a caption to its table. Docling
+  assigns most captions, and a domain rule links the captions it leaves alone.
+- `continues` links part N+1 of a table to part N. Both are on consecutive pages with the
+  same column count. The earlier part ends in the lower half of its page, the later part
+  starts in the upper half of its page, and no text other than page furniture and the
+  captions of either part lies between them in reading order.
+- `near` links the closest paragraph or list item to an image: same column, within
+  `NEAR_TEXT_MAX_POINTS`, on the image's page or on the next page when its caption
+  continues there. The score is `1 - gap / NEAR_TEXT_MAX_POINTS`.
+- `describes` is reserved and not produced by this feature.
+
+The elements endpoint returns, for each element, every relationship that touches it as
+an edge `{source_id, target_id, kind}`, the edge shape of JSON Graph Format v2, so an
+image shows its caption and nearby text.
 
 ## RetrievalUnit (stored in Qdrant)
 
@@ -142,7 +151,7 @@ A structurally coherent group of content prepared for search.
 | point id | UUID | `uuid5(ID_NAMESPACE, "unit:{sha256}:{unit_key}")` |
 | `document_id` | UUID | Indexed |
 | `unit_type` | `text`, `table`, `figure` | Indexed |
-| `text` | text | Content that is embedded and fed to BM25. Figures combine caption, labels and description |
+| `text` | text | Unit content for display. Figures combine caption, labels and description. Table chains join their parts without repeated headers. Both vectors receive the heading path and this text joined by newlines, and the dense side is truncated to `EMBEDDER_MAX_INPUT_TOKENS` |
 | `heading_path` | list of text | Section headings in scope |
 | `pages` | list of integers | Indexed. A table chain lists every page it spans (FR-011) |
 | `element_ids` | list of UUID | Source elements |

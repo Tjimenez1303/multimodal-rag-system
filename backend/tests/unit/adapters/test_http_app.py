@@ -237,7 +237,7 @@ def test_plain_http_errors_use_status_phrase_codes(client: TestClient) -> None:
     response = client.post("/health/live")
 
     assert response.status_code == 405
-    # RFC 9110 section 15.5.6: a 405 must list the methods the resource allows.
+    # A 405 must list the methods the resource allows.
     assert response.headers["allow"] == "GET"
     assert response.json()["code"] == "method_not_allowed"
     assert response.json()["title"] == "Method Not Allowed"

@@ -14,6 +14,7 @@ WORKER_ENV = API_ENV | {
     "VLM_MODEL": "ai/qwen3.5:9b",
     "EMBEDDER_URL": "http://model-runner.docker.internal/engines/v1/",
     "EMBEDDER_MODEL": "ai/qwen3-embedding:0.6b",
+    "EMBEDDER_TOKENIZER_PATH": "/opt/tokenizers/embedder/tokenizer.json",
 }
 
 
@@ -59,6 +60,12 @@ def test_worker_settings_expose_documented_defaults(
     assert settings.decorative_min_page_share == 0.2
     assert settings.near_text_max_points == 72.0
     assert settings.qdrant_timeout_seconds == 10.0
+    assert settings.embedder_dimensions == 1024
+    assert settings.embedder_batch_size == 32
+    assert settings.embedder_max_input_tokens == 2048
+    assert settings.embedder_tokenizer_path == Path(
+        "/opt/tokenizers/embedder/tokenizer.json"
+    )
 
 
 def test_missing_required_variables_are_named_in_the_error(
@@ -70,7 +77,13 @@ def test_missing_required_variables_are_named_in_the_error(
         WorkerSettings.load()
 
     message = str(raised.value)
-    for name in ("DATABASE_URL", "QDRANT_URL", "VLM_URL", "EMBEDDER_MODEL"):
+    for name in (
+        "DATABASE_URL",
+        "QDRANT_URL",
+        "VLM_URL",
+        "EMBEDDER_MODEL",
+        "EMBEDDER_TOKENIZER_PATH",
+    ):
         assert name in message
 
 
@@ -102,4 +115,16 @@ def test_liveness_interval_must_be_shorter_than_its_maximum_age(
     )
 
     with pytest.raises(ConfigurationError, match="LIVENESS_INTERVAL_SECONDS"):
+        WorkerSettings.load()
+
+
+def test_the_embedding_input_must_leave_room_for_a_whole_unit(
+    clean_env: pytest.MonkeyPatch,
+) -> None:
+    set_env(
+        clean_env,
+        WORKER_ENV | {"MAX_UNIT_TOKENS": "480", "EMBEDDER_MAX_INPUT_TOKENS": "400"},
+    )
+
+    with pytest.raises(ConfigurationError, match="EMBEDDER_MAX_INPUT_TOKENS"):
         WorkerSettings.load()

@@ -4,6 +4,11 @@ Docling nests the text it finds inside a figure or a table cell under that item,
 depth, for example inside a list group. Such text belongs to its figure, as labels, or
 to its table, and never becomes running text. Only the captions and footnotes of a
 figure or table are elements of their own.
+
+Docling's reading order model assigns captions to figures and tables, sometimes a text
+its layout model labeled as body text. Every text a figure or table references as a
+caption becomes a caption element, linked to its figure (``caption_of``) or its table
+(``title_of``).
 """
 
 import io
@@ -29,7 +34,10 @@ from multimodal_rag.adapters.docling.headings import HeadingLevels
 from multimodal_rag.ingestion.domain import (
     BoundingBox,
     ElementKind,
+    ElementRelationship,
     ExtractedElement,
+    PageSize,
+    RelationshipKind,
     TextOrigin,
     element_id_for,
 )
@@ -69,10 +77,14 @@ class MappedBatch:
     Attributes:
         elements: Elements in reading order.
         images: PNG bytes of each image element, keyed by element id.
+        relationships: Caption links Docling assigned within the range.
+        page_sizes: Size of each converted page.
     """
 
     elements: tuple[ExtractedElement, ...]
     images: dict[uuid.UUID, bytes]
+    relationships: tuple[ElementRelationship, ...]
+    page_sizes: dict[int, PageSize]
 
 
 def map_document(
@@ -91,13 +103,16 @@ def map_document(
         ocr_scores: Mean recognition confidence per 1-based page, when known.
 
     Returns:
-        The elements and the crops of their images.
+        The elements, the crops of their images, their caption links and the
+        size of each page.
 
     Raises:
         InvalidBoundingBoxError: If an item lies outside its page.
     """
     mapper = _Mapper(document, context, ocr_scores)
     elements: list[ExtractedElement] = []
+    ids_by_ref: dict[str, list[uuid.UUID]] = {}
+    floating: list[tuple[ExtractedElement, FloatingItem]] = []
     for item, _ in document.iterate_items(
         included_content_layers=LAYERS, traverse_pictures=True
     ):
@@ -108,10 +123,41 @@ def map_document(
             # page, so every element keeps a single page and position.
             for provenance, text in _fragments(item):
                 order = first_order + len(elements)
-                elements.append(mapper.text(item, provenance, text, order=order))
-        else:
-            elements.append(mapper.floating(item, order=first_order + len(elements)))
-    return MappedBatch(elements=tuple(elements), images=mapper.images)
+                element = mapper.text(item, provenance, text, order=order)
+                ids_by_ref.setdefault(item.self_ref, []).append(element.id)
+                elements.append(element)
+        elif isinstance(item, PictureItem | TableItem):
+            element = mapper.floating(item, order=first_order + len(elements))
+            floating.append((element, item))
+            elements.append(element)
+    return MappedBatch(
+        elements=tuple(elements),
+        images=mapper.images,
+        relationships=_caption_links(floating, ids_by_ref),
+        page_sizes={
+            number: PageSize(width=page.size.width, height=page.size.height)
+            for number, page in document.pages.items()
+        },
+    )
+
+
+def _caption_links(
+    floating: list[tuple[ExtractedElement, FloatingItem]],
+    ids_by_ref: dict[str, list[uuid.UUID]],
+) -> tuple[ElementRelationship, ...]:
+    links = []
+    for element, item in floating:
+        kind = (
+            RelationshipKind.CAPTION_OF
+            if element.kind is ElementKind.IMAGE
+            else RelationshipKind.TITLE_OF
+        )
+        for ref in item.captions:
+            links += [
+                ElementRelationship(source_id=caption, target_id=element.id, kind=kind)
+                for caption in ids_by_ref.get(ref.cref, [])
+            ]
+    return tuple(links)
 
 
 class _Mapper:
@@ -125,6 +171,14 @@ class _Mapper:
         self._context = context
         self._ocr_scores = ocr_scores
         self.images: dict[uuid.UUID, bytes] = {}
+        self._captions = {
+            ref.cref
+            for item, _ in document.iterate_items(
+                included_content_layers=LAYERS, traverse_pictures=True
+            )
+            if isinstance(item, FloatingItem)
+            for ref in item.captions
+        }
 
     def is_element(self, item: DocItem) -> bool:
         if not isinstance(item, TextItem | TableItem | PictureItem):
@@ -141,15 +195,18 @@ class _Mapper:
         self, item: TextItem, provenance: ProvenanceItem, text: str, *, order: int
     ) -> ExtractedElement:
         kind = _KIND_BY_LABEL.get(item.label, ElementKind.PARAGRAPH)
+        if item.self_ref in self._captions:
+            kind = ElementKind.CAPTION
         level = None
         if kind is ElementKind.HEADING:
             level = self._context.headings.level_of(text, page=provenance.page_no)
         return self._build(provenance, order, kind=kind, text=text, heading_level=level)
 
-    def floating(self, item: DocItem, *, order: int) -> ExtractedElement:
+    def floating(
+        self, item: PictureItem | TableItem, *, order: int
+    ) -> ExtractedElement:
         if isinstance(item, PictureItem):
             return self._image(item, order)
-        assert isinstance(item, TableItem)
         return self._build(
             item.prov[0],
             order,

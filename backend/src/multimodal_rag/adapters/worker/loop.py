@@ -16,6 +16,7 @@ process exits, releases the memory extraction accumulates, and compose restarts 
 import asyncio
 import contextlib
 import logging
+import uuid
 from collections.abc import Awaitable, Callable
 from typing import Protocol
 
@@ -120,7 +121,7 @@ class WorkerLoop:
         clear_correlation()
         bind_correlation(request_id=job.correlation_id, job_id=str(job.id))
         logger.info("job claimed")
-        heartbeat = asyncio.ensure_future(self._keep_leased(job))
+        heartbeat = asyncio.ensure_future(self._keep_leased(job.id, job.held_lease()))
         try:
             finished = await _first_of(self._process(job), stop, heartbeat)
             if finished is None:
@@ -136,16 +137,15 @@ class WorkerLoop:
             await asyncio.gather(heartbeat, return_exceptions=True)
             clear_correlation()
 
-    async def _keep_leased(self, job: IngestionJob) -> None:
+    async def _keep_leased(self, job_id: uuid.UUID, lease_token: uuid.UUID) -> None:
         # Renews until cancelled. A lost lease ends the attempt, an outage does not,
         # because the lease outlives a few missed renewals.
-        assert job.lease_token is not None
         while True:
             await asyncio.sleep(self._heartbeat_seconds)
             try:
                 await self._jobs.heartbeat(
-                    job_id=job.id,
-                    lease_token=job.lease_token,
+                    job_id=job_id,
+                    lease_token=lease_token,
                     lease_seconds=self._lease_seconds,
                 )
             except _DATABASE_OUTAGES as error:

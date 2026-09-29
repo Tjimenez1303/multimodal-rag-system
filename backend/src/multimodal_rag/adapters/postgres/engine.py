@@ -86,8 +86,8 @@ def create_engine(settings: DatabaseSettings) -> AsyncEngine:
 def create_migration_engine(settings: DatabaseSettings) -> AsyncEngine:
     """Build the engine of a one-shot command such as ``alembic upgrade``.
 
-    It keeps the connection and statement timeouts but pools nothing, as in Alembic's
-    async template, because the command opens one connection and exits.
+    It keeps the connection and statement timeouts but pools nothing, because the
+    command opens one connection and exits.
 
     Args:
         settings: Database URL and timeouts.

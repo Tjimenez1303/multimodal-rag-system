@@ -82,9 +82,19 @@ curl -s -o figure.png http://localhost:8000/api/v1/documents/<document_id>/image
 Expected:
 
 - Every element has `page` and a `bbox` with `origin: top_left`.
-- Images carry `labels`, a `description` and a `description_status`.
+- Images carry `labels`, a `description` and a `description_status`, and list their
+  `caption_of` and `near` relationships.
 - Decorative images are `skipped`.
 - The PNG opens and shows the figure.
+
+Upload `backend/tests/fixtures/split_table.pdf` and list its tables:
+
+```bash
+curl -s "http://localhost:8000/api/v1/documents/<document_id>/elements?kind=table"
+```
+
+Expected: the table on page 2 has a `continues` relationship to the table on page 1, and
+`summary.table_chains` is 1.
 
 ## Scenario 3: scanned manual (FR-022, FR-023, SC-010)
 
@@ -95,7 +105,8 @@ Expected:
 - The job completes.
 - Text elements have `origin: recognized` with a `confidence`.
 - `summary.recognized_pages` equals the number of scanned pages.
-- The lubrication table that continues across pages shows a `continues` relationship.
+- Figures carry labels recognized inside them, and the Google digitization marks are
+  `skipped` as decorative.
 
 ## Scenario 4: identical upload and rejections (FR-002, FR-016)
 

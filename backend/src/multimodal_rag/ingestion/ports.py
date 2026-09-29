@@ -21,6 +21,7 @@ from multimodal_rag.ingestion.domain import (
     IngestionJob,
     JobStage,
     JobSummary,
+    PageSize,
     RetrievalUnit,
 )
 
@@ -62,6 +63,9 @@ class ExtractionBatch:
         elements: Elements of the batch in reading order.
         images: PNG bytes of each image element, keyed by element id.
         recognized_pages: Pages of the batch whose text came from recognition.
+        page_sizes: Size of each page of the batch.
+        relationships: Caption links the extractor found between the elements of
+            the batch.
     """
 
     first_page: int
@@ -70,6 +74,8 @@ class ExtractionBatch:
     elements: tuple[ExtractedElement, ...]
     images: dict[uuid.UUID, bytes] = field(default_factory=dict)
     recognized_pages: tuple[int, ...] = ()
+    page_sizes: dict[int, PageSize] = field(default_factory=dict)
+    relationships: tuple[ElementRelationship, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -336,13 +342,13 @@ class ElementRepository(Protocol):
     async def relationships_for(
         self, element_ids: Sequence[uuid.UUID]
     ) -> tuple[ElementRelationship, ...]:
-        """Return the relationships that start from the given elements.
+        """Return the relationships that touch the given elements.
 
         Args:
-            element_ids: Source elements.
+            element_ids: Elements at either end of the relationships.
 
         Returns:
-            Every relationship whose source is one of the elements.
+            Every relationship whose source or target is one of the elements.
         """
         ...
 
@@ -549,10 +555,25 @@ class TokenCounter(Protocol):
     """Tokenizer of the embedding model, used to size retrieval units."""
 
     def count(self, text: str) -> int:
-        """Return the number of tokens in a text.
+        """Return the number of tokens the embedding model reads for a text.
 
         Args:
             text: Text to count.
+
+        Returns:
+            The token count, special tokens included.
+        """
+        ...
+
+    def truncate(self, text: str, max_tokens: int) -> str:
+        """Cut a text at a token boundary so the model reads at most ``max_tokens``.
+
+        Args:
+            text: Text to shorten.
+            max_tokens: Largest token count, special tokens included.
+
+        Returns:
+            The text itself when it fits, or its longest prefix that fits.
         """
         ...
 

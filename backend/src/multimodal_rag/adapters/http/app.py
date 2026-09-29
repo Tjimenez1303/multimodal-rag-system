@@ -151,10 +151,9 @@ def _problem_aware_openapi(app: FastAPI) -> Callable[[], dict[str, Any]]:
     """Build the OpenAPI document with the responses the API really sends.
 
     FastAPI documents every extra response as ``application/json`` and adds a 422
-    validation response to routes with parameters. Following "Extending OpenAPI" in
-    the FastAPI documentation, the document is generated once and then corrected:
-    problem bodies move to ``application/problem+json``, and the 422 is dropped
-    because validation errors are answered with 400 problem details.
+    validation response to routes with parameters. The document is generated once and
+    then corrected: problem bodies move to ``application/problem+json``, and the 422 is
+    dropped because validation errors are answered with 400 problem details.
     """
 
     def openapi() -> dict[str, Any]:

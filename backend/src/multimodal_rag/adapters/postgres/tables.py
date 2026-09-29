@@ -200,4 +200,6 @@ element_relationships = sa.Table(
     sa.CheckConstraint(_one_of("kind", RelationshipKind), name="valid_kind"),
     sa.CheckConstraint("source_id <> target_id", name="no_self_link"),
     sa.Index(None, "document_id"),
+    # The primary key serves lookups by source, this index serves lookups by target.
+    sa.Index(None, "target_id"),
 )

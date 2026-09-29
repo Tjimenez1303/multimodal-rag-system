@@ -1,10 +1,9 @@
 """Wake-ups for idle workers through PostgreSQL ``LISTEN``.
 
 The listener holds its own asyncpg connection outside the SQLAlchemy pool, because a
-pooled connection can be recycled or reset while it listens, as in Prefect's Postgres
-listener. A notification only means "claim now": the worker still polls at a fixed
-interval, so a lost connection or a missed notification delays a job by at most one
-interval.
+pooled connection can be recycled or reset while it listens. A notification only means
+"claim now": the worker still polls at a fixed interval, so a lost connection or a
+missed notification delays a job by at most one interval.
 """
 
 import asyncio

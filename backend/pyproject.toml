@@ -9,6 +9,7 @@ dependencies = [
     "docling>=2.130,<3",
     "fastapi>=0.141.1",
     "httpx>=0.28.1",
+    "huggingface-hub>=1.33.0",
     "onnxruntime>=1.30.0",
     "pydantic>=2.13.5",
     "pydantic-settings>=2.15.0",
@@ -166,6 +167,8 @@ forbidden_modules = [
     "structlog",
     "stamina",
     "tokenizers",
+    "huggingface_hub",
+    "PIL",
 ]
 
 [[tool.importlinter.contracts]]

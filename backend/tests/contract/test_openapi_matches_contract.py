@@ -5,11 +5,12 @@ from typing import Any
 import pytest
 
 from multimodal_rag.adapters.http.app import create_app
+from multimodal_rag.adapters.http.routes_documents import documents_router
 from multimodal_rag.adapters.http.routes_ingestion import ingestion_router
 from tests.contract.contract import CONTRACT, resolve
 
 SERVED: dict[str, Any] = create_app(
-    readiness_checks={}, routers=(ingestion_router,)
+    readiness_checks={}, routers=(ingestion_router, documents_router)
 ).openapi()
 OPERATIONS = [
     (path, method)

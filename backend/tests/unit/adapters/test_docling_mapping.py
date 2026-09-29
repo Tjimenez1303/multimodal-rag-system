@@ -13,8 +13,18 @@ from docling_core.types.doc import (
 )
 
 from multimodal_rag.adapters.docling.headings import HeadingLevels
-from multimodal_rag.adapters.docling.mapping import DocumentContext, map_document
-from multimodal_rag.ingestion.domain import ElementKind, ExtractedElement, TextOrigin
+from multimodal_rag.adapters.docling.mapping import (
+    DocumentContext,
+    MappedBatch,
+    map_document,
+)
+from multimodal_rag.ingestion.domain import (
+    ElementKind,
+    ExtractedElement,
+    PageSize,
+    RelationshipKind,
+    TextOrigin,
+)
 
 PAGE = Size(width=612, height=792)
 
@@ -38,16 +48,21 @@ def context(*, recognized: frozenset[int] = frozenset()) -> DocumentContext:
     )
 
 
-def mapped(
+def mapped_batch(
     document: DoclingDocument, *, recognized: frozenset[int] = frozenset()
-) -> list[ExtractedElement]:
-    batch = map_document(
+) -> MappedBatch:
+    return map_document(
         document,
         context=context(recognized=recognized),
         first_order=0,
         ocr_scores={1: 0.87},
     )
-    return list(batch.elements)
+
+
+def mapped(
+    document: DoclingDocument, *, recognized: frozenset[int] = frozenset()
+) -> list[ExtractedElement]:
+    return list(mapped_batch(document, recognized=recognized).elements)
 
 
 @pytest.fixture
@@ -188,3 +203,43 @@ def test_a_word_hyphenated_across_pages_is_split_where_docling_joined_it(
     elements = mapped(document)
 
     assert [(e.page, e.text) for e in elements] == [(1, "The mag"), (2, "neto fires")]
+
+
+def test_captions_assigned_by_docling_become_caption_and_title_links(
+    document: DoclingDocument,
+) -> None:
+    figure = document.add_picture(prov=provenance())
+    figure_caption = document.add_text(
+        label=DocItemLabel.CAPTION, text="Figure 1.", parent=figure, prov=provenance()
+    )
+    figure.captions.append(figure_caption.get_ref())
+    table = document.add_table(
+        data=TableData(num_rows=1, num_cols=1), prov=provenance()
+    )
+    # Docling can assign as a caption a text its layout model labeled as body text.
+    title = document.add_text(
+        label=DocItemLabel.TEXT, text="Table 1 (continued).", prov=provenance()
+    )
+    table.captions.append(title.get_ref())
+
+    batch = mapped_batch(document)
+
+    by_text = {e.text: e for e in batch.elements}
+    image, table_element = batch.elements[0], batch.elements[2]
+    title_element = by_text["Table 1 (continued)."]
+    assert title_element.kind is ElementKind.CAPTION
+    assert {(r.source_id, r.target_id, r.kind) for r in batch.relationships} == {
+        (by_text["Figure 1."].id, image.id, RelationshipKind.CAPTION_OF),
+        (title_element.id, table_element.id, RelationshipKind.TITLE_OF),
+    }
+
+
+def test_the_size_of_every_page_is_reported(document: DoclingDocument) -> None:
+    document.add_page(page_no=2, size=Size(width=842, height=595))
+
+    batch = mapped_batch(document)
+
+    assert batch.page_sizes == {
+        1: PageSize(width=612, height=792),
+        2: PageSize(width=842, height=595),
+    }

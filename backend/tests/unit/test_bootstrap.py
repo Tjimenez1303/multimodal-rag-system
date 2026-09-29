@@ -23,6 +23,7 @@ WORKER_ENV = {
     "VLM_MODEL": "ai/qwen3.5:9b",
     "EMBEDDER_URL": "http://model-runner.docker.internal/engines/v1/",
     "EMBEDDER_MODEL": "ai/qwen3-embedding:0.6b",
+    "EMBEDDER_TOKENIZER_PATH": "/opt/tokenizers/embedder/tokenizer.json",
 }
 
 
@@ -60,11 +61,20 @@ def test_api_reports_liveness_and_an_unreachable_database(
     assert ready.json()["detail"] == "Unavailable: database"
 
 
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/v1/jobs/7f9d1c3e-0b1a-4c55-9a3e-6f0f6a8e2b11",
+        "/api/v1/documents/7f9d1c3e-0b1a-4c55-9a3e-6f0f6a8e2b11/elements",
+        "/api/v1/documents/7f9d1c3e-0b1a-4c55-9a3e-6f0f6a8e2b11/images/"
+        "0b1a7f9d-1c3e-4c55-9a3e-6f0f6a8e2b11",
+    ],
+)
 def test_api_answers_503_while_the_database_is_unreachable(
-    api_env: pytest.MonkeyPatch,
+    api_env: pytest.MonkeyPatch, path: str
 ) -> None:
     with TestClient(bootstrap.create_api_app()) as client:
-        response = client.get("/api/v1/jobs/7f9d1c3e-0b1a-4c55-9a3e-6f0f6a8e2b11")
+        response = client.get(path)
 
     assert response.status_code == 503
     assert response.json()["code"] == "storage_unavailable"

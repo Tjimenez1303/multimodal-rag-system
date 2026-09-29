@@ -1,7 +1,7 @@
 """RFC 9457 problem details, the single place that maps errors to HTTP statuses.
 
 Every problem uses the ``about:blank`` type, so its ``title`` is the standard phrase of
-its status (RFC 9457 section 4.2.1). The specific cause travels in the ``code``
+its status. The specific cause travels in the ``code``
 extension member and, for client errors, in ``detail``.
 """
 
@@ -174,8 +174,9 @@ def problem_response(
     )
 
 
-async def _handle_domain_error(request: Request, error: Exception) -> JSONResponse:
-    assert isinstance(error, MultimodalRagError)
+async def _handle_domain_error(
+    request: Request, error: MultimodalRagError
+) -> JSONResponse:
     status = status_for(error)
     if status >= 500:
         # Internal details stay in the logs, and clients only get the stable code.
@@ -184,8 +185,9 @@ async def _handle_domain_error(request: Request, error: Exception) -> JSONRespon
     return problem_response(request, status=status, code=error.code, detail=str(error))
 
 
-async def _handle_validation_error(request: Request, error: Exception) -> JSONResponse:
-    assert isinstance(error, RequestValidationError)
+async def _handle_validation_error(
+    request: Request, error: RequestValidationError
+) -> JSONResponse:
     fields = ", ".join(
         ".".join(str(part) for part in issue["loc"]) for issue in error.errors()
     )
@@ -197,8 +199,9 @@ async def _handle_validation_error(request: Request, error: Exception) -> JSONRe
     )
 
 
-async def _handle_http_error(request: Request, error: Exception) -> JSONResponse:
-    assert isinstance(error, StarletteHTTPException)
+async def _handle_http_error(
+    request: Request, error: StarletteHTTPException
+) -> JSONResponse:
     if isinstance(error, ProblemHTTPException):
         return problem_response(
             request, status=error.status_code, code=error.code, detail=error.detail
@@ -222,7 +225,8 @@ def install_problem_handlers(app: FastAPI) -> None:
     Args:
         app: Application to configure.
     """
-    app.add_exception_handler(MultimodalRagError, _handle_domain_error)
-    app.add_exception_handler(RequestValidationError, _handle_validation_error)
-    app.add_exception_handler(StarletteHTTPException, _handle_http_error)
-    app.add_exception_handler(Exception, _handle_unexpected_error)
+    # FastAPI's decorator form accepts handlers typed with the exception they handle.
+    app.exception_handler(MultimodalRagError)(_handle_domain_error)
+    app.exception_handler(RequestValidationError)(_handle_validation_error)
+    app.exception_handler(StarletteHTTPException)(_handle_http_error)
+    app.exception_handler(Exception)(_handle_unexpected_error)

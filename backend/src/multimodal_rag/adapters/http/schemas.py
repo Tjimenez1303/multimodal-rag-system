@@ -2,12 +2,21 @@
 
 import uuid
 from datetime import datetime
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict
 
-from multimodal_rag.ingestion.domain import FailureCode, JobStage, JobStatus
+from multimodal_rag.ingestion.domain import (
+    DescriptionStatus,
+    ElementKind,
+    FailureCode,
+    JobStage,
+    JobStatus,
+    RelationshipKind,
+    TextOrigin,
+)
 from multimodal_rag.ingestion.use_cases.intake import Submission
+from multimodal_rag.ingestion.use_cases.library import ElementView
 
 
 class UploadAccepted(BaseModel):
@@ -112,3 +121,154 @@ class JobBody(BaseModel):
     created_at: datetime
     started_at: datetime | None
     finished_at: datetime | None
+
+
+class BoundingBoxBody(BaseModel):
+    """Position on a page in PDF points with a top-left origin.
+
+    Attributes:
+        left: Distance from the left edge of the page.
+        top: Distance from the top edge of the page.
+        right: Distance from the left edge to the right side of the box.
+        bottom: Distance from the top edge to the bottom side of the box.
+        origin: Always ``top_left``.
+    """
+
+    left: float
+    top: float
+    right: float
+    bottom: float
+    origin: Literal["top_left"] = "top_left"
+
+
+class TableBody(BaseModel):
+    """Rows and columns of a table.
+
+    Attributes:
+        rows: Number of rows, the header included.
+        columns: Number of columns.
+        cells: Cell text, row by row.
+    """
+
+    rows: int
+    columns: int
+    cells: list[list[str]]
+
+
+class RelationshipBody(BaseModel):
+    """A directed link between two elements.
+
+    Attributes:
+        source_id: Element the link starts from, such as a caption.
+        target_id: Element the link points to, such as an image.
+        kind: Meaning of the link.
+    """
+
+    source_id: uuid.UUID
+    target_id: uuid.UUID
+    kind: RelationshipKind
+
+
+class ElementBody(BaseModel):
+    """A captured element with its position and relationships.
+
+    Attributes:
+        id: Element id.
+        kind: Type of content.
+        page: 1-based page number.
+        bbox: Position on the page.
+        reading_order: Order within the document.
+        heading_level: Level of a heading.
+        text: Text content, or the Markdown of a table.
+        table: Rows and columns of a table.
+        origin: Whether the text came from the text layer or from recognition.
+        confidence: Recognition confidence of recognized text.
+        image_url: Relative URL of the stored crop of an image.
+        image_class: Classifier label of an image.
+        labels: Text printed inside an image.
+        description: Generated description of an image.
+        description_status: Outcome of describing an image.
+        unverified_identifiers: Identifiers of the description absent from the
+            image's labels and caption.
+        is_decorative: Whether the image is a logo or a repeated decoration.
+        relationships: Every link that touches the element.
+    """
+
+    id: uuid.UUID
+    kind: ElementKind
+    page: int
+    bbox: BoundingBoxBody
+    reading_order: int
+    heading_level: int | None
+    text: str | None
+    table: TableBody | None
+    origin: TextOrigin
+    confidence: float | None
+    image_url: str | None
+    image_class: str | None
+    labels: list[str]
+    description: str | None
+    description_status: DescriptionStatus | None
+    unverified_identifiers: list[str]
+    is_decorative: bool
+    relationships: list[RelationshipBody]
+
+    @classmethod
+    def from_view(cls, view: ElementView, *, image_url: str | None) -> Self:
+        """Build the body of an element.
+
+        Args:
+            view: Element and its relationships.
+            image_url: Relative URL of its crop, for images with one.
+
+        Returns:
+            The response body.
+        """
+        element = view.element
+        box = element.bbox
+        table = element.table
+        return cls(
+            id=element.id,
+            kind=element.kind,
+            page=element.page,
+            bbox=BoundingBoxBody(
+                left=box.left, top=box.top, right=box.right, bottom=box.bottom
+            ),
+            reading_order=element.reading_order,
+            heading_level=element.heading_level,
+            text=element.text,
+            table=None
+            if table is None
+            else TableBody(
+                rows=len(table),
+                columns=max((len(row) for row in table), default=0),
+                cells=[list(row) for row in table],
+            ),
+            origin=element.origin,
+            confidence=element.confidence,
+            image_url=image_url,
+            image_class=element.image_class,
+            labels=list(element.labels),
+            description=element.description,
+            description_status=element.description_status,
+            unverified_identifiers=list(element.unverified_identifiers),
+            is_decorative=element.is_decorative,
+            relationships=[
+                RelationshipBody(
+                    source_id=link.source_id, target_id=link.target_id, kind=link.kind
+                )
+                for link in view.relationships
+            ],
+        )
+
+
+class ElementPageBody(BaseModel):
+    """One page of elements in reading order.
+
+    Attributes:
+        items: Elements of this page.
+        next_cursor: Cursor of the next page, or ``None`` on the last page.
+    """
+
+    items: list[ElementBody]
+    next_cursor: str | None

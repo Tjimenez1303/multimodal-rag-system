@@ -8,6 +8,7 @@ module imports nothing outside the standard library and the project's own errors
 import math
 import re
 import uuid
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from enum import StrEnum
@@ -18,10 +19,13 @@ from multimodal_rag.ingestion.errors import (
     InvalidDocumentError,
     InvalidElementError,
     InvalidJobTransitionError,
+    InvalidPageSizeError,
+    JobNotLeasedError,
+    UnknownPageSizeError,
 )
 
-# Random application namespace for UUIDv5 ids, generated once as RFC 9562 section 6.6
-# recommends. It must never change: every stored element and unit id derives from it.
+# Random application namespace for UUIDv5 ids, generated once. It must never change:
+# every stored element and unit id derives from it.
 ID_NAMESPACE = uuid.UUID("e7ff7153-60c1-4d27-ab14-b11734f890b0")
 
 _SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
@@ -225,6 +229,52 @@ class BoundingBox:
 
 
 @dataclass(frozen=True, slots=True)
+class PageSize:
+    """Size of a page in PDF points.
+
+    Attributes:
+        width: Horizontal size of the page.
+        height: Vertical size of the page.
+    """
+
+    width: float
+    height: float
+
+    def __post_init__(self) -> None:
+        """Reject sizes that are not positive and finite."""
+        if not all(
+            math.isfinite(value) and value > 0 for value in (self.width, self.height)
+        ):
+            raise InvalidPageSizeError(
+                f"Page size must be positive and finite: {self.width}x{self.height}"
+            )
+
+    @property
+    def area(self) -> float:
+        """Surface of the page in square points."""
+        return self.width * self.height
+
+    @staticmethod
+    def of_page(page_sizes: Mapping[int, PageSize], page: int) -> PageSize:
+        """Return the size of a page reported by the extractor.
+
+        Args:
+            page_sizes: Size of each 1-based page.
+            page: Page to look up.
+
+        Returns:
+            The size of the page.
+
+        Raises:
+            UnknownPageSizeError: If the page has no reported size.
+        """
+        try:
+            return page_sizes[page]
+        except KeyError:
+            raise UnknownPageSizeError(f"Page {page} has no known size") from None
+
+
+@dataclass(frozen=True, slots=True)
 class Document:
     """An uploaded PDF identified by the fingerprint of its bytes.
 
@@ -391,6 +441,19 @@ class IngestionJob:
     def attempts_exhausted(self) -> bool:
         """Whether another claim would exceed the attempt limit."""
         return self.attempt >= self.max_attempts
+
+    def held_lease(self) -> uuid.UUID:
+        """Return the fencing token of the attempt that holds the job.
+
+        Returns:
+            The lease token of the current attempt.
+
+        Raises:
+            JobNotLeasedError: If the job was handed over without a claim.
+        """
+        if self.lease_token is None:
+            raise JobNotLeasedError(f"Job {self.id} was not claimed")
+        return self.lease_token
 
     def claim(
         self,
@@ -668,6 +731,19 @@ class ExtractedElement:
             raise InvalidElementError(f"Element {self.id} is not an image")
         return replace(self, image_key=image_key)
 
+    def as_decorative(self) -> ExtractedElement:
+        """Return the image flagged as a logo, stamp or repeated decoration.
+
+        Returns:
+            A copy of the element with ``is_decorative`` set.
+
+        Raises:
+            InvalidElementError: If the element is not an image.
+        """
+        if self.kind is not ElementKind.IMAGE:
+            raise InvalidElementError(f"Element {self.id} is not an image")
+        return replace(self, is_decorative=True)
+
     def with_description(
         self,
         *,
@@ -746,7 +822,8 @@ class RetrievalUnit:
         id: Deterministic id, see ``unit_id_for``.
         document_id: Document the unit belongs to.
         unit_type: Text, table or figure unit.
-        text: Content that is embedded and fed to keyword search.
+        text: Content of the unit, shown to readers. ``embedding_text`` adds the
+            heading path for the vectors.
         heading_path: Section headings in scope, outermost first.
         pages: Pages the unit spans, in ascending order.
         element_ids: Source elements.
@@ -765,3 +842,8 @@ class RetrievalUnit:
     boxes: tuple[PagedBox, ...]
     figure_ids: tuple[uuid.UUID, ...] = ()
     image_key: str | None = None
+
+    @property
+    def embedding_text(self) -> str:
+        """Heading path and text joined by newlines, as embedded and fed to BM25."""
+        return "\n".join((*self.heading_path, self.text))

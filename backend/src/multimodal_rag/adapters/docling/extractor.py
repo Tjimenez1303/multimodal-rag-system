@@ -2,9 +2,8 @@
 
 One converter is built per worker process and reused for every document, because
 loading the layout, table and OCR models dominates start-up time. Documents are
-converted in page ranges, as in docling-serve's split processing example, so the job
-reports progress per batch and memory stays bounded by the batch size. Each range has
-the conversion timeout Docling recommends for production.
+converted in page ranges, so the job reports progress per batch and memory stays
+bounded by the batch size. Each range has its own conversion timeout.
 """
 
 import logging
@@ -133,6 +132,8 @@ class DoclingExtractor:
                 pages_total=layout.page_count,
                 elements=mapped.elements,
                 images=mapped.images,
+                page_sizes=mapped.page_sizes,
+                relationships=mapped.relationships,
                 recognized_pages=tuple(
                     page
                     for page in range(first, last + 1)

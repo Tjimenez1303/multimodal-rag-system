@@ -293,13 +293,36 @@ Sources:
 ## 7. Structure-aware retrieval units
 
 **Decision**: the application layer owns a chunker that works on domain elements, not on
-Docling objects. Units follow the reading order and break at headings, tables and figures.
-Paragraphs under the same heading merge up to a token ceiling, and an oversize paragraph is
-split only at sentence boundaries. Each table, or each chain of linked table parts across
-pages, is one unit. Each relevant figure is one unit built from its caption, its labels and
-its description. Units carry the heading path, the pages, the element ids and the related
-figure ids. Tokens are counted through a `TokenCounter` port backed by the embedding
-model's tokenizer.
+Docling objects. It follows the rules of Docling's own chunkers, applied to domain
+elements:
+
+- **Boundaries.** Units follow the reading order and break at headings, tables and
+  figures. Paragraphs under the same headings merge up to `MAX_UNIT_TOKENS`, as
+  HybridChunker merges peers that share headings.
+- **Heading path.** A map from heading level to the latest heading at that level. A new
+  heading drops every heading at its level or deeper, as Docling's HierarchicalChunker
+  does with `heading_by_level`. Levels may skip numbers (the FAA outline yields levels 1
+  and 4), and the map keeps the path correct either way.
+- **Contextualization.** The text that is embedded and fed to BM25 is the heading path
+  followed by the unit text, joined by newlines, as Docling's `contextualize` does. The
+  token ceiling is measured on that contextualized text, as HybridChunker measures it.
+  The payload keeps the plain text for display.
+- **Oversize paragraphs.** A paragraph above the ceiling is split at sentence ends (a
+  period, question mark or exclamation mark followed by whitespace) and its sentences are
+  packed greedily up to the ceiling, the same regex fallback LlamaIndex's
+  `SentenceSplitter` applies when no sentence tokenizer is installed. A single sentence
+  above the ceiling stays whole, because FR-010 forbids cutting a sentence. None of the
+  2,468 paragraphs in the samples exceeds 480 tokens, so this path is a safeguard.
+- **Tables.** Each table, or each chain of linked table parts, is one unit, whatever its
+  size (see section 8 and the embedding input cap in section 11).
+- **Figures.** Each relevant figure is one unit built from its caption, its labels and
+  its description.
+- **References.** Units carry the heading path, the pages, the element ids, the boxes and
+  the related figure ids (figures linked to a unit element by `near`).
+- **Tokens.** Counted through a `TokenCounter` port backed by the embedding model's
+  tokenizer, with special tokens included. On the reference machine the Hugging Face
+  tokenizer of `Qwen/Qwen3-Embedding-0.6B` gave the same counts as the model served by
+  Docker Model Runner (3 and 7 tokens for two probe inputs).
 
 **Rationale**:
 
@@ -307,32 +330,55 @@ model's tokenizer.
   cannot live in the core.
 - HybridChunker also drops the labels inside pictures unless a custom serializer enables
   `traverse_pictures`, and it would not honor the cross-page table links the spec requires.
+- semchunk, which HybridChunker uses to split text, was rejected for paragraphs: it
+  splits first at the longest whitespace run (11 sample paragraphs contain double spaces)
+  and cuts inside a sentence that exceeds the ceiling. NLTK's sentence tokenizer, the
+  LlamaIndex and Haystack default, is not installed and needs a data download.
 - Owning the chunker keeps chunking deterministic and testable with plain fakes.
 
 **Alternatives considered**: Docling's HybridChunker called from the adapter. It is
-rejected for the reasons above, but its rules (merge peers under the same headings, repeat
-table headers, contextualize with headings) inform ours.
+rejected for the reasons above, but its rules (merge peers under the same headings,
+contextualize with headings) define ours.
 
 Sources:
 
 - https://github.com/docling-project/docling-core/blob/main/docling_core/transforms/chunker/hybrid_chunker.py
-- https://github.com/docling-project/docling-core/blob/main/docling_core/transforms/serializer/common.py
+  (`_count_chunk_tokens` counts the contextualized chunk, peers merge under equal headings)
+- https://github.com/docling-project/docling-core/blob/main/docling_core/transforms/chunker/hierarchical_chunker.py
+  (`heading_by_level`)
+- https://github.com/docling-project/docling-core/blob/main/docling_core/transforms/chunker/base.py
+  (`contextualize`)
+- https://docling-project.github.io/docling/concepts/chunking/
+- https://github.com/run-llama/llama_index/blob/main/llama-index-core/llama_index/core/node_parser/text/sentence.py
+  (`CHUNKING_REGEX` fallback)
 
 ## 8. Tables that continue across pages
 
-**Decision**: a domain rule links table B to table A when all of these hold:
+**Decision**: a domain rule links table B to table A (`continues`, from B to A) when all of
+these hold:
 
-- They are on consecutive pages.
-- Only page furniture (headers, footers, page numbers) lies between them in reading order.
-- They have the same column count.
-- A ends in the lower part of its page and B starts in the upper part of its page.
+- They are on consecutive pages and have the same column count.
+- Between them in reading order there is no text other than page furniture and the
+  captions of A or B. Images do not interrupt a table, as in Microsoft's sample, which
+  only checks paragraphs.
+- A ends in the lower half of its page and B starts in the upper half of its page.
 
-A header row on B that repeats A's header is dropped when the parts are joined into the
-retrieval unit. A caption containing "continued" or "continuación" strengthens the match
-but is not required.
+The retrieval unit of a chain joins the Markdown of every part. A part whose first row
+repeats the first row of the chain's head loses its header and separator lines, as
+Microsoft's `remove_header_from_markdown_table` does. A caption containing "continued"
+or "continuación" raises the score of the link but is not required.
 
 **Rationale**: Docling does not merge split tables today (issues #2976 and #2060 are open).
-The rule follows Microsoft's documented cross-page table sample.
+The rule follows Microsoft's documented cross-page table sample, which requires equal
+column counts and accepts only page headers, page footers and page numbers between the
+parts.
+
+On the samples the rule links the two parts of `split_table.pdf`. The scanned TM manual
+yields no chain: its multi-page index (pages 58 to 61) is interrupted by the Google
+digitization mark, which recognition reads as a paragraph, and by a running header that
+the layout model labels as a heading on two of those pages. Treating repeated text as
+page furniture would recover them, but that heuristic has no documented reference outside
+research prototypes, so it is left out.
 
 **Alternatives considered**: merging parts into a single element, which the clarification
 rejected, and asking an LLM to decide, which is slower and less deterministic.
@@ -340,6 +386,8 @@ rejected, and asking an LLM to decide, which is slower and less deterministic.
 Sources: https://github.com/docling-project/docling/issues/2976, the cross-page table sample
 at
 [Azure-Samples/document-intelligence-code-samples](https://github.com/Azure-Samples/document-intelligence-code-samples/blob/main/Python(v4.0)/Retrieval_Augmented_Generation_(RAG)_samples/sample_identify_and_merge_cross_page_tables.py)
+(`check_paragraph_presence`, `remove_header_from_markdown_table`, the `column_count`
+comparison)
 
 ## 9. Figure description
 
@@ -348,16 +396,39 @@ after extraction and outside Docling. The adapter speaks the OpenAI-compatible
 `/chat/completions` API that both Docker Model Runner and Ollama expose, sending the figure
 as a base64 `image_url` data URI with thinking disabled.
 
-- **Scope.** Figures classified as logo, icon, signature, stamp, code or full-page image,
-  and figures below 5% of the page area, are skipped. Full-page images come from scanned
-  pages, where text recognition already provides the content.
+- **Scope.** The filter mirrors Docling's own picture description options,
+  `picture_area_threshold` (0.05 by default) and `classification_deny`. Figures classified
+  as `logo`, `icon`, `signature`, `stamp`, `bar_code`, `qr_code`, `full_page_image` or
+  `page_thumbnail`, and images repeated on at least `DECORATIVE_MIN_PAGES` pages or
+  `DECORATIVE_MIN_PAGE_SHARE` of the pages (same PNG bytes), are decorative and skipped.
+  Figures below 5% of their page area are skipped but stay relevant context. Full-page
+  images come from scanned pages, where text recognition already provides the content.
+  The class names are those of DocumentFigureClassifier v2.5. With
+  `FIGURE_DESCRIPTION_ENABLED=false` every figure is skipped.
+- **Links.** Docling's reading order model already assigns captions to pictures and
+  tables (`predict_to_captions`), so the extractor turns `captions` references into
+  `caption_of` and `title_of` links, and the domain only links captions Docling left
+  alone: the nearest image or table in the same column within `NEAR_TEXT_MAX_POINTS`, or
+  across a page break. `near` links the closest paragraph or list item in the same column
+  within `NEAR_TEXT_MAX_POINTS`, measured from the figure or, when the caption continues on
+  the next page, from the caption.
 - **Prompt.** The model receives the caption and the neighboring text, and is asked for a
   short description in the language of the caption and surrounding text (English when there
-  is none) plus every printed label verbatim.
+  is none) plus every printed label verbatim. The manual's text is fenced after the
+  instructions, and the language rule is repeated after it, the placement OpenAI's GPT-4.1
+  prompting guide gives for instructions around long context. With the rule only before
+  the fenced text, `qwen3.5:9b` described 31 of 34 figures of the Spanish INSST guide in
+  English. Repeated after it, 8 of 8 sampled figures came out in Spanish.
 - **Input.** Images are downscaled to at most 1280 px on the long side.
-- **Concurrency.** Two figures are described at a time, which measured fastest.
+- **Concurrency.** Two figures are described at a time, which measured fastest. An
+  `asyncio.Semaphore` bounds the calls, as Docling's API picture description bounds them
+  with its `concurrency` option.
 - **Resilience.** Each call has its own timeout and retry budget. When a figure still
-  fails, it is marked `not_described` and the job continues (FR-027).
+  fails, it is marked `not_described` and the job continues (FR-027). Once one figure
+  exhausts its budget because the model is unreachable or times out, the job stops
+  calling the model and marks the remaining figures `not_described`, a per-job circuit
+  breaker. Without it an unreachable model would cost the full retry budget, 300 s by
+  default, for every figure. A rejected request fails only its own figure.
 - **Verification.** Identifiers in the description (tokens that mix letters and digits,
   part-number patterns) are compared with the figure's labels and caption, and any not
   found are stored as unverified (FR-028).
@@ -377,6 +448,18 @@ also considered but has no published Mac or CPU throughput and is left out of th
 
 Sources:
 
+- Docling picture description:
+  - https://github.com/docling-project/docling/blob/main/docling/datamodel/pipeline_options.py
+    (`picture_area_threshold`, `classification_deny`)
+  - https://github.com/docling-project/docling/blob/main/docling/models/picture_description_base_model.py
+  - https://github.com/docling-project/docling/blob/main/docling/models/stages/picture_description/picture_description_api_model.py
+    (`concurrency`)
+  - https://github.com/docling-project/docling/blob/main/docling/utils/api_image_request.py
+    (PNG sent as a base64 `image_url` data URI)
+  - https://github.com/docling-project/docling/blob/main/docling/models/stages/reading_order/readingorder_model.py
+    (`predict_to_captions`)
+- Circuit breaker: https://learn.microsoft.com/en-us/azure/architecture/patterns/circuit-breaker
+- Instruction placement: https://developers.openai.com/cookbook/examples/gpt4-1_prompting_guide
 - Vendor approaches:
   - https://learn.microsoft.com/en-us/azure/search/multimodal-search-overview
   - https://docs.cloud.google.com/document-ai/docs/layout-parse-chunk
@@ -433,8 +516,16 @@ model's `Instruct: … Query:` format.
 
 The model runs in embedding mode with `--ubatch-size 2048 --batch-size 2048`. With the
 default physical batch of 512 tokens, llama.cpp crashed with HTTP 500 on inputs longer
-than 512 tokens, which the benchmark reproduced. Retrieval units are also capped below
-that ceiling by the chunker.
+than 512 tokens, which the benchmark reproduced. Text units stay below `MAX_UNIT_TOKENS`.
+
+Tables are never split (FR-011, SC-005), and one sample table measures 3,770 tokens, so
+the embedding input is truncated at `EMBEDDER_MAX_INPUT_TOKENS` (2048, the physical
+batch), the first remedy OpenAI's cookbook gives for inputs longer than the model's
+context. Keyword search still receives the whole text. Truncation uses the token offsets
+of the Hugging Face tokenizer, whose `tokenizer.json` is downloaded at image build time
+with `hf download` at a pinned revision, listed in `backend/embedder_tokenizer.txt` and
+cached by CI like the Docling models. The embedder sends `EMBEDDER_BATCH_SIZE` passages
+(32) per request.
 
 **Rationale**:
 
@@ -454,6 +545,9 @@ that ceiling by the chunker.
 
 Sources:
 
+- Long inputs: https://developers.openai.com/cookbook/examples/embedding_long_inputs
+- Tokenizer download: https://huggingface.co/docs/huggingface_hub/guides/cli
+- Tokenizer offsets: https://huggingface.co/docs/tokenizers/api/encoding
 - MTEB multilingual leaderboard: https://mteb-leaderboard.hf.space/benchmark/MTEB(Multilingual%2C%20v2)
 - Model cards:
   - https://huggingface.co/Qwen/Qwen3-Embedding-0.6B
@@ -473,9 +567,16 @@ with the IDF modifier, so hybrid search later fuses the two with RRF.
 - **Visibility.** Points are written with `visible=false` and flipped to `true` in one
   filtered `set_payload` when the job completes. A failed job deletes its points by
   `document_id` (FR-018).
-- **BM25 options.** Language-neutral: lowercase, ASCII folding and no stemming. The same
-  analyzer then works for English and Spanish queries, and identifiers such as part
-  numbers match exactly.
+- **BM25 options.** Language-neutral, passed as `Bm25Config` in `Document.options`:
+  `lowercase=True`, `ascii_folding=True`, `stemmer={"type": "none"}` and
+  `stopwords={"languages": [], "custom": []}`. The same analyzer then works for English
+  and Spanish queries, and identifiers such as part numbers match exactly. Qdrant marks
+  the older `language: "none"` switch as deprecated. qdrant-client 1.19 sends a
+  `Document` with model `qdrant/bm25` to the server as is, so no sparse model runs in the
+  worker.
+- **Text.** Both vectors receive the contextualized unit text (section 7).
+- **Errors.** Connection failures, timeouts and 5xx answers are transient and retried with
+  the provider policy. Other answers are rejected requests.
 
 **Rationale**: server-side BM25 has been in open-source Qdrant core since 1.15.2, so no
 sparse model runs in the worker. Deterministic ids make re-processing overwrite points
@@ -489,13 +590,14 @@ the evaluation shows lexical recall gaps.
 - Weaviate and Milvus, which are viable but heavier or less aligned with server-side BM25.
 - fastembed BM25 computed client-side, the runner-up.
 
-To verify during setup: the exact option names for a language-neutral analyzer in Qdrant's
-BM25 inference.
-
 Sources:
 
 - https://github.com/qdrant/qdrant/releases/tag/v1.15.2
 - https://qdrant.tech/documentation/search/hybrid-queries/
+- https://qdrant.tech/documentation/search/text-search/full-text-search/ (BM25 text
+  processing, stemming and stopwords)
+- qdrant-client 1.19.1: `http/models/models.py` (`Bm25Config`) and
+  `embed/model_embedder.py` (server-side BM25)
 - https://qdrant.tech/documentation/manage-data/points/
 - https://qdrant.tech/documentation/manage-data/indexing/
 

@@ -7,14 +7,17 @@ routes here as they are implemented.
 
 import asyncio
 import logging
+import math
 import os
 import signal
 import socket
 from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from functools import partial
 
+import httpx
 from fastapi import FastAPI
+from qdrant_client import AsyncQdrantClient
 from sqlalchemy.ext.asyncio import AsyncEngine
 from starlette.types import ASGIApp
 
@@ -28,7 +31,14 @@ from multimodal_rag.adapters.http.body_limit import (
 )
 from multimodal_rag.adapters.http.dependencies import IngestionState
 from multimodal_rag.adapters.http.request_context import RequestContextMiddleware
+from multimodal_rag.adapters.http.routes_documents import documents_router
 from multimodal_rag.adapters.http.routes_ingestion import UPLOAD_PATH, ingestion_router
+from multimodal_rag.adapters.openai_compatible.describer import (
+    OpenAICompatibleFigureDescriber,
+)
+from multimodal_rag.adapters.openai_compatible.embedder import (
+    OpenAICompatibleEmbedder,
+)
 from multimodal_rag.adapters.postgres.documents import PostgresDocumentRepository
 from multimodal_rag.adapters.postgres.elements import PostgresElementRepository
 from multimodal_rag.adapters.postgres.engine import check_database, create_engine
@@ -36,15 +46,26 @@ from multimodal_rag.adapters.postgres.job_notifications import (
     PostgresJobNotifications,
 )
 from multimodal_rag.adapters.postgres.job_queue import PostgresJobQueue
+from multimodal_rag.adapters.qdrant.index import QdrantVectorIndex
 from multimodal_rag.adapters.storage.filesystem import FilesystemBlobStorage
+from multimodal_rag.adapters.tokenizer.huggingface import HuggingFaceTokenCounter
 from multimodal_rag.adapters.worker.liveness import LivenessFile
 from multimodal_rag.adapters.worker.loop import WorkerLoop
+from multimodal_rag.ingestion.figures import FigurePolicy
+from multimodal_rag.ingestion.ports import DocumentExtractor
 from multimodal_rag.ingestion.use_cases.intake import (
     GetJob,
     SubmitDocument,
     UploadLimits,
 )
-from multimodal_rag.ingestion.use_cases.processing import ProcessJob
+from multimodal_rag.ingestion.use_cases.library import (
+    GetElementImage,
+    ListDocumentElements,
+)
+from multimodal_rag.ingestion.use_cases.processing import (
+    EnrichmentOptions,
+    ProcessJob,
+)
 from multimodal_rag.shared.config import ApiSettings, WorkerSettings
 from multimodal_rag.shared.logging import configure_logging
 from multimodal_rag.shared.resilience import RetryPolicy
@@ -79,7 +100,7 @@ def create_api_app() -> ASGIApp:
             "blob_storage": storage.check_writable,
         },
         readiness_timeout_seconds=settings.readiness_timeout_seconds,
-        routers=(ingestion_router,),
+        routers=(ingestion_router, documents_router),
         lifespan=lifespan,
         version=__version__,
         body_limits=BodyLimits(
@@ -96,9 +117,11 @@ def _ingestion_state(
 ) -> IngestionState:
     clock = SystemClock()
     jobs = PostgresJobQueue(engine)
+    documents = PostgresDocumentRepository(engine)
+    elements = PostgresElementRepository(engine)
     return IngestionState(
         submit_document=SubmitDocument(
-            documents=PostgresDocumentRepository(engine),
+            documents=documents,
             jobs=jobs,
             blobs=storage,
             inspector=PdfiumInspector(),
@@ -110,6 +133,10 @@ def _ingestion_state(
             max_attempts=settings.max_attempts,
         ),
         get_job=GetJob(jobs=jobs),
+        list_document_elements=ListDocumentElements(
+            documents=documents, jobs=jobs, elements=elements
+        ),
+        get_element_image=GetElementImage(elements=elements, blobs=storage),
     )
 
 
@@ -169,30 +196,91 @@ async def _serve_jobs(
         batch_timeout_seconds=settings.extraction_batch_timeout_seconds,
     )
     await asyncio.to_thread(extractor.warm_up)
-    storage = FilesystemBlobStorage(settings.blob_root)
     jobs = PostgresJobQueue(engine)
-    process = ProcessJob(
+    async with AsyncExitStack() as clients:
+        process = await _process_job(settings, engine, jobs, extractor, clients)
+        logger.info("worker ready")
+        await WorkerLoop(
+            jobs=jobs,
+            process=process,
+            wakeups=notifications,
+            worker_id=f"{socket.gethostname()}:{os.getpid()}",
+            lease_seconds=settings.lease_seconds,
+            heartbeat_seconds=settings.heartbeat_seconds,
+            poll_seconds=settings.poll_seconds,
+            claim_retry=RetryPolicy.for_claims(settings),
+            max_jobs=settings.worker_max_jobs,
+        ).run(stop=stop)
+    # The loop also returns after its job budget, and the liveness task stops too.
+    stop.set()
+
+
+async def _process_job(
+    settings: WorkerSettings,
+    engine: AsyncEngine,
+    jobs: PostgresJobQueue,
+    extractor: DocumentExtractor,
+    clients: AsyncExitStack,
+) -> ProcessJob:
+    retry = RetryPolicy.for_providers(settings)
+    qdrant = AsyncQdrantClient(
+        url=str(settings.qdrant_url),
+        timeout=math.ceil(settings.qdrant_timeout_seconds),
+    )
+    clients.push_async_callback(qdrant.close)
+    index = QdrantVectorIndex(
+        qdrant,
+        collection=settings.qdrant_collection,
+        dimensions=settings.embedder_dimensions,
+        retry=retry,
+    )
+    await index.ensure_collection()
+    embedder_client = await clients.enter_async_context(
+        httpx.AsyncClient(
+            base_url=str(settings.embedder_url),
+            timeout=settings.embedder_timeout_seconds,
+        )
+    )
+    describer = None
+    if settings.figure_description_enabled:
+        vlm_client = await clients.enter_async_context(
+            httpx.AsyncClient(
+                base_url=str(settings.vlm_url), timeout=settings.vlm_timeout_seconds
+            )
+        )
+        describer = OpenAICompatibleFigureDescriber(
+            vlm_client, model=settings.vlm_model, retry=retry
+        )
+    return ProcessJob(
         documents=PostgresDocumentRepository(engine),
         jobs=jobs,
         elements=PostgresElementRepository(engine),
-        blobs=storage,
+        blobs=FilesystemBlobStorage(settings.blob_root),
         extractor=extractor,
+        describer=describer,
+        embedder=OpenAICompatibleEmbedder(
+            embedder_client,
+            model=settings.embedder_model,
+            dimensions=settings.embedder_dimensions,
+            batch_size=settings.embedder_batch_size,
+            retry=retry,
+        ),
+        token_counter=HuggingFaceTokenCounter.from_file(
+            settings.embedder_tokenizer_path
+        ),
+        index=index,
         page_batch=settings.extraction_page_batch,
+        enrichment=EnrichmentOptions(
+            figure_policy=FigurePolicy(
+                decorative_min_pages=settings.decorative_min_pages,
+                decorative_min_page_share=settings.decorative_min_page_share,
+            ),
+            figure_concurrency=settings.figure_concurrency,
+            near_text_max_points=settings.near_text_max_points,
+            max_unit_tokens=settings.max_unit_tokens,
+            embedder_max_input_tokens=settings.embedder_max_input_tokens,
+        ),
     )
-    logger.info("worker ready")
-    await WorkerLoop(
-        jobs=jobs,
-        process=process,
-        wakeups=notifications,
-        worker_id=f"{socket.gethostname()}:{os.getpid()}",
-        lease_seconds=settings.lease_seconds,
-        heartbeat_seconds=settings.heartbeat_seconds,
-        poll_seconds=settings.poll_seconds,
-        claim_retry=RetryPolicy.for_claims(settings),
-        max_jobs=settings.worker_max_jobs,
-    ).run(stop=stop)
-    # The loop also returns after its job budget, and the liveness task stops too.
-    stop.set()
 
 
 def worker_is_alive() -> bool:

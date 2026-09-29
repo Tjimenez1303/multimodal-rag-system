@@ -1,0 +1,209 @@
+{
+  "status": "answered",
+  "reason": null,
+  "answer": "## Inspecting ignition leads\n\n### What to look for\n\nCheck each lead for **chafing**, *burned* insulation and loose terminals [1].\n\n1. Remove the lead from the spark plug.\n2. Measure the resistance with an ohmmeter [2].\n   - Replace the lead when the reading is out of limits.\n\n| Check | Tool |\n|---|---|\n| Insulation | Visual |\n| Continuity | Ohmmeter |\n\nRecord the value as `R_lead` in the log:\n\n```\nLEAD 1: 1.2 kOhm\nLEAD 2: 1.1 kOhm\n```",
+  "not_covered": null,
+  "citations": [
+    {
+      "number": 1,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "pages": [31, 32],
+      "unit_ids": ["2f592807-2e31-5fa4-9853-fc05d7513877"]
+    },
+    {
+      "number": 2,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "pages": [47],
+      "unit_ids": ["3f863be5-3831-5686-873f-f4b1794048fa"]
+    }
+  ],
+  "sources": [
+    {
+      "unit_id": "3f863be5-3831-5686-873f-f4b1794048fa",
+      "rank": 1,
+      "similarity": 0.7780575,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": [
+        "Reciprocating Engine Ignition System Maintenance & Inspection",
+        "Ignition System Leads"
+      ],
+      "pages": [47],
+      "content_type": "text",
+      "excerpt": "Remove safety wire and disconnect lead from igniter plug.\nDischarge any electrical charge stored in the system by grounding and remove ignition leads from engine.\nClean leads with approved dry cleaning solvent.\nInspect connectors for damaged threads, corrosion, cracked insulators, and bent or broken",
+      "cited": true,
+      "citation_number": 2,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": ["1d951eed-b06a-5869-9c9d-9f1007136577"]
+    },
+    {
+      "unit_id": "2f592807-2e31-5fa4-9853-fc05d7513877",
+      "rank": 2,
+      "similarity": 0.79503936,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": [
+        "Reciprocating Engine Ignition System Maintenance & Inspection",
+        "Maintenance & Inspection of Ignition Leads"
+      ],
+      "pages": [31, 32],
+      "content_type": "text",
+      "excerpt": "Inspection of ignition leads should include both a visual and an electrical test. During the visual test, the lead cover should be inspected for cracks or other damage, abrasions, mutilated braid, or other physical damage. Inspect leads for overheating if routed close to exhaust stacks. Disconnect t",
+      "cited": true,
+      "citation_number": 1,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": []
+    },
+    {
+      "unit_id": "4400bc74-9e01-5b31-ab73-17353e088663",
+      "rank": 3,
+      "similarity": 0.7195326,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": [
+        "Reciprocating Engine Ignition System Maintenance & Inspection",
+        "Maintenance & Inspection of Ignition Leads"
+      ],
+      "pages": [32],
+      "content_type": "text",
+      "excerpt": "When defective leads are revealed by an ignition harness test, continue the test to determine whether the leads or distributor block are defective. If the difficulty is in an individual ignition lead, determine whether the electrical leak is at the spark plug elbow or elsewhere. Remove the elbow, pu",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": []
+    },
+    {
+      "unit_id": "a8e9362f-e165-5a18-8dc4-3a50e7994c3c",
+      "rank": 4,
+      "similarity": 0.67953527,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": [
+        "Reciprocating Engine Ignition System Maintenance & Inspection",
+        "Ignition Switch Check"
+      ],
+      "pages": [31],
+      "content_type": "text",
+      "excerpt": "The ignition switch check is performed to see that all magneto ground leads are electrically grounded. The ignition switch check is usually made at 700 rpm. On those\naircraft engine installations that do not idle at this low rpm, set the engine speed to the lowest possible to perform this check. Whe",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": []
+    },
+    {
+      "unit_id": "06d3ef2b-7263-59fb-be11-b2cbf3b4583d",
+      "rank": 5,
+      "similarity": 0.75339675,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": [
+        "Reciprocating Engine Ignition System Maintenance & Inspection",
+        "Ignition System Leads"
+      ],
+      "pages": [46],
+      "content_type": "text",
+      "excerpt": "Remove clamps securing ignition leads to engine.\nRemove safety wire and disconnect electrical connectors from exciter units.",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": []
+    },
+    {
+      "unit_id": "1432d71a-6698-58d7-a2a2-4d7f17f64667",
+      "rank": 6,
+      "similarity": 0.65253687,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": [
+        "Reciprocating Engine Ignition System Maintenance & Inspection",
+        "Igniter Plugs"
+      ],
+      "pages": [47],
+      "content_type": "text",
+      "excerpt": "from the ignition exciter unit and wait at least one minute to permit the stored energy to dissipate before disconnecting the high-voltage cable from the igniter.\nRemove igniter plugs from mounts.\nInspect igniter plug gap surface material. Before inspection, remove residue from the shell exterior us",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": ["057acf5a-02ca-582a-b56b-40e32c1645bf"]
+    },
+    {
+      "unit_id": "85fdd568-64a6-5931-b024-fb2db6627514",
+      "rank": 7,
+      "similarity": 0.72335875,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": [
+        "Reciprocating Engine Ignition System Maintenance & Inspection",
+        "Maintenance & Inspection of Ignition Leads"
+      ],
+      "pages": [32],
+      "content_type": "text",
+      "excerpt": "Remove approximately ¼ inch of insulation from the spark plug end of the lead and install the elbow, integral seal, and cigarette. [Figure 4-54]\nInstall a marker on the distributor end of the cable to identify its cylinder number. If a new marker is not available, use the marker removed from the def",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": ["6cd546b7-ee16-5fc3-b052-08c17cbfa217"]
+    },
+    {
+      "unit_id": "2720b217-7408-5abd-a53b-f0a5da925d25",
+      "rank": 8,
+      "similarity": 0.7215116,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": [
+        "Reciprocating Engine Ignition System Maintenance & Inspection",
+        "Igniter Plugs"
+      ],
+      "pages": [47],
+      "content_type": "text",
+      "excerpt": "Disconnect ignition leads from igniter plugs. A good procedure to perform before disconnecting the ignition lead is to disconnect the low-voltage primary lead",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": []
+    }
+  ],
+  "primary_image": {
+    "element_id": "1d951eed-b06a-5869-9c9d-9f1007136577",
+    "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+    "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+    "page": 47,
+    "bbox": {
+      "left": 52.58906173706055,
+      "top": 43.3289794921875,
+      "right": 292.81048583984375,
+      "bottom": 447.4793701171875,
+      "origin": "top_left"
+    },
+    "caption": "Figure 4-77. Constrained gap igniter plug.",
+    "unit_id": "3f863be5-3831-5686-873f-f4b1794048fa",
+    "url": "/api/v1/documents/5d3ff0f9-f671-4a1b-b3e6-3258071fa024/images/1d951eed-b06a-5869-9c9d-9f1007136577"
+  },
+  "related_images": []
+}

@@ -6,6 +6,7 @@ converted in page ranges, so the job reports progress per batch and memory stays
 bounded by the batch size. Each range has its own conversion timeout.
 """
 
+import io
 import logging
 import uuid
 from collections.abc import Iterator
@@ -56,6 +57,9 @@ class DoclingExtractor:
             do_table_structure=True,
             do_picture_classification=True,
             generate_picture_images=True,
+            # Pages are rendered for the figure crops anyway, so keeping the page
+            # images only adds their PNG encoding.
+            generate_page_images=True,
             images_scale=IMAGES_SCALE,
             accelerator_options=AcceleratorOptions(
                 num_threads=threads, device=AcceleratorDevice.CPU
@@ -134,6 +138,7 @@ class DoclingExtractor:
                 images=mapped.images,
                 page_sizes=mapped.page_sizes,
                 relationships=mapped.relationships,
+                page_images=_page_images(result, first, last),
                 recognized_pages=tuple(
                     page
                     for page in range(first, last + 1)
@@ -154,3 +159,21 @@ class DoclingExtractor:
                 f"Pages {first} to {last} were converted only partially"
             )
         return result
+
+
+def _page_images(result: ConversionResult, first: int, last: int) -> dict[int, bytes]:
+    """Encode the rendered image of every page of a batch as PNG.
+
+    Raises:
+        CorruptDocumentError: If Docling rendered no image for one of the pages.
+    """
+    images: dict[int, bytes] = {}
+    for page_number in range(first, last + 1):
+        page = result.document.pages.get(page_number)
+        image = page.image.pil_image if page and page.image else None
+        if image is None:
+            raise CorruptDocumentError(f"Page {page_number} could not be rendered")
+        buffer = io.BytesIO()
+        image.save(buffer, format="PNG")
+        images[page_number] = buffer.getvalue()
+    return images

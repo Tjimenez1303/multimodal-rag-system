@@ -25,6 +25,14 @@ jobs:
           version: "0.12.19"
       - name: Install dependencies
         run: uv sync --locked --directory backend
+      # The frontend hooks run the client's own linter, formatter and type checker.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        with:
+          node-version-file: frontend/.node-version
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        run: npm --prefix frontend ci
       - name: Run pre-commit hooks
         run: uv run --project backend pre-commit run --all-files --show-diff-on-failure
 
@@ -73,3 +81,40 @@ jobs:
         env:
           DOCLING_ARTIFACTS_PATH: ${{ runner.temp }}/docling-models
           EMBEDDER_TOKENIZER_PATH: ${{ runner.temp }}/embedder-tokenizer/tokenizer.json
+
+  frontend:
+    name: Frontend tests, client drift, build and end-to-end
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
+        with:
+          version: "0.12.19"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        with:
+          node-version-file: frontend/.node-version
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: |
+          uv sync --locked --directory ../backend
+          npm ci
+      # The committed client must match the API the backend serves.
+      - name: Check the generated client
+        run: |
+          uv run --directory ../backend python scripts/export_openapi.py ../frontend/openapi.json
+          npm run generate-client
+          git diff --exit-code openapi.json src/client
+      - name: Run unit tests with the coverage gate
+        run: npm run test:coverage
+      - name: Build
+        run: npm run build
+      - name: Install browsers
+        run: npx playwright install --with-deps chromium firefox webkit
+      - name: Run end-to-end tests
+        run: npm run test:e2e

@@ -99,6 +99,7 @@ class Harness:
     def __post_init__(self) -> None:
         self.jobs = RecordingJobQueue(self.clock)
         self.elements = InMemoryElementRepository(self.jobs)
+        self.index = InMemoryVectorIndex()
         self.process = ProcessJob(
             documents=self.documents,
             jobs=self.jobs,
@@ -108,7 +109,7 @@ class Harness:
             describer=FakeFigureDescriber(),
             embedder=FakeEmbedder(),
             token_counter=WordTokenCounter(),
-            index=InMemoryVectorIndex(),
+            index=self.index,
             page_batch=4,
             enrichment=ENRICHMENT,
         )
@@ -380,3 +381,49 @@ async def test_a_job_without_a_lease_is_an_internal_inconsistency(
 
     with pytest.raises(DataInconsistencyError):
         await harness.process(unleased)
+
+
+def stored_pages(harness: Harness, document_id: uuid.UUID) -> dict[str, bytes]:
+    prefix = f"pages/{document_id}/"
+    return {k: v for k, v in harness.blobs.blobs.items() if k.startswith(prefix)}
+
+
+async def test_every_page_image_of_every_batch_is_stored(harness: Harness) -> None:
+    job = await harness.claimed_job()
+    batches = two_batches(job.document_id)
+    harness.extractor.batches = batches
+
+    await harness.process(job)
+
+    stored = stored_pages(harness, job.document_id)
+    assert set(stored) == {
+        ExtractedElement.page_image_key_for(document_id=job.document_id, page_number=n)
+        for n in range(1, 7)
+    }
+    for batch in harness.extractor.yielded:
+        for page_number, png in batch.page_images.items():
+            key = ExtractedElement.page_image_key_for(
+                document_id=job.document_id, page_number=page_number
+            )
+            assert stored[key] == png
+
+
+async def test_a_retried_job_overwrites_the_same_page_images(harness: Harness) -> None:
+    job = await harness.claimed_job()
+    harness.extractor.batches = two_batches(job.document_id)
+    # A database outage abandons the first attempt after its pages were stored.
+    harness.index.failures["publish"] = StorageUnavailableError("db down")
+    with pytest.raises(StorageUnavailableError):
+        await harness.process(job)
+    first = stored_pages(harness, job.document_id)
+    objects = len(harness.blobs.blobs)
+
+    del harness.index.failures["publish"]
+    harness.clock.advance(seconds=91)
+    retry = await claim_next(harness.jobs)
+    await harness.process(retry)
+
+    assert retry.attempt == 2
+
+    assert stored_pages(harness, job.document_id).keys() == first.keys()
+    assert len(harness.blobs.blobs) == objects

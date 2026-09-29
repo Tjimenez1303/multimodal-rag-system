@@ -106,6 +106,12 @@ class ImageNotFoundError(NotFoundError):
     code = "image_not_found"
 
 
+class PageNotFoundError(NotFoundError):
+    """The requested page number is outside the document."""
+
+    code = "page_not_found"
+
+
 class InvalidJobTransitionError(ConcurrencyError):
     """A job was asked to move to a state its current state does not allow."""
 

@@ -90,7 +90,7 @@ docstring-code-format = true
 [tool.mypy]
 strict = true
 python_version = "3.14"
-files = ["src", "tests", "migrations"]
+files = ["src", "tests", "migrations", "scripts"]
 mypy_path = "src"
 plugins = ["pydantic.mypy"]
 

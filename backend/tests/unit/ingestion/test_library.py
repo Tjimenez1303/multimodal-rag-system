@@ -17,10 +17,12 @@ from multimodal_rag.ingestion.errors import (
     ElementNotFoundError,
     ImageNotFoundError,
     IngestionNotCompletedError,
+    PageNotFoundError,
 )
 from multimodal_rag.ingestion.use_cases.library import (
     GetDocument,
     GetElementImage,
+    GetPageImage,
     ListDocumentElements,
     ListDocuments,
 )
@@ -57,6 +59,9 @@ class Library:
         self.get_image = GetElementImage(elements=self.elements, blobs=self.blobs)
         self.list_documents = ListDocuments(documents=self.documents, jobs=self.jobs)
         self.get_document = GetDocument(documents=self.documents, jobs=self.jobs)
+        self.get_page = GetPageImage(
+            documents=self.documents, jobs=self.jobs, blobs=self.blobs
+        )
 
     async def registered(self, name: str) -> Document:
         # One second apart, so creation order decides the listing order.
@@ -267,3 +272,70 @@ async def test_a_document_is_returned_with_its_latest_job(library: Library) -> N
 async def test_getting_an_unknown_document_is_not_found(library: Library) -> None:
     with pytest.raises(DocumentNotFoundError):
         await library.get_document(uuid.uuid4())
+
+
+def page_key(page_number: int) -> str:
+    return ExtractedElement.page_image_key_for(
+        document_id=DOCUMENT_ID, page_number=page_number
+    )
+
+
+async def test_the_image_of_a_page_of_a_completed_document_is_returned(
+    library: Library,
+) -> None:
+    await library.document()
+    await finish_next(library.jobs, succeed=True)
+    await library.blobs.save_bytes(page_key(2), PNG)
+
+    assert await library.get_page(DOCUMENT_ID, 2) == PNG
+
+
+async def test_the_page_of_an_unknown_document_is_not_found(library: Library) -> None:
+    with pytest.raises(DocumentNotFoundError):
+        await library.get_page(uuid.uuid4(), 1)
+
+
+async def test_a_page_waits_for_a_completed_ingestion(library: Library) -> None:
+    await library.document()
+
+    with pytest.raises(IngestionNotCompletedError):
+        await library.get_page(DOCUMENT_ID, 1)
+    await claim_next(library.jobs)
+    with pytest.raises(IngestionNotCompletedError):
+        await library.get_page(DOCUMENT_ID, 1)
+
+
+async def test_a_failed_ingestion_has_no_pages(library: Library) -> None:
+    await library.document()
+    await finish_next(library.jobs, succeed=False)
+
+    with pytest.raises(IngestionNotCompletedError):
+        await library.get_page(DOCUMENT_ID, 1)
+
+
+async def test_a_document_without_a_job_has_no_pages(library: Library) -> None:
+    document = await library.registered("no-job.pdf")
+
+    with pytest.raises(IngestionNotCompletedError):
+        await library.get_page(document.id, 1)
+
+
+@pytest.mark.parametrize("page_number", [0, -1, 3])
+async def test_a_page_outside_the_document_is_not_found(
+    library: Library, page_number: int
+) -> None:
+    await library.document()
+    await finish_next(library.jobs, succeed=True)
+
+    with pytest.raises(PageNotFoundError):
+        await library.get_page(DOCUMENT_ID, page_number)
+
+
+async def test_a_missing_page_image_of_a_completed_document_is_an_inconsistency(
+    library: Library,
+) -> None:
+    await library.document()
+    await finish_next(library.jobs, succeed=True)
+
+    with pytest.raises(DataInconsistencyError):
+        await library.get_page(DOCUMENT_ID, 1)

@@ -15,6 +15,7 @@ from multimodal_rag.ingestion.use_cases.intake import GetJob, SubmitDocument
 from multimodal_rag.ingestion.use_cases.library import (
     GetDocument,
     GetElementImage,
+    GetPageImage,
     ListDocumentElements,
     ListDocuments,
 )
@@ -28,6 +29,7 @@ class IngestionState(TypedDict):
         get_job: Use case behind the job status route.
         list_document_elements: Use case behind the elements route.
         get_element_image: Use case behind the image route.
+        get_page_image: Use case behind the page image route.
         list_documents: Use case behind the library route.
         get_document: Use case behind the document route.
     """
@@ -36,6 +38,7 @@ class IngestionState(TypedDict):
     get_job: GetJob
     list_document_elements: ListDocumentElements
     get_element_image: GetElementImage
+    get_page_image: GetPageImage
     list_documents: ListDocuments
     get_document: GetDocument
 
@@ -102,6 +105,19 @@ def provide_get_element_image(request: Request) -> GetElementImage:
     return use_case
 
 
+def provide_get_page_image(request: Request) -> GetPageImage:
+    """Return the page image use case built at startup.
+
+    Args:
+        request: Request being handled.
+
+    Returns:
+        The shared ``GetPageImage`` instance.
+    """
+    use_case: GetPageImage = request.state.get_page_image
+    return use_case
+
+
 def provide_list_documents(request: Request) -> ListDocuments:
     """Return the library use case built at startup.
 
@@ -160,6 +176,7 @@ ListDocumentElementsDep = Annotated[
     ListDocumentElements, Depends(provide_list_document_elements)
 ]
 GetElementImageDep = Annotated[GetElementImage, Depends(provide_get_element_image)]
+GetPageImageDep = Annotated[GetPageImage, Depends(provide_get_page_image)]
 ListDocumentsDep = Annotated[ListDocuments, Depends(provide_list_documents)]
 GetDocumentDep = Annotated[GetDocument, Depends(provide_get_document)]
 AnswerQuestionDep = Annotated[AnswerQuestion, Depends(provide_answer_question)]

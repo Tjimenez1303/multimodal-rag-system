@@ -33,3 +33,21 @@ repos:
         language: system
         pass_filenames: false
         files: ^backend/.*\.py$
+      - id: frontend-lint
+        name: frontend lint (oxlint)
+        entry: npm --prefix frontend run lint
+        language: system
+        pass_filenames: false
+        files: ^frontend/
+      - id: frontend-format
+        name: frontend format (prettier)
+        entry: npm --prefix frontend run format:check
+        language: system
+        pass_filenames: false
+        files: ^frontend/
+      - id: frontend-typecheck
+        name: frontend type check (tsc)
+        entry: npm --prefix frontend run typecheck
+        language: system
+        pass_filenames: false
+        files: ^frontend/

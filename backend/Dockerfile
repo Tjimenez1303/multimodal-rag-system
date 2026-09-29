@@ -7,10 +7,15 @@ ARG PYTHON_IMAGE=python:3.14.7-slim-trixie@sha256:51dafde81dbdb6ebde285137a295cf
 
 # RapidOCR depends on the full opencv-python build, which links X11, GL and GLib at
 # import time even without a display.
+# Docling's parser renders pages with system fonts in place of the standard PDF fonts
+# (Helvetica, Times, Courier) that files do not embed. Without any, it draws every
+# glyph as a box, which spoils page images, figure crops and layout detection. The URW
+# base 35 fonts are the free clones of those fonts.
 FROM ${PYTHON_IMAGE} AS base
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends \
         libgl1 libglib2.0-0t64 libice6 libsm6 libx11-6 libxcb1 libxext6 \
+        fonts-urw-base35 \
     && rm -rf /var/lib/apt/lists/*
 
 FROM base AS dependencies

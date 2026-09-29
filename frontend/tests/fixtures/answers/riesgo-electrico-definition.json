@@ -1,0 +1,137 @@
+{
+  "status": "answered",
+  "reason": null,
+  "answer": "El riesgo eléctrico se entiende como el riesgo originado por la energía eléctrica [1].\n\nEste riesgo incluye específicamente:\n- Choque eléctrico por contacto con elementos en tensión (contacto eléctrico directo), o con masas puestas accidentalmente en tensión (contacto eléctrico indirecto) [1].\n- Quemaduras por choque eléctrico, o por arco eléctrico [1].\n- Caídas o golpes como consecuencia de choque o arco eléctrico [1].\n- Incendios o explosions originados por la electricidad [1].\n\nEn la definición de riesgo eléctrico a los efectos de este Reglamento se entiende, no solo la probabilidad de sufrir un choque eléctrico (sea por contacto directo o por indirecto) debido al paso de la corriente por el cuerpo humano, sino que también se han considerado otro tipo de riesgos/efectos asociados, generalmente considerados por separado y relativamente frecuentes, tales como quemaduras, caídas, incendios, explosions, intoxicaciones, etc., cuyo origen sea una utilización indebida (en condiciones diferentes a las previstas) o un defecto de las instalaciones o de los receptors [1].",
+  "not_covered": null,
+  "citations": [
+    {
+      "number": 1,
+      "document_id": "b5d1a952-567c-4f17-9bc7-40b31c8a33f2",
+      "document_name": "insst-crash.pdf",
+      "pages": [19],
+      "unit_ids": ["ffce5658-2fe8-5e89-84b9-57e9c59c0c54"]
+    }
+  ],
+  "sources": [
+    {
+      "unit_id": "ffce5658-2fe8-5e89-84b9-57e9c59c0c54",
+      "rank": 1,
+      "similarity": 0.8445178,
+      "document_id": "b5d1a952-567c-4f17-9bc7-40b31c8a33f2",
+      "document_name": "insst-crash.pdf",
+      "section": ["ANEXO I Definiciones"],
+      "pages": [19],
+      "content_type": "text",
+      "excerpt": "A los efectos de lo dispuesto en este Real Decreto, se entenderá como:\nRiesgo eléctrico: riesgo originado por la energía eléctrica. Quedan específicamente incluidos los riesgos de:\n\u0007Choque eléctrico por contacto con elementos en tensión (contacto eléctrico directo), o con masas puestas accidentalmen",
+      "cited": true,
+      "citation_number": 1,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": []
+    },
+    {
+      "unit_id": "b063153e-577e-58f7-9741-eef6c6e4c7f3",
+      "rank": 2,
+      "similarity": 0.5645262,
+      "document_id": "b5d1a952-567c-4f17-9bc7-40b31c8a33f2",
+      "document_name": "insst-crash.pdf",
+      "section": ["IP XX"],
+      "pages": [24, 25],
+      "content_type": "text",
+      "excerpt": "\u0007Trabajo en proximidad: trabajo durante el cual el trabajador entra, o puede entrar, en la zona de proximidad, sin entrar en la zona de peligro, bien sea con una parte de su cuerpo, o con las herramientas, equipos, dispositivos o materials que manipula.\n\u0007Trabajador autorizado: trabajador que ha sid",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": []
+    },
+    {
+      "unit_id": "de8d45ba-24d0-5ebf-bcc9-727f66fdf3e3",
+      "rank": 3,
+      "similarity": 0.5770365,
+      "document_id": "b5551573-56ec-4b9d-b4bb-1c46549dcb32",
+      "document_name": "insst-guia-riesgo-electrico.pdf",
+      "section": [
+        "Equipos de protección individual frente al riesgo eléctrico: selección y uso"
+      ],
+      "pages": [55],
+      "content_type": "table",
+      "excerpt": "Tabla 3. Equipos de protección individual frente al arco eléctrico.\nTabla 3. Equipos de protección individual frente al arco eléctrico.\n\n| II. Equipos de protección individual frente al arco eléctrico - Denominación                                                                                     ",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [
+        {
+          "page": 55,
+          "rows": [
+            [
+              "II. Equipos de protección individual frente al arco eléctrico",
+              "II. Equipos de protección individual frente al arco eléctrico",
+              "II. Equipos de protección individual frente al arco eléctrico"
+            ],
+            [
+              "Denominación",
+              "Normas técnicas aplicables",
+              "Protección frente a riesgo térmico y otros"
+            ],
+            [
+              "Pantalla facial",
+              "UNE-EN 166. Protección individual de los ojos. Especificaciones RfUs 03-024. Protección ocular y facial frente al arco eléctrico. Requisitos adicionales 13",
+              "• \u0007Las pantallas faciales son los únicos protectors que ofrecen protección frente a un riesgo derivado de la electricidad incorporando el requisito de protección contra el arco eléctrico en cortocircuito. • Los oculares han de tener una clase ocular de 2-1, 2 o 3-1, 2. • \u0007El número \"8\" es el símbolo del marcado que indica solidez frente al arco eléctrico de cortocircuito. • \u0007Clase de protección frente al riesgo térmico generado por un arco eléctrico."
+            ],
+            [
+              "Guantes de pro- tección frente a los riesgos térmi- cos derivados de un arco eléctrico Ropa de protec- ción frente a los riesgos térmicos derivados del arco eléctrico",
+              "UNE-EN 61482-1-2. Trabajos en tensión. Ropa de protección contra los peligros térmicos de un arco eléctrico. Parte 1-2: Métodos de ensayo. Método 2: Determinación de la clase de protección contra el arco de los materials y la ropa por medio de un arco dirigido y constreñido (caja de ensayo) UNE-EN IEC 61482-1-1. Trabajos en tensión. Ropa de protección contra el riesgo térmico de un arco eléctrico. Parte 1-1: Métodos de ensayo. Método 1: Determinación de la característica del arco (ELIM, ATPV y/o EBT) de materials y prendas de vestir y de protección mediante un arco abierto",
+              "El nivel de protección térmica que ofrece el equipo de protección individual puede set especificado de dos formas: 14 • \u0007Mediante una clase de protección que indica el nivel de energía del arco hasta el que el equipo de protección individual protege: - Clase 1: 1,2 cal/cm 2 < ECI < 3,2 cal/cm 2 - Clase 2: 3,2 cal/cm 2 < ECI < 10,1 cal/cm 2 • \u0007Mediante un valor numérico (expresado en kJ/m 2 o cal/cm 2 ) que describe el rendimiento protector del equipo ante un arco."
+            ]
+          ]
+        }
+      ],
+      "figure_ids": []
+    },
+    {
+      "unit_id": "a8c99d91-9a5e-5981-bc2a-633a2cdd4578",
+      "rank": 4,
+      "similarity": 0.73037046,
+      "document_id": "b5551573-56ec-4b9d-b4bb-1c46549dcb32",
+      "document_name": "insst-guia-riesgo-electrico.pdf",
+      "section": ["PARA LA EVALUACIÓN Y PREVENCIÓN DEL RIESGO ELÉCTRICO"],
+      "pages": [2, 3],
+      "content_type": "text",
+      "excerpt": "REAL DECRETO 614/2001, de 8 de junio BOE n° 148, de 2I de junio\nMINISTERIO DE TRABAJO Y ECONOMÍA SOCIAL\nTítulo:\nGuía técnica para la evaluación y prevención del riesgo eléctrico.\nAutor:\nInstituto Nacional de Seguridad y Salud en el Trabajo (INSST), O.A., M.P.\nEdita:\nInstituto Nacional de Seguridad y",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": []
+    },
+    {
+      "unit_id": "1d0d7555-a3c3-5801-9d85-d353655012b6",
+      "rank": 5,
+      "similarity": 0.7172959,
+      "document_id": "30f26a90-3384-4132-897f-3dbcca840082",
+      "document_name": "insst-fr026.pdf",
+      "section": ["Notas:", "Artículo 4. Técnicas y procedimientos de trabajo"],
+      "pages": [15],
+      "content_type": "figure",
+      "excerpt": "Figura 1. Proceso de toma de decisions para la realización de trabajos con riesgo eléctrico de acuerdo con los requisitos del Real Decreto 614/2001.\nINICIO NO sí ¿Debe realizarse un trabajo en una instalación eléctrica, o en su proximidad, que conlleva un riego eléctrico? ¿Se trata de una “operació",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": true,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": ["497eecff-6164-52df-a550-4461f61a285f"]
+    }
+  ],
+  "primary_image": null,
+  "related_images": []
+}

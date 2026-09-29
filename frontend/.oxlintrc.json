@@ -1,0 +1,17 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["react", "typescript", "oxc", "jsx-a11y", "import"],
+  "ignorePatterns": [
+    "src/client/**",
+    "src/components/ui/**",
+    "src/components/ai-elements/**",
+    "dist/**",
+    "coverage/**"
+  ],
+  "rules": {
+    "react/rules-of-hooks": "error",
+    "react/exhaustive-deps": "error",
+    "jsx-a11y/prefer-tag-over-role": "off",
+    "react/only-export-components": ["warn", { "allowConstantExport": true }]
+  }
+}

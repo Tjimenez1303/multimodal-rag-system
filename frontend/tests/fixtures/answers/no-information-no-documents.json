@@ -1,0 +1,10 @@
+{
+  "status": "not_enough_information",
+  "reason": "no_searchable_documents",
+  "answer": "There are no searchable documents yet. Upload a document and wait for its ingestion to complete.",
+  "not_covered": null,
+  "citations": [],
+  "sources": [],
+  "primary_image": null,
+  "related_images": []
+}

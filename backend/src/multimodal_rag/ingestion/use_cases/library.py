@@ -15,6 +15,7 @@ from multimodal_rag.ingestion.errors import (
     BlobNotFoundError,
     ImageNotFoundError,
     IngestionNotCompletedError,
+    PageNotFoundError,
 )
 from multimodal_rag.ingestion.ports import (
     BlobStorage,
@@ -233,4 +234,63 @@ class GetElementImage:
         except BlobNotFoundError as error:
             raise DataInconsistencyError(
                 f"The crop of image {element_id} is missing"
+            ) from error
+
+
+class GetPageImage:
+    """Returns the rendered image of a page of a completed document.
+
+    Pages are rendered and stored by the worker during extraction, so no PDF is
+    processed here.
+
+    Args:
+        documents: Document persistence.
+        jobs: Job store, to find the document's latest job.
+        blobs: Storage of the page images.
+    """
+
+    def __init__(
+        self, *, documents: DocumentRepository, jobs: JobQueue, blobs: BlobStorage
+    ) -> None:
+        self._documents = documents
+        self._jobs = jobs
+        self._blobs = blobs
+
+    async def __call__(self, document_id: uuid.UUID, page_number: int) -> bytes:
+        """Return the PNG image of a page.
+
+        Args:
+            document_id: Document the page belongs to.
+            page_number: 1-based page number.
+
+        Returns:
+            The PNG bytes.
+
+        Raises:
+            DocumentNotFoundError: If no document has this id.
+            IngestionNotCompletedError: If the document's latest job has not
+                completed.
+            PageNotFoundError: If the page is outside 1 to the document's page count.
+            DataInconsistencyError: If the stored image of the page is missing.
+        """
+        document = await self._documents.get(document_id)
+        job = await self._jobs.latest_for_document(document_id)
+        if job is None or job.status is not JobStatus.COMPLETED:
+            raise IngestionNotCompletedError(
+                f"Document {document_id} has no completed ingestion"
+            )
+        # A completed job learned the page count even when the upload could not.
+        page_count = document.page_count or (job.summary.pages if job.summary else 0)
+        if not 1 <= page_number <= page_count:
+            raise PageNotFoundError(
+                f"Page {page_number} is outside the document's {page_count} pages"
+            )
+        key = ExtractedElement.page_image_key_for(
+            document_id=document_id, page_number=page_number
+        )
+        try:
+            return await self._blobs.read_bytes(key)
+        except BlobNotFoundError as error:
+            raise DataInconsistencyError(
+                f"The image of page {page_number} of document {document_id} is missing"
             ) from error

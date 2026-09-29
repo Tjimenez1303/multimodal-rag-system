@@ -396,13 +396,26 @@ class FakePdfInspector:
         )
 
 
+# A valid 1 x 1 PNG, the page image the fake extractor renders for every page.
+TINY_PNG = bytes.fromhex(
+    "89504e470d0a1a0a0000000d49484452000000010000000108000000"
+    "003a7e9b550000000a49444154789c63f80f0001010100b138f61400"
+    "00000049454e44ae426082"
+)
+
+
 @dataclass
 class FakeExtractor:
-    """Returns canned batches, or raises the configured error."""
+    """Returns canned batches, or raises the configured error.
+
+    Batches without page images get a tiny PNG for each of their pages, as the Docling
+    adapter renders every page. ``yielded`` keeps the batches as they were returned.
+    """
 
     batches: list[ExtractionBatch] = field(default_factory=list)
     error: Exception | None = None
     calls: int = 0
+    yielded: list[ExtractionBatch] = field(default_factory=list)
 
     def extract(
         self,
@@ -415,7 +428,12 @@ class FakeExtractor:
         self.calls += 1
         if self.error is not None:
             raise self.error
-        yield from self.batches
+        for batch in self.batches:
+            if not batch.page_images:
+                pages = range(batch.first_page, batch.last_page + 1)
+                batch = replace(batch, page_images=dict.fromkeys(pages, TINY_PNG))
+            self.yielded.append(batch)
+            yield batch
 
 
 @dataclass

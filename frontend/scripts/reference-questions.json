@@ -1,0 +1,57 @@
+[
+  { "slug": "shunt-generator-wiring", "question": "How is a shunt generator wired?" },
+  {
+    "slug": "series-generator-on-airplanes",
+    "question": "Why is a series wound generator never used on airplanes?"
+  },
+  {
+    "slug": "ignition-lead-inspection",
+    "question": "How do you inspect the ignition leads of an aircraft engine?"
+  },
+  {
+    "slug": "magneto-timing-steps",
+    "question": "What are the steps to time a magneto to the engine?"
+  },
+  {
+    "slug": "generator-types-table",
+    "question": "Summarize in a table the differences between series, shunt and compound wound generators."
+  },
+  {
+    "slug": "voltage-regulator-purpose",
+    "question": "What does the voltage regulator of a generator do?"
+  },
+  {
+    "slug": "welding-engine-start",
+    "question": "How do I start the welding machine engine?"
+  },
+  {
+    "slug": "welding-control-panel",
+    "question": "What are the controls on the welding machine control panel?"
+  },
+  {
+    "slug": "welding-preventive-checks",
+    "question": "Which preventive maintenance checks are done before operating the welding machine?"
+  },
+  { "slug": "riesgo-electrico-definition", "question": "¿Qué es el riesgo eléctrico?" },
+  {
+    "slug": "cinco-reglas-de-oro",
+    "question": "¿Cuáles son las cinco reglas de oro para trabajar sin tensión?"
+  },
+  {
+    "slug": "spark-plug-gap-and-firing-order",
+    "question": "How is the spark plug gap measured, and what is the firing order of a nine-cylinder radial engine?"
+  },
+  {
+    "slug": "bonding-jumper-inspection",
+    "question": "What does a bonding jumper do and how is it inspected?"
+  },
+  {
+    "slug": "no-information-bicycle",
+    "question": "What is the recommended tire pressure for a bicycle?"
+  },
+  {
+    "slug": "no-information-restricted",
+    "question": "What is a shunt generator?",
+    "document_ids": ["b5551573-56ec-4b9d-b4bb-1c46549dcb32"]
+  }
+]

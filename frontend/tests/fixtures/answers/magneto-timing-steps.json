@@ -1,0 +1,256 @@
+{
+  "status": "answered",
+  "reason": null,
+  "answer": "To time a magneto to the engine, the following steps are taken:\n\n1.  **Prepare the Magneto Internally:** Before installation, the internal timing of the magneto must be checked and adjusted with the magneto off the engine. This involves positioning the magneto rotor at the E-gap position and setting the breaker points to open when the timing lines or marks are perfectly aligned [1].\n2.  **Position the Engine:** Remove the most accessible spark plug from the No. 1 cylinder. Pull the propeller through in the direction of rotation until the No. 1 piston is coming up on the compression stroke, which can be felt by holding a thumb over the spark plug hole [2].\n3.  **Set Crankshaft Position:** Set the engine crankshaft at the prescribed number of degrees ahead of true top dead center on the compression stroke, usually using the timing marks on the engine [2].\n4.  **Install the Magneto:** While holding the magneto drive in the firing position for the No. 1 cylinder as indicated by the alignment of the reference marks, install the magneto drive into the engine drive [2]. The magneto should be installed in the middle of its slotted flange to allow for fine timing [2].\n5.  **Check Point Opening:** Attach a timing light to both magnetos. With the engine still in the firing position, move the magnetos in the flange slots until the breaker points in the magneto just open [2]. If the slots do not permit sufficient movement, move the magneto out of position to permit turning the magneto drive shaft, then reinstall and repeat the check [2].\n6.  **Verify Synchronization:** Ensure that the lights for both sets of points come on when the points are open, within the prescribed timing position [3]. Both right and left sets of breaker points should open at the same instant to ensure proper magneto-to-engine timing and synchronized operation [3].\n\nThe four conditions that must occur at the same instant for correct timing are: the piston in the No. 1 cylinder is a prescribed number of degrees before top dead center on the compression stroke; the rotating magnet of the magneto is in the E-gap position; the breaker points are just opening on the No. 1 cam lobe; and the distributor finger is aligned with the electrode serving the No. 1 cylinder [4].",
+  "not_covered": null,
+  "citations": [
+    {
+      "number": 1,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "pages": [29],
+      "unit_ids": ["d62d4b1b-d77a-5f77-bbef-e9ad8f32b403"]
+    },
+    {
+      "number": 2,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "pages": [30],
+      "unit_ids": [
+        "5007552d-a1bc-5951-abfa-93ef83c04890",
+        "f3faeea8-88a9-5d76-b8e3-163ce9a4f9ca"
+      ]
+    },
+    {
+      "number": 3,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "pages": [30, 31],
+      "unit_ids": ["587f89f9-301e-583f-8494-64c26fc95dcf"]
+    },
+    {
+      "number": 4,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "pages": [26],
+      "unit_ids": ["4c299e81-da46-5131-ba5c-3abf6ada2714"]
+    }
+  ],
+  "sources": [
+    {
+      "unit_id": "4c9fd3dc-b5eb-5da9-a203-b4bc76480b46",
+      "rank": 1,
+      "similarity": 0.65891016,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": [
+        "Reciprocating Engine Ignition System Maintenance & Inspection",
+        "High-Tension Magneto E-Gap Setting (Bench Timing)"
+      ],
+      "pages": [29],
+      "content_type": "text",
+      "excerpt": "The following steps are taken to check and adjust the timing of the breaker points for the S-200 magneto, which does not have timing marks in the breaker compartment:\nRemove the timing inspection plug from the top of the magneto. Turn the rotating magnet in its normal direction of rotation until the",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": []
+    },
+    {
+      "unit_id": "587f89f9-301e-583f-8494-64c26fc95dcf",
+      "rank": 2,
+      "similarity": 0.70653695,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": [
+        "Reciprocating Engine Ignition System Maintenance & Inspection",
+        "Timing the High-tension Magneto to the Engine"
+      ],
+      "pages": [30, 31],
+      "content_type": "text",
+      "excerpt": "Install the magneto attaching nuts on the studs and tighten slightly. The nuts must not be tight enough to prevent the movement of the magneto assembly when the magneto mounting flange is tapped with a mallet. Reconnect the timing light to the magneto and breaker points. With the light and ignition ",
+      "cited": true,
+      "citation_number": 3,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": []
+    },
+    {
+      "unit_id": "5007552d-a1bc-5951-abfa-93ef83c04890",
+      "rank": 3,
+      "similarity": 0.7369646,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": [
+        "Reciprocating Engine Ignition System Maintenance & Inspection",
+        "Timing the High-tension Magneto to the Engine"
+      ],
+      "pages": [30],
+      "content_type": "text",
+      "excerpt": "When replacing magnetos on aircraft engines, two factors must be considered:\nThe internal timing of the magneto, including breaker point adjustment, which must be correct to obtain maximum potential voltage from the magneto.\nThe engine crankshaft position where the spark occurs. The engine is usuall",
+      "cited": true,
+      "citation_number": 2,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": ["9fa8dd76-66d2-5127-b4b2-2d973c4ca5a6"]
+    },
+    {
+      "unit_id": "13504439-ca9c-550c-9b68-a23ed0e67636",
+      "rank": 4,
+      "similarity": 0.44655254,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": [
+        "Reciprocating Engine Ignition Systems",
+        "Primary Electrical Circuit"
+      ],
+      "pages": [5],
+      "content_type": "text",
+      "excerpt": "As a result of the holding process, there is a very high stress in the magnetic circuit by the time the magnet rotor has reached the position where the breaker points are about to open. The breaker points, when opened, function with the condenser to interrupt the flow of current in the primary coil,",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": ["c0204548-ae38-5efb-821a-f832bf311f6f"]
+    },
+    {
+      "unit_id": "f3faeea8-88a9-5d76-b8e3-163ce9a4f9ca",
+      "rank": 5,
+      "similarity": 0.71171546,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": [
+        "Reciprocating Engine Ignition System Maintenance & Inspection",
+        "Timing the High-tension Magneto to the Engine"
+      ],
+      "pages": [30],
+      "content_type": "text",
+      "excerpt": "engine drive. It should be installed in the middle of its slotted flange to allow for fine timing of the magneto to the engine. Attach a timing light to both magnetos. With the engine still in the firing position, the magnetos should be timed by moving them in the flange slots until the breaker point",
+      "cited": true,
+      "citation_number": 2,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": ["8783147d-a2a5-5843-88c0-57f96069fd2b"]
+    },
+    {
+      "unit_id": "d62d4b1b-d77a-5f77-bbef-e9ad8f32b403",
+      "rank": 6,
+      "similarity": 0.6999288,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": [
+        "Reciprocating Engine Ignition System Maintenance & Inspection",
+        "Checking the Internal Timing of a Magneto"
+      ],
+      "pages": [29],
+      "content_type": "text",
+      "excerpt": "When replacing or preparing a magneto for installation, the first concern is with the internal timing of the magneto. For each magneto model, the manufacturer determines how many degrees beyond the neutral position a pole of the rotor magnet should be to obtain the strongest spark at the instant of ",
+      "cited": true,
+      "citation_number": 1,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": ["67f70d20-d37b-5e80-a87b-10a5fdf9d2f3"]
+    },
+    {
+      "unit_id": "ccc0a70b-3ac9-5625-ae5b-d9caaa2765e8",
+      "rank": 7,
+      "similarity": 0.48498532,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": [
+        "Reciprocating Engine Ignition Systems",
+        "High-Tension Retard Breaker Vibrator"
+      ],
+      "pages": [23],
+      "content_type": "text",
+      "excerpt": "Since relay R4 is closed, the starter is energized and the engine crankshaft is rotated. When the engine reaches its normal advance firing position, the main breaker points of the left magneto begin to open. The interrupted surges of current from the vibrator can still find a path to ground through ",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": []
+    },
+    {
+      "unit_id": "4c299e81-da46-5131-ba5c-3abf6ada2714",
+      "rank": 8,
+      "similarity": 0.5657686,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": ["Reciprocating Engine Ignition System Maintenance & Inspection"],
+      "pages": [26],
+      "content_type": "text",
+      "excerpt": "An aircraft's ignition system is the result of careful design and thorough testing. The ignition system usually provides good, dependable service, provided it is maintained and inspected properly. However, difficulties can occur with normal wear, which affects ignition system performance, especially",
+      "cited": true,
+      "citation_number": 4,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": []
+    }
+  ],
+  "primary_image": {
+    "element_id": "9fa8dd76-66d2-5127-b4b2-2d973c4ca5a6",
+    "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+    "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+    "page": 30,
+    "bbox": {
+      "left": 52.611454010009766,
+      "top": 41.90719985961914,
+      "right": 292.4239807128906,
+      "bottom": 266.424072265625,
+      "origin": "top_left"
+    },
+    "caption": "Figure 4-52. Installing timing kit.",
+    "unit_id": "5007552d-a1bc-5951-abfa-93ef83c04890",
+    "url": "/api/v1/documents/5d3ff0f9-f671-4a1b-b3e6-3258071fa024/images/9fa8dd76-66d2-5127-b4b2-2d973c4ca5a6"
+  },
+  "related_images": [
+    {
+      "element_id": "8783147d-a2a5-5843-88c0-57f96069fd2b",
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "page": 30,
+      "bbox": {
+        "left": 301.62567138671875,
+        "top": 43.63442611694336,
+        "right": 541.73974609375,
+        "bottom": 212.68722534179688,
+        "origin": "top_left"
+      },
+      "caption": "Figure 4-53. Timing marks aligned.",
+      "unit_id": "f3faeea8-88a9-5d76-b8e3-163ce9a4f9ca",
+      "url": "/api/v1/documents/5d3ff0f9-f671-4a1b-b3e6-3258071fa024/images/8783147d-a2a5-5843-88c0-57f96069fd2b"
+    },
+    {
+      "element_id": "67f70d20-d37b-5e80-a87b-10a5fdf9d2f3",
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "page": 29,
+      "bbox": {
+        "left": 52.986202239990234,
+        "top": 456.22674560546875,
+        "right": 292.6269226074219,
+        "bottom": 647.7435913085938,
+        "origin": "top_left"
+      },
+      "caption": "Figure 4-50. Timing marks indicate the number one firing position of a magneto.",
+      "unit_id": "d62d4b1b-d77a-5f77-bbef-e9ad8f32b403",
+      "url": "/api/v1/documents/5d3ff0f9-f671-4a1b-b3e6-3258071fa024/images/67f70d20-d37b-5e80-a87b-10a5fdf9d2f3"
+    }
+  ]
+}

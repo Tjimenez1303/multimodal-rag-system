@@ -1,0 +1,10 @@
+{
+  "status": "not_enough_information",
+  "reason": "no_valid_citations",
+  "answer": "The answer could not be supported by the documents, so it is not shown. Try asking in another way.",
+  "not_covered": null,
+  "citations": [],
+  "sources": [],
+  "primary_image": null,
+  "related_images": []
+}

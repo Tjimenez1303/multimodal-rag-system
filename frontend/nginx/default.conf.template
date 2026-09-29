@@ -1,0 +1,72 @@
+# Serves the client and proxies the API on the same origin (contracts/client.md
+# section 1). Values in ${...} come from the environment when the container starts.
+
+# One JSON line per request, without the client address or the query string.
+log_format json_access escape=json
+  '{"time":"$time_iso8601","level":"info","logger":"nginx.access",'
+  '"method":"$request_method","path":"$uri","status":$status,'
+  '"duration_ms":$request_time_ms,"request_id":"$http_x_request_id"}';
+
+# $request_time is in seconds with millisecond precision, such as 0.012 or 1.234.
+map $request_time $request_time_ms {
+  "~^0\.0*(?<milliseconds>\d+)$" $milliseconds;
+  "~^(?<seconds>\d+)\.(?<fraction>\d+)$" $seconds$fraction;
+  default 0;
+}
+
+map $uri $cache_control {
+  "~^/assets/" "public, max-age=31536000, immutable";
+  "/config.json" "no-store";
+  # API responses keep the headers the API sets.
+  "~^/api/" "";
+  # index.html carries a nonce of its own request, so it is never reused.
+  default "no-store";
+}
+
+server {
+  listen 80;
+  server_name _;
+  server_tokens off;
+  root /usr/share/nginx/html;
+
+  access_log /dev/stdout json_access;
+
+  add_header Cache-Control $cache_control always;
+  add_header Content-Security-Policy "default-src 'self'; img-src 'self' data: blob:; connect-src 'self'; script-src 'self'; style-src 'self' 'nonce-$request_id'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'" always;
+  add_header X-Content-Type-Options nosniff always;
+  add_header Referrer-Policy no-referrer always;
+
+  location = /healthz {
+    access_log off;
+    default_type text/plain;
+    return 200 "ok";
+  }
+
+  location = /config.json {
+    default_type application/json;
+    return 200 '{"answerWaitSeconds":${ANSWER_WAIT_SECONDS},"maxFilterDocuments":${MAX_FILTER_DOCUMENTS},"statusPollSeconds":${STATUS_POLL_SECONDS}}';
+  }
+
+  location /api/ {
+    # Docker's DNS, re-read every 10 s, so a recreated API container is found again.
+    resolver 127.0.0.11 valid=10s;
+    set $api http://api:8000;
+    proxy_pass $api;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Request-ID $http_x_request_id;
+    # Uploads stream to the API, whose own limits answer with problem details.
+    proxy_request_buffering off;
+    client_max_body_size 0;
+    # Above the client's wait limit, so nginx never cuts a question still awaited.
+    proxy_read_timeout ${NGINX_PROXY_READ_TIMEOUT}s;
+  }
+
+  location / {
+    try_files $uri /index.html;
+    # Radix injects a <style> element to lock scrolling behind dialogs. The page
+    # hands this request's nonce to it, and style-src accepts only that one.
+    sub_filter "__CSP_NONCE__" "$request_id";
+    sub_filter_once off;
+  }
+}

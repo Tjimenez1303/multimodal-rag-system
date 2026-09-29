@@ -4,6 +4,7 @@ The extraction models load once per session. Without ``DOCLING_ARTIFACTS_PATH`` 
 are downloaded to the default cache on first use.
 """
 
+import io
 import os
 import threading
 import uuid
@@ -11,9 +12,10 @@ from pathlib import Path
 
 import pytest
 from docling.utils.locks import pypdfium2_lock
+from PIL import Image
 from pypdf import PdfWriter
 
-from multimodal_rag.adapters.docling.extractor import DoclingExtractor
+from multimodal_rag.adapters.docling.extractor import IMAGES_SCALE, DoclingExtractor
 from multimodal_rag.adapters.docling.headings import OutlineEntry
 from multimodal_rag.adapters.docling.pdfium import PdfiumInspector, read_layout
 from multimodal_rag.ingestion.domain import (
@@ -194,6 +196,23 @@ class TestExtractor:
             {1: PageSize(width=612, height=792)},
             {2: PageSize(width=612, height=792)},
         ]
+
+    def test_every_page_of_a_batch_comes_with_its_png_image(
+        self, extractor: DoclingExtractor
+    ) -> None:
+        batches = extract(extractor, "split_table.pdf", batch_size=1)
+
+        assert [sorted(b.page_images) for b in batches] == [[1], [2]]
+        for batch in batches:
+            for page_number, png in batch.page_images.items():
+                with Image.open(io.BytesIO(png)) as image:
+                    size = batch.page_sizes[page_number]
+                    assert image.format == "PNG"
+                    # Pages are rendered at twice the PDF resolution, 144 dpi.
+                    assert image.size == (
+                        round(size.width * IMAGES_SCALE),
+                        round(size.height * IMAGES_SCALE),
+                    )
 
     def test_every_heading_gets_a_level(self, extractor: DoclingExtractor) -> None:
         headings = [

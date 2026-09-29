@@ -1,0 +1,10 @@
+{
+  "status": "not_enough_information",
+  "reason": "not_answered_by_sources",
+  "answer": "The provided sources do not contain instructions on how to start the welding machine engine; they only mention that the operator must know how to perform every operation and that the section gives instructions on starting and stopping the machine.",
+  "not_covered": null,
+  "citations": [],
+  "sources": [],
+  "primary_image": null,
+  "related_images": []
+}

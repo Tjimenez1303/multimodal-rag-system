@@ -1,0 +1,178 @@
+{
+  "status": "answered",
+  "reason": null,
+  "answer": "The sources do not provide information on how the spark plug gap is measured.\nThe firing order of a nine-cylinder radial engine is 1-3-5-7-9-2-4-6-8 [1].",
+  "not_covered": "The sources do not contain information on how the spark plug gap is measured.",
+  "citations": [
+    {
+      "number": 1,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "pages": [7],
+      "unit_ids": ["bfb0bf3e-e653-566d-a304-fe569f61ed4d"]
+    }
+  ],
+  "sources": [
+    {
+      "unit_id": "bfb0bf3e-e653-566d-a304-fe569f61ed4d",
+      "rank": 1,
+      "similarity": 0.7362239,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": [
+        "Reciprocating Engine Ignition Systems",
+        "Secondary Electrical Circuit"
+      ],
+      "pages": [7],
+      "content_type": "text",
+      "excerpt": "In Figure 4-10, the distributor rotor finger is aligned with the distributor electrode marked \"3,\" which fires the No. 5 cylinder of a nine-cylinder radial engine. Since the firing order of a nine-cylinder radial engine is 1-3-5-7-9-2-4-6-8, the third electrode in the magneto sparking order serves t",
+      "cited": true,
+      "citation_number": 1,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": []
+    },
+    {
+      "unit_id": "c457e0d6-cd17-5831-bb1e-700412095e60",
+      "rank": 2,
+      "similarity": 0.6207055,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": [
+        "Reciprocating Engine Ignition System Maintenance & Inspection",
+        "Spark Plug Reconditioning Service"
+      ],
+      "pages": [37],
+      "content_type": "text",
+      "excerpt": "gauge. The spark plug should be tested by using a tester as shown in Figure 4-62, which passes a high-voltage through the spark plug and fire the gap. As this test takes place, the firing end of the plug is subjected to air pressure to simulate the pressure in the engine's cylinder. If the firing pa",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": ["c20ccf53-56f4-58d6-98b1-06493907623d"]
+    },
+    {
+      "unit_id": "1e4ef9cc-f612-5cd1-935d-6e5c37410269",
+      "rank": 3,
+      "similarity": 0.60478044,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": [
+        "Reciprocating Engine Ignition Systems",
+        "Secondary Electrical Circuit"
+      ],
+      "pages": [6, 7],
+      "content_type": "text",
+      "excerpt": "breaker points open enters the rotor where it arcs a small air gap to the No. 1 electrode in the block.\nSince the distributor rotates at one-half crankshaft speed on all four-stroke cycle engines, the distributor block has as many electrodes as there are engine cylinders, or as many electrodes as cy",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": ["15fea253-bb8e-598e-9b91-4272697a25bc"]
+    },
+    {
+      "unit_id": "c5e10e55-57d5-56d3-bd85-77debb8aa99d",
+      "rank": 4,
+      "similarity": 0.4805852,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": ["Reciprocating Engine Ignition Systems"],
+      "pages": [1],
+      "content_type": "text",
+      "excerpt": "The basic requirements for reciprocating engine ignition systems are similar, regardless of the type of engine. All ignition systems must deliver a high-tension spark across the electrodes of each spark plug in each cylinder of the engine in the correct firing order. At a predetermined number of deg",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": ["5ed65840-bccc-5b93-a53f-774a41318485"]
+    },
+    {
+      "unit_id": "a8ff78b8-ddc5-57ad-b9ac-777af84ddd52",
+      "rank": 5,
+      "similarity": 0.60394907,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": ["Reciprocating Engine Ignition Systems", "Spark Plugs"],
+      "pages": [25],
+      "content_type": "figure",
+      "excerpt": "Figure 4-42. Spark plug reach.\nReach\nThis figure shows a cross-sectional view of a spark plug installed in an engine cylinder, with the threaded portion inserted into the spark plug bushing. The diagram highlights the length of the threaded section that extends into the cylinder, which is labeled as",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": true,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": ["41c94158-4424-5ae0-be63-8c5d44c82902"]
+    },
+    {
+      "unit_id": "12f17e07-1e3c-589b-8dde-d254e1677bdf",
+      "rank": 6,
+      "similarity": 0.55795085,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": ["Reciprocating Engine Ignition Systems", "Spark Plugs"],
+      "pages": [24],
+      "content_type": "text",
+      "excerpt": "The function of the spark plug in an ignition system is to conduct a short impulse of high-voltage current through the wall of the combustion chamber. Inside the combustion chamber, it provides an air gap across which the impulse can produce an electric spark to ignite the air-fuel charge. While the",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": ["d1d23cb5-43ab-5f98-8ffa-d28d1f1b8ded"]
+    },
+    {
+      "unit_id": "2b8302a2-5976-595f-b1d5-94e1152d0311",
+      "rank": 7,
+      "similarity": 0.5206045,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": [
+        "Reciprocating Engine Ignition System Maintenance & Inspection",
+        "Spark Plug Reconditioning Service"
+      ],
+      "pages": [36],
+      "content_type": "text",
+      "excerpt": "A visual inspection should be the first step in servicing spark plugs. The threads on the shielding barrel and on the shell that screws into the cylinder should be inspected for damaged or nicked threads. Inspect the lead shielding barrel for corrosion, nicks, and cracks. The firing end should be ch",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": []
+    },
+    {
+      "unit_id": "53d8b03a-0ff5-5bde-8a19-c8226481e9a4",
+      "rank": 8,
+      "similarity": 0.45841137,
+      "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
+      "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
+      "section": [
+        "Reciprocating Engine Ignition System Maintenance & Inspection",
+        "Ignition Harness Maintenance"
+      ],
+      "pages": [41],
+      "content_type": "text",
+      "excerpt": "Although the ignition harness is simple, it is a vital link between the magneto and spark plug. Because the harness is mounted on the engine and exposed to the atmosphere, it is vulnerable to heat, moisture, and the effects of changing altitude. These factors, plus aging insulation and normal gap er",
+      "cited": false,
+      "citation_number": null,
+      "low_confidence_text": false,
+      "generated_description": false,
+      "unverified_identifiers": [],
+      "tables": [],
+      "figure_ids": []
+    }
+  ],
+  "primary_image": null,
+  "related_images": []
+}

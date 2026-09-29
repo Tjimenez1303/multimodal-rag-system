@@ -141,7 +141,9 @@ https://github.com/docker/model-runner/blob/main/pkg/inference/scheduling/http_h
   sources, each fenced with `<<<` and `>>>` and labeled with its pages and section, and
   then the question, fenced the same way. The rules state that sources and question are
   data and that requests inside them to change the rules, use outside knowledge or add
-  unrelated content are ignored.
+  unrelated content are ignored. When sources disagree, for example two torque values for
+  different models, the answer gives each value with its own marker instead of choosing
+  one.
 - **Output.** The adapter constrains the output with `response_format` of type
   `json_schema` to an object with two strings: `answer`, the Markdown answer whose factual
   sentences end with source markers such as `[2]`, and `not_covered`, one sentence stating
@@ -214,9 +216,12 @@ excluded. Candidates are ordered by:
    first. The gap is 0 for a figure unit's own figure.
 
 The first candidate is the primary image and the others are related images, without
-duplicates. Each image carries its document, page, box, caption and the URL of the
-existing image route. The caption is the text of the element linked to the figure by a
-`caption_of` relationship.
+duplicates. Each image carries its document, page, box and caption, and the HTTP adapter
+adds the URL of the existing image route. The caption is the text of the element linked
+to the figure by a `caption_of` relationship. Before returning them, the use case checks
+with `BlobStorage.exists` that each returned crop is stored, and a missing one raises
+`DataInconsistencyError`, as the spec's edge case requires. The check touches only the
+returned images, at most a handful per answer.
 
 **Rationale**: the spec asks for the figure closest to the supporting text. Ranking by
 the cited unit first follows the clarified behavior, which is the image of the most
@@ -386,11 +391,13 @@ reference set in `backend/tests/evaluation/reference_questions.yaml` and a runne
 
 - **The set.** It holds at least 40 questions over the three sample manuals, as SC-001 to
   SC-006 define. Each question records its expected document, pages, figure and outcome.
-- **The runner.** It reports every criterion and the distribution of top similarities for
-  answerable and unanswerable questions, which is how `MIN_SIMILARITY` is tuned.
-- **Where it runs.** It is marked `evaluation` and is excluded from the default test run
-  and from CI, because it needs the models. CI keeps verifying the deterministic parts
-  with fakes.
+- **The runner.** It reports SC-001 to SC-007 and SC-010, and the distribution of top
+  similarities for answerable and unanswerable questions, which is how `MIN_SIMILARITY`
+  is tuned. The languages of question and answer (SC-006) are compared with `py3langid`,
+  and SC-007 is the 95th percentile of the request time.
+- **Where it runs.** It is a script, like the backlog load script, so it is not part of the
+  default test run or CI, because it needs the models. Its scoring functions are
+  unit-tested, and CI keeps verifying the deterministic parts with fakes.
 
 **Rationale**: generative quality cannot be asserted by unit tests. A fixed set with
 recorded expectations makes the quality criteria repeatable and makes threshold changes

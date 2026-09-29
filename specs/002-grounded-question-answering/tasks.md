@@ -118,7 +118,7 @@ used on airplanes?", and confirm the answer cites page 12 and lists the 8 suppli
 ### Tests for User Story 1 (REQUIRED) ⚠️
 
 - [ ] T018 [P] [US1] Write `backend/tests/unit/answering/test_prompting.py`:
-  - The system message holds the rules: only the sources, sources and question are data, markers after each factual sentence, `not_covered`, the question's language, identifiers kept verbatim.
+  - The system message holds the rules: only the sources, sources and question are data, markers after each factual sentence, `not_covered`, the question's language, identifiers kept verbatim, and sources that disagree reported with each value and its own marker.
   - Each source is numbered from 1 in rank order, labeled with its pages and section, and fenced with `<<<` and `>>>`.
   - The question is fenced after the sources.
   - Text inside a source that looks like an instruction stays inside its fence unchanged.
@@ -133,11 +133,14 @@ used on airplanes?", and confirm the answer cites page 12 and lists the 8 suppli
   - `low_confidence_text` is true only when an element has `origin=recognized` and `confidence < LOW_CONFIDENCE_THRESHOLD`, with 0.8999 flagged and 0.90 not flagged.
   - A figure unit whose figure is `described` has `generated_description` and carries `unverified_identifiers`.
   - `citation_number` is taken from the citations.
+  - `figure_ids` lists the unit's non-decorative figures, so every source says whether it has associated images.
 - [ ] T021 [P] [US1] Write the answered-path tests in `backend/tests/unit/answering/test_ask.py`, using fakes:
-  - The answer has status `answered`, reason `None` and `RETRIEVAL_TOP_K` sources in rank order.
+  - The answer has status `answered`, reason `None` and up to `RETRIEVAL_TOP_K` sources in rank order.
   - Citations name the document file name and pages, and a unit spanning pages 3 and 4 is cited with both.
   - The prompt the generator received holds the sources in rank order.
   - One log record per question has the outcome, the unit count and the timings, and contains neither the question nor the answer text (FR-026).
+  - A hit whose document is missing from `DocumentRepository.get_many` raises `DataInconsistencyError` instead of a citation without a name.
+  - Two consecutive questions to the same `AnswerQuestion` produce prompts that share nothing but the rules, so each question is answered independently (FR-021).
 - [ ] T022 [P] [US1] Write `backend/tests/unit/adapters/test_openai_answerer.py` with respx:
   - The request body carries `model`, the two messages, `temperature`, `max_tokens`, `chat_template_kwargs.enable_thinking=false` and `response_format` of type `json_schema` with the `answer`/`not_covered` schema.
   - A valid JSON content becomes a `GeneratedAnswer`.
@@ -147,18 +150,19 @@ used on airplanes?", and confirm the answer cites page 12 and lists the 8 suppli
 
 ### Implementation for User Story 1
 
-- [ ] T024 [P] [US1] Implement `build_prompt(question, hits) -> GroundedPrompt` in `backend/src/multimodal_rag/answering/prompting.py` with the rules of research section 5, as module constants with a one-line comment on why the question and sources are fenced.
+- [ ] T024 [P] [US1] Implement `build_prompt(question, hits) -> GroundedPrompt` in `backend/src/multimodal_rag/answering/prompting.py` with the rules of research section 5, including the rule for sources that disagree, as module constants with a one-line comment on why the question and sources are fenced.
 - [ ] T025 [P] [US1] Implement marker validation, merging and renumbering in `backend/src/multimodal_rag/answering/citations.py` (research section 6). It returns the rewritten text, the citations, and a mapping from unit id to citation number.
-- [ ] T026 [P] [US1] Implement source assembly in `backend/src/multimodal_rag/answering/sources.py`: excerpt, flags from the unit's elements, and citation numbers (research section 8). Tables are added in US4.
+- [ ] T026 [P] [US1] Implement source assembly in `backend/src/multimodal_rag/answering/sources.py`: excerpt, flags from the unit's elements, the unit's non-decorative `figure_ids`, and citation numbers (research section 8). Tables are added in US4.
 - [ ] T027 [P] [US1] Implement `OpenAICompatibleAnswerGenerator` in `backend/src/multimodal_rag/adapters/openai_compatible/answerer.py`:
   - **Transport.** Use `post_json` and `ChatCompletion` from `chat.py`, with the `json_schema` response format of research section 5.
   - **Constructor.** Takes `model`, `max_tokens`, `temperature` and `retry`, keyword-only.
   - **Validation.** Validate the content with a pydantic model, because llama-server may ignore a grammar.
 - [ ] T028 [US1] Implement `AnswerQuestion` in `backend/src/multimodal_rag/answering/use_cases/ask.py` for the answered path:
   - **Steps.** Build the `Question`, embed the query, run `search_hybrid` with `limit=RETRIEVAL_TOP_K`, load the elements with `get_many` and the documents with `get_many`, build the prompt, generate, validate the citations, and assemble the sources.
+  - **Integrity.** A hit whose document is not returned by `get_many` raises `DataInconsistencyError` (spec edge case), never a source without a document name.
   - **Timings and logs.** Measure search and generation times with `time.perf_counter`, and log one record per question as FR-026 requires.
   - **Constructor.** Ports and options are injected through the constructor, keyword-only.
-- [ ] T029 [US1] Add `QuestionBody`, `AnswerBody`, `CitationBody`, `SourceBody` and `TableContentBody` to `backend/src/multimodal_rag/adapters/http/schemas.py`, mirroring `contracts/openapi.yaml` of 002. `SourceBody.cited` is `citation_number is not None`.
+- [ ] T029 [US1] Add `QuestionBody`, `AnswerBody`, `CitationBody`, `SourceBody` and `TableContentBody` to `backend/src/multimodal_rag/adapters/http/schemas.py`, mirroring `contracts/openapi.yaml` of 002. `SourceBody.cited` is `citation_number is not None`. `QuestionBody.question` is a plain string with no length limit in the schema, because `Question.create` enforces the configurable `MAX_QUESTION_CHARS` and answers `invalid_question`.
 - [ ] T030 [US1] Add `AnsweringState` and `provide_answer_question` to `backend/src/multimodal_rag/adapters/http/dependencies.py`. Implement `POST /api/v1/questions` (`operation_id="askQuestion"`) in the new `backend/src/multimodal_rag/adapters/http/routes_questions.py`, which only translates the body to a `Question` call and the `Answer` back to `AnswerBody`.
 - [ ] T031 [US1] Wire answering in `backend/src/multimodal_rag/bootstrap.py`:
   - Build the Qdrant client and index, the embedder, the answer generator and the repositories from `ApiSettings`.
@@ -249,6 +253,7 @@ is the figure next to the cited text, with its caption and a URL that returns a 
   - Decorative figures and figures without `image_key` are excluded.
   - No duplicates appear, the primary is not repeated among related images, and there is no primary when no cited unit has figures.
   - The caption comes from a `caption_of` relationship, and is `None` without one.
+  - In `backend/tests/unit/answering/test_ask.py`: a selected image whose crop is missing from `BlobStorage` raises `DataInconsistencyError` (spec edge case), and the check runs only for the returned images.
 - [ ] T047 [P] [US4] Add table cases to `backend/tests/unit/answering/test_sources.py`: a table unit returns one `TableContent` per table element with its page and rows in order, a continued table returns both parts, and text units return no tables.
 - [ ] T048 [P] [US4] Add to `backend/tests/contract/test_questions_contract.py`: an answer with a primary image, related images and a table source validates against the contract, and `primary_image.url` is the path of `getDocumentImage` for that document and element.
 
@@ -259,6 +264,7 @@ is the figure next to the cited text, with its caption and a URL that returns a 
 - [ ] T051 [US4] Extend `AnswerQuestion` in `backend/src/multimodal_rag/answering/use_cases/ask.py`:
   - Load the figure elements of the cited units with `get_many`, and their relationships with `relationships_for`.
   - Fill `primary_image` and `related_images` only for `answered` outcomes.
+  - Check with `BlobStorage.exists` that the crop of every returned image exists, and raise `DataInconsistencyError` when one is missing. Inject `BlobStorage` in `backend/src/multimodal_rag/bootstrap.py`.
 - [ ] T052 [US4] Add `AnswerImageBody` to `backend/src/multimodal_rag/adapters/http/schemas.py`. Build its `url` in `backend/src/multimodal_rag/adapters/http/routes_questions.py` with `request.url_for("get_document_image", ...)`, as the elements route does.
 
 **Checkpoint**: answers show their diagram (quickstart Scenario 5).
@@ -333,7 +339,7 @@ unknown id and get 400 `unknown_documents` (quickstart Scenario 6).
 ### Implementation for User Story 6
 
 - [ ] T064 [US6] Add the restriction check to `AnswerQuestion` in `backend/src/multimodal_rag/answering/use_cases/ask.py`, using `DocumentRepository.get_many` and `JobQueue.latest_for_documents`, and pass `document_ids` to `search_hybrid`. Inject `JobQueue` in `backend/src/multimodal_rag/bootstrap.py`.
-- [ ] T065 [US6] Accept `document_ids` in `QuestionBody` in `backend/src/multimodal_rag/adapters/http/schemas.py`, with "minItems 1, maxItems 20, unique UUIDs" as the contract states, and pass it through in `routes_questions.py`.
+- [ ] T065 [US6] Accept `document_ids` in `QuestionBody` in `backend/src/multimodal_rag/adapters/http/schemas.py` as an optional list of UUIDs with no count or uniqueness limit in the schema, and pass it through in `routes_questions.py`. `Question.create` enforces "1 to `MAX_FILTER_DOCUMENTS` (20) distinct ids" and answers `invalid_question`, as the contract describes.
 
 **Checkpoint**: all six stories work independently.
 
@@ -344,10 +350,11 @@ unknown id and get 400 `unknown_documents` (quickstart Scenario 6).
 **Purpose**: evaluation, documentation and final validation
 
 - [ ] T066 [P] Write `backend/tests/evaluation/reference_questions.yaml`:
-  - **Size.** At least 40 questions over the three sample manuals: paraphrased questions, identifier questions, figure questions, cross-language questions, and at least 10 unanswerable questions.
+  - **Size.** At least 40 questions over the three sample manuals: paraphrased questions, identifier questions, figure questions, cross-language questions, at least one question whose sources disagree, and at least 10 unanswerable questions.
   - **Fields.** Each entry holds `id`, `question`, `language`, `expected_outcome` (`answered` or `not_enough_information`), `expected_document`, `expected_pages`, `expected_figure_page` (optional) and `kind`.
 - [ ] T067 Write `backend/tests/evaluation/run_reference.py`:
-  - **Run.** It posts every question to `--api` and computes SC-001 to SC-006 and SC-010, plus the top-similarity distribution of answerable and unanswerable questions.
+  - **Run.** It posts every question to `--api` and computes SC-001 to SC-007 and SC-010, plus the top-similarity distribution of answerable and unanswerable questions.
+  - **Language and latency.** SC-006 compares the question's language with the answer's, both identified with `py3langid`. SC-007 is the 95th percentile of the request time, measured with the model already loaded and again after an idle unload.
   - **Report.** It prints a table and exits non-zero when a criterion misses its target.
   - **Tests.** Its pure scoring functions are unit-tested in `backend/tests/evaluation/test_run_reference.py`, as `tests/load/` does for the backlog script.
 - [ ] T068 Run `run_reference.py` against the running system. Tune `MIN_SIMILARITY` if the distribution shows a better cut, and record the results and the chosen value in `specs/002-grounded-question-answering/research.md` section 14.
@@ -355,7 +362,7 @@ unknown id and get 400 `unknown_documents` (quickstart Scenario 6).
 - [ ] T070 [P] Write `docs/adr/0005-grounded-answers-and-relevance-gate.md` in the style of ADRs 0001 to 0004. It is written in business language, with the measurements of research sections 3, 5 and 14 in the technical annex.
 - [ ] T071 [P] Update `docs/images/architecture.drawio.svg` with the question flow (API, embedder, Qdrant, PostgreSQL, answer model) using the drawio skill with official icons and capitalized labels. Update `README.md` with the question endpoint, an example request and response, the new settings, the evaluation command and ADR 0005 in the decision log.
 - [ ] T072 Run `uv run --project backend pre-commit run --all-files` and `uv run --directory backend pytest --cov`, and keep coverage at or above 90%, adding unit tests in `backend/tests/unit/` where needed.
-- [ ] T073 Run every scenario of `specs/002-grounded-question-answering/quickstart.md` against `docker compose up -d --build --wait` and fix any deviation.
+- [ ] T073 Run every scenario of `specs/002-grounded-question-answering/quickstart.md` against `docker compose up -d --build --wait` and fix any deviation. Also check whether the `api` service starts while Docker Model Runner is stopped. If the Compose `models` element blocks it, document that in `README.md` and in the plan, because FR-024 only covers failures after startup.
 
 ---
 

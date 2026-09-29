@@ -178,5 +178,5 @@ uv run --directory backend pytest --cov
 - **Default run.** It includes the unit tests with fakes (grounding, gate, citations, image
   selection, admission and cancellation), the contract tests for `askQuestion`, and the
   Qdrant integration tests for the similarity scores.
-- **Excluded.** The reference evaluation is marked `evaluation` and needs the running
+- **Excluded.** The reference evaluation is a script that needs the running
   models, so it is not part of this run.

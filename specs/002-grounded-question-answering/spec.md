@@ -262,8 +262,10 @@ restricted to one of them, and confirm every source and image comes from that ma
   rather than cited without a name.
 - Several retrieved units come from the same page. The page is cited once per supported
   statement, not repeated for every unit.
-- The answer model returns an empty or malformed response after its retries. The request
-  fails with an error stating that the answer could not be generated.
+- The answer model returns a malformed response, or one without the expected fields,
+  after its retries. The request fails with an error stating that the answer could not be
+  generated. An answer the model deliberately leaves empty because the sources do not
+  cover the question is a not-enough-information outcome, not an error.
 - Questions arrive while a large batch of documents is being ingested. They are still
   answered, possibly more slowly, and none of them hang beyond the configured deadline.
 - A figure's stored image is missing when the response is assembled. The problem is
@@ -414,11 +416,11 @@ question records its expected document, pages and, when relevant, expected figur
   and status checks still complete in under 2 seconds.
 - **SC-009**: While 100 documents are queued for ingestion, questions are still answered
   and none of them exceeds the configured total deadline.
+- **SC-010**: 100% of sources that come from low-confidence recognized text are flagged
+  as such in the response.
 - **SC-011**: When more questions arrive than the system can answer or hold in line,
   100% of the extra questions receive the busy error in under 1 second, and every
   accepted question still ends within the configured total deadline.
-- **SC-010**: 100% of sources that come from low-confidence recognized text are flagged
-  as such in the response.
 
 ## Assumptions
 

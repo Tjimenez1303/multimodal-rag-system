@@ -62,7 +62,8 @@ Decisions, alternatives and sources are in [research.md](research.md).
   answer model adapter.
 - testcontainers Qdrant for the similarity scores.
 - Contract tests against the merged 001 and 002 OpenAPI files.
-- A reference question set runs against the live system, marked `evaluation`.
+- A reference question set runs against the live system as a script, like the backlog
+  load script, with its scoring functions unit-tested.
 
 **Target Platform**: Linux containers through Docker Compose. The reference machine is an
 Apple M4 Pro with Docker Desktop at 12 CPUs and 20 GB, and the models run on the host GPU
@@ -116,7 +117,8 @@ chat client belongs to a later feature.
 
 **Post-design re-check (after Phase 1)**: all gates still pass. The design reuses the
 ingestion adapters and error mapping, and the single new dependency is justified in
-research section 9. No deviation needs Complexity Tracking.
+research section 9. The only deviation is the frontend deferral of Principle IX, carried
+over from feature 001 and recorded in Complexity Tracking.
 
 ## Project Structure
 
@@ -198,8 +200,11 @@ and the adapters.
 
 ## Complexity Tracking
 
-No constitution deviation needs justification. The notable choices, each explained in
-research.md, are:
+| Deviation | Why needed | Simpler alternative rejected because |
+|---|---|---|
+| `compose.yaml` still starts no frontend (Principle IX) | The chat client is its own feature, and this one delivers the question API only | A placeholder frontend would ship an empty service with no requirement behind it. The chat client feature adds it to the same `compose.yaml`, as feature 001 recorded |
+
+The notable choices, each explained in research.md, are:
 
 - A relevance gate in the core instead of trusting the model alone (section 3).
 - The prompt built in the core instead of in the adapter (section 5).

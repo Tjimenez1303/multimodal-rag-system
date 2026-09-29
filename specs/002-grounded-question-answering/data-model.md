@@ -16,6 +16,10 @@ The types below are frozen dataclasses in `answering/domain.py`. The HTTP schema
 | `text` | string | Trimmed. 1 to `MAX_QUESTION_CHARS` (2,000) characters, else `InvalidQuestionError` (FR-002) |
 | `document_ids` | tuple of UUID or `None` | `None` means every completed document. When set, 1 to `MAX_FILTER_DOCUMENTS` (20) distinct ids. Unknown ids raise `UnknownDocumentsError` and ids whose latest job is not completed raise `DocumentsNotReadyError`, both naming the ids (FR-020) |
 
+The HTTP schema accepts any string and any list of UUIDs. These rules live only in
+`Question.create`, so the limits stay configurable and a violation always answers
+`invalid_question`.
+
 ## Answer
 
 | Field | Type | Notes |
@@ -79,6 +83,7 @@ least once, and every unit id belongs to `Answer.sources` (FR-011).
 | `generated_description` | boolean | Figure unit whose text includes a model description (FR-014) |
 | `unverified_identifiers` | tuple of strings | Carried from the figure element (FR-014) |
 | `tables` | tuple of `TableContent` | One per table element of a table unit, else empty (FR-018) |
+| `figure_ids` | tuple of UUID | Non-decorative image elements associated with the unit, empty when it has none |
 
 `cited` in the HTTP body is `citation_number is not None`.
 
@@ -99,10 +104,10 @@ least once, and every unit id belongs to `Answer.sources` (FR-011).
 | `bbox` | `BoundingBox` | PDF points, top-left origin |
 | `caption` | string or `None` | Text of the element linked by `caption_of` |
 | `unit_id` | UUID | Cited unit that brought the image |
-| `url` | string | Path of the existing image route, built by the HTTP adapter |
 
 Selection rules are in [research.md](research.md), section 7. Decorative images and images
-without a stored crop are never returned (FR-017).
+without a stored crop are never returned (FR-017). The HTTP body adds a `url`, the path of
+the existing image route, which only the HTTP adapter can build.
 
 ## Internal values
 
@@ -146,4 +151,6 @@ section 11.
 | Citations only to supplied units | FR-011, SC-002 | `answering/citations.py` |
 | Every citation referenced, markers renumbered | FR-010 | `answering/citations.py` |
 | Decorative images never returned | FR-017 | `answering/images.py` |
+| A returned image's crop exists, else `DataInconsistencyError` | Spec edge case | `AnswerQuestion`, through `BlobStorage.exists` |
+| Every hit's document exists, else `DataInconsistencyError` | Spec edge case | `AnswerQuestion`, through `DocumentRepository.get_many` |
 | Deadline covers waiting | FR-022, FR-028 | `AnswerQuestion` with `asyncio.timeout` around admission and work |

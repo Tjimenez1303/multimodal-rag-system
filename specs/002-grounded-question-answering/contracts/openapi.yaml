@@ -80,16 +80,15 @@ components:
       properties:
         question:
           type: string
-          minLength: 1
-          maxLength: 2000
-          description: Question in any language. The limit is MAX_QUESTION_CHARS.
+          description: >
+            Question in any language. After trimming it must hold 1 to MAX_QUESTION_CHARS
+            characters (2000 by default), else 400 invalid_question.
         document_ids:
           type: [array, "null"]
-          minItems: 1
-          maxItems: 20
-          uniqueItems: true
           items: { type: string, format: uuid }
-          description: Restrict the answer to these completed documents.
+          description: >
+            Restrict the answer to these completed documents. When set, it must hold 1 to
+            MAX_FILTER_DOCUMENTS distinct ids (20 by default), else 400 invalid_question.
     AnswerStatus:
       type: string
       enum: [answered, not_enough_information]
@@ -161,6 +160,7 @@ components:
         - generated_description
         - unverified_identifiers
         - tables
+        - figure_ids
       properties:
         unit_id: { type: string, format: uuid }
         rank: { type: integer, minimum: 1 }
@@ -191,6 +191,10 @@ components:
           type: array
           description: Rows of each part of a table unit, one entry per page.
           items: { $ref: "#/components/schemas/TableContent" }
+        figure_ids:
+          type: array
+          description: Non-decorative image elements associated with the unit.
+          items: { type: string, format: uuid }
     TableContent:
       type: object
       required: [page, rows]

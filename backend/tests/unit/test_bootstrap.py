@@ -12,6 +12,8 @@ import httpx
 import pytest
 from asgi_lifespan import LifespanManager
 from fastapi.testclient import TestClient
+from tokenizers import Tokenizer
+from tokenizers.models import WordLevel
 
 from multimodal_rag import bootstrap
 from multimodal_rag.__main__ import main
@@ -34,6 +36,8 @@ ANSWERING_ENV = {
     "EMBEDDER_MODEL": "ai/qwen3-embedding:0.6b",
     "ANSWER_MODEL_URL": "http://127.0.0.1:9/v1/",
     "ANSWER_MODEL": "ai/qwen3.5:9b",
+    "RERANKER_URL": "http://127.0.0.1:9/v1/",
+    "RERANKER_MODEL": "ai/qwen3-reranker:0.6B",
 }
 
 
@@ -46,6 +50,9 @@ def api_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> pytest.MonkeyPat
     monkeypatch.setenv("LOG_FORMAT", "console")
     for name, value in ANSWERING_ENV.items():
         monkeypatch.setenv(name, value)
+    tokenizer = tmp_path / "tokenizer.json"
+    Tokenizer(WordLevel({"[UNK]": 0}, unk_token="[UNK]")).save(str(tokenizer))
+    monkeypatch.setenv("EMBEDDER_TOKENIZER_PATH", str(tokenizer))
     return monkeypatch
 
 
@@ -112,7 +119,7 @@ async def test_answering_clients_live_only_inside_the_lifespan(
 
     async with LifespanManager(app):
         opened = list(RecordingClient.created)
-        assert len(opened) == 2
+        assert len(opened) == 3
         assert not any(client.is_closed for client in opened)
 
     assert all(client.is_closed for client in opened)
@@ -130,7 +137,9 @@ def test_questions_are_served_and_fail_while_search_is_unreachable(
     assert response.json()["code"] == "search_unavailable"
 
 
-@pytest.mark.parametrize("name", ["ANSWER_MODEL_URL", "QDRANT_URL", "EMBEDDER_MODEL"])
+@pytest.mark.parametrize(
+    "name", ["ANSWER_MODEL_URL", "RERANKER_URL", "QDRANT_URL", "EMBEDDER_MODEL"]
+)
 def test_api_refuses_to_start_without_the_answering_settings(
     api_env: pytest.MonkeyPatch, name: str
 ) -> None:
@@ -138,6 +147,18 @@ def test_api_refuses_to_start_without_the_answering_settings(
 
     with pytest.raises(ConfigurationError, match=name):
         bootstrap.create_api_app()
+
+
+def test_api_refuses_to_start_without_the_reranker_tokenizer(
+    api_env: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    api_env.setenv("EMBEDDER_TOKENIZER_PATH", str(tmp_path / "missing.json"))
+
+    with (
+        pytest.raises(ConfigurationError, match="missing.json"),
+        TestClient(bootstrap.create_api_app()),
+    ):
+        pass
 
 
 def test_api_refuses_to_start_without_required_settings(

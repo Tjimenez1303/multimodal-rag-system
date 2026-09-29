@@ -18,6 +18,9 @@ from multimodal_rag.answering.errors import (
     AnswerModelTimeoutError,
     AnswerModelUnavailableError,
     InvalidQuestionError,
+    RerankerResponseError,
+    RerankerTimeoutError,
+    RerankerUnavailableError,
     SearchTimeoutError,
     SearchUnavailableError,
 )
@@ -129,6 +132,23 @@ async def test_the_model_receives_the_sources_in_rank_order(
     assert QUESTION in prompt.user
 
 
+async def test_the_model_receives_the_sources_in_judged_order(
+    library: Library, faa: Document
+) -> None:
+    series = await add_text(library, faa, SERIES, 12)
+    table = await add_text(library, faa, TABLE, 3, 4)
+    library.judge.relevance = {"ratings table": 0.95, "series wound": 0.60}
+
+    answer = await library.ask()(QUESTION)
+
+    [prompt] = library.generator.prompts
+    assert prompt.user.index(TABLE) < prompt.user.index(SERIES)
+    assert [(s.unit_id, s.rank) for s in answer.sources] == [
+        (table.id, 1),
+        (series.id, 2),
+    ]
+
+
 async def test_one_log_record_reports_outcome_units_and_timings_without_content(
     library: Library, faa: Document, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -145,6 +165,8 @@ async def test_one_log_record_reports_outcome_units_and_timings_without_content(
     assert "units 2" in message
     assert "cited 1" in message
     assert "search_ms" in message
+    assert "ranking_ms" in message
+    assert "top_relevance 1.000" in message
     assert "generation_ms" in message
     for content in (QUESTION, "Poor regulation", SERIES, TABLE):
         assert content not in message
@@ -206,10 +228,10 @@ class TestNotEnoughInformation:
     async def test_below_the_relevance_gate_the_model_is_not_asked(
         self, library: Library, faa: Document
     ) -> None:
-        library.index.default_similarity = 0.59
+        library.judge.default = 0.29
         await add_text(library, faa, SERIES, 12)
 
-        answer = await library.ask(min_similarity=0.60)(QUESTION)
+        answer = await library.ask(min_relevance=0.30)(QUESTION)
 
         assert_not_enough(answer, NotEnoughReason.NO_RELEVANT_CONTENT)
         assert answer.text == not_enough_message(
@@ -217,10 +239,54 @@ class TestNotEnoughInformation:
         )
         assert library.generator.prompts == []
 
+    async def test_a_similar_unit_that_does_not_answer_is_not_supplied(
+        self, library: Library, faa: Document
+    ) -> None:
+        profile = await add_text(library, faa, "The company sells generators.", 1)
+        library.index.similarities[profile.id] = 0.69
+        library.judge.relevance = {"sells generators": 0.08}
+
+        answer = await library.ask(min_relevance=0.30)(
+            "How many employees sell generators?"
+        )
+
+        assert_not_enough(answer, NotEnoughReason.NO_RELEVANT_CONTENT)
+        assert library.generator.prompts == []
+
+    async def test_an_unrelated_question_is_stopped_before_the_model(
+        self, library: Library, faa: Document
+    ) -> None:
+        await add_text(library, faa, SERIES, 12)
+        await add_text(library, faa, TABLE, 3, 4)
+        library.judge.default = 0.001
+
+        answer = await library.ask()("What is the generator of paella flavor?")
+
+        assert_not_enough(answer, NotEnoughReason.NO_RELEVANT_CONTENT)
+        assert library.generator.prompts == []
+
+    async def test_a_stopped_question_logs_its_best_judgement_without_content(
+        self, library: Library, faa: Document, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        await add_text(library, faa, SERIES, 12)
+        await add_text(library, faa, TABLE, 3, 4)
+        library.judge.default = 0.05
+        library.judge.relevance = {"ratings table": 0.12}
+
+        with caplog.at_level(logging.INFO, logger=LOGGER):
+            await library.ask()(QUESTION)
+
+        [record] = [r for r in caplog.records if r.name == LOGGER]
+        message = record.getMessage()
+        assert "reason no_relevant_content" in message
+        assert "top_relevance 0.120" in message
+        for content in (QUESTION, SERIES, TABLE):
+            assert content not in message
+
     async def test_the_fixed_message_is_in_the_language_of_the_question(
         self, library: Library, faa: Document
     ) -> None:
-        library.index.default_similarity = 0.27
+        library.judge.default = 0.01
         library.languages.keywords = {"receta": "es"}
         await add_text(library, faa, "Receta de un generador.", 12)
 
@@ -402,7 +468,7 @@ class TestAttribution:
         assert "attributed 1 of 1 statements" in caplog.text
 
 
-async def test_the_search_asks_for_twice_the_units_and_drops_identical_ones(
+async def test_the_search_asks_for_twice_the_candidates_and_drops_identical_ones(
     library: Library, faa: Document
 ) -> None:
     copy = document("faa-powerplant-copy.pdf")
@@ -410,9 +476,11 @@ async def test_the_search_asks_for_twice_the_units_and_drops_identical_ones(
     await add_text(library, copy, SERIES, 12)
     await add_text(library, faa, TABLE, 3, 4)
 
-    answer = await library.ask(top_k=8)(QUESTION)
+    answer = await library.ask(top_k=8, rerank_candidates=16)(QUESTION)
 
-    assert library.index.searches[0]["limit"] == 16
+    assert library.index.searches[0]["limit"] == 32
+    [(_, passages)] = library.judge.calls
+    assert len(passages) == 2
     assert [s.unit_id for s in answer.sources][0] == original.id
     assert len(answer.sources) == 2
 
@@ -421,18 +489,109 @@ async def test_an_identifier_question_below_the_gate_reaches_the_model(
     library: Library,
 ) -> None:
     tm = document("tm-5-3431-201-10.pdf")
-    library.index.default_similarity = 0.42
+    library.judge.default = 0.05
     code = await add_text(library, tm, "Code SPL-480 means low oil pressure.", 13)
     library.answer(
         GeneratedAnswer(text="SPL-480 means low oil pressure [1].", not_covered="")
     )
 
-    answer = await library.ask(min_similarity=0.60)("What is code SPL-480?")
+    answer = await library.ask(min_relevance=0.30)("What is code SPL-480?")
 
     assert len(library.generator.prompts) == 1
     assert answer.status is AnswerStatus.ANSWERED
     [citation] = answer.citations
     assert (citation.unit_ids, citation.pages) == ((code.id,), (13,))
+
+
+class TestReranking:
+    TOTAL = "Terminos y Condiciones\nTotal Neto:\n$880,900.0"
+
+    @pytest.mark.parametrize("question", ["Total Neto", "Cual es mi total Neto"])
+    async def test_a_short_question_answered_by_a_unit_reaches_the_model(
+        self, library: Library, question: str
+    ) -> None:
+        quote = document("labeled_total.pdf")
+        total = await add_text(library, quote, self.TOTAL, 2)
+        library.index.similarities[total.id] = 0.43
+        library.judge.relevance = {"Total Neto": 0.99}
+        library.answer(
+            GeneratedAnswer(text="El total neto es $880,900.0 [1].", not_covered="")
+        )
+
+        answer = await library.ask(min_relevance=0.30)(question)
+
+        assert answer.status is AnswerStatus.ANSWERED
+        [citation] = answer.citations
+        assert (citation.unit_ids, citation.pages) == ((total.id,), (2,))
+
+    async def test_the_judge_reads_the_question_and_each_candidate_with_headings(
+        self, library: Library, faa: Document
+    ) -> None:
+        for number in range(20):
+            await add_text(library, faa, f"Generator note {number}.", 20 + number)
+
+        await library.ask(top_k=8, rerank_candidates=16)("generator note")
+
+        [(question, passages)] = library.judge.calls
+        assert question == "generator note"
+        assert len(passages) == 16
+        assert all(
+            passage.startswith("Generators\nGenerator note") for passage in passages
+        )
+
+    async def test_the_highest_judged_candidates_are_supplied(
+        self, library: Library, faa: Document
+    ) -> None:
+        notes = [
+            await add_text(library, faa, f"Generator note {number}.", 20 + number)
+            for number in range(16)
+        ]
+        library.judge.default = 0.1
+        library.judge.relevance = {
+            f"note {number}.": 0.2 + number / 100 for number in range(8, 16)
+        }
+
+        answer = await library.ask(top_k=8, rerank_candidates=16)("generator note")
+
+        supplied = [source.unit_id for source in answer.sources]
+        assert supplied == [notes[number].id for number in range(15, 7, -1)]
+
+    async def test_a_low_judged_identifier_unit_is_still_supplied(
+        self, library: Library
+    ) -> None:
+        tm = document("tm-5-3431-201-10.pdf")
+        for number in range(15):
+            await add_text(
+                library, tm, f"What code {number} means is listed.", number + 1
+            )
+        code = await add_text(library, tm, "Code SPL-480 means low oil pressure.", 40)
+        library.judge.default = 0.9
+        library.judge.relevance = {"SPL-480": 0.05}
+        # The identifier's unit is judged lowest, so it is the eighth source.
+        library.answer(
+            GeneratedAnswer(text="SPL-480 means low oil pressure [8].", not_covered="")
+        )
+
+        answer = await library.ask(top_k=8, rerank_candidates=16)(
+            "What is code SPL-480?"
+        )
+
+        assert len(answer.sources) == 8
+        assert answer.sources[-1].unit_id == code.id
+        [citation] = answer.citations
+        assert citation.unit_ids == (code.id,)
+
+    async def test_a_restricted_question_judges_only_its_documents(
+        self, library: Library, faa: Document
+    ) -> None:
+        other = document("other-manual.pdf")
+        await add_text(library, faa, SERIES, 12)
+        await add_text(library, other, "A series wound generator in another manual.", 3)
+
+        await library.ask()(QUESTION, document_ids=[faa.id])
+
+        [(_, passages)] = library.judge.calls
+        assert passages == (f"Generators\n{SERIES}",)
 
 
 class TestImages:
@@ -581,6 +740,59 @@ class TestFailures:
             await library.ask()(QUESTION)
 
         assert raised.value.__cause__ is failure
+
+    @pytest.mark.parametrize(
+        ("failure", "expected"),
+        [
+            (ProviderUnavailableError("reranker down"), RerankerUnavailableError),
+            (ProviderTimeoutError("reranker slow"), RerankerTimeoutError),
+            (ProviderResponseError("no judgement"), RerankerResponseError),
+        ],
+    )
+    async def test_judging_failures_name_the_reranker_without_a_fallback(
+        self,
+        library: Library,
+        faa: Document,
+        failure: ProviderError,
+        expected: type[MultimodalRagError],
+    ) -> None:
+        await add_text(library, faa, SERIES, 12)
+        library.judge.errors = [failure]
+
+        with pytest.raises(expected) as raised:
+            await library.ask()(QUESTION)
+
+        assert raised.value.__cause__ is failure
+        assert library.generator.prompts == []
+
+    async def test_judging_slower_than_the_deadline_is_cancelled(
+        self, library: Library, faa: Document
+    ) -> None:
+        await add_text(library, faa, SERIES, 12)
+        library.judge.delay_seconds = 1.0
+
+        with pytest.raises(AnswerDeadlineExceededError):
+            await library.ask(deadline_seconds=0.05)(QUESTION)
+
+        assert library.judge.cancelled == 1
+
+    async def test_a_cancelled_question_stops_judging_and_frees_its_place(
+        self, library: Library, faa: Document
+    ) -> None:
+        await add_text(library, faa, SERIES, 12)
+        library.slots = FakeAnswerSlots(capacity=1, queue_limit=0)
+        library.judge.delay_seconds = 1.0
+        running = asyncio.create_task(library.ask()(QUESTION))
+        await asyncio.sleep(0.01)
+
+        running.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await running
+
+        assert library.judge.cancelled == 1
+        library.judge.delay_seconds = 0
+        answer = await library.ask()(QUESTION)
+        assert answer.status is AnswerStatus.ANSWERED
 
     async def test_an_answer_model_error_is_raised_as_it_is(
         self, library: Library, faa: Document

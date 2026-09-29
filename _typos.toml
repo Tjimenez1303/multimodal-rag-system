@@ -11,3 +11,7 @@ extend-exclude = [
     # Responses captured from the service, kept verbatim, some in Spanish.
     "frontend/tests/fixtures/answers/*.json",
 ]
+
+[default.extend-words]
+# Spanish word of the maintenance quote fixture, never a misspelling of "client".
+cliente = "cliente"

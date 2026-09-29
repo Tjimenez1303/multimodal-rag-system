@@ -452,8 +452,12 @@ export const zUnitType = z.enum([
  *
  * Attributes:
  * unit_id: Retrieval unit id.
- * rank: Position in the fused ranking.
- * similarity: Dense cosine similarity to the question.
+ * rank: Position in judged order, which is the order supplied to the answer
+ * model.
+ * relevance: The reranker's probability that the unit contains the
+ * information that answers the question.
+ * similarity: Dense cosine similarity to the question. Informational, it does
+ * not gate.
  * document_id: Document of the unit.
  * document_name: File name of that document.
  * section: Heading path, outermost first.
@@ -473,6 +477,7 @@ export const zUnitType = z.enum([
 export const zSourceBody = z.object({
     unit_id: z.uuid(),
     rank: z.int(),
+    relevance: z.number().gte(0).lte(1),
     similarity: z.number(),
     document_id: z.uuid(),
     document_name: z.string(),

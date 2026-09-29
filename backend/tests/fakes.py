@@ -618,6 +618,41 @@ class InMemoryVectorIndex:
 
 
 @dataclass
+class FakeRelevanceJudge:
+    """Judges each passage by the first key of ``relevance`` it contains.
+
+    A passage that contains none of the keys gets ``default``. Scripted ``errors`` are
+    raised one per call before judging, every call's question and passages are
+    recorded, and ``delay_seconds`` makes each call sleep first, so tests can exceed
+    deadlines or cancel a running judgement.
+    """
+
+    relevance: dict[str, float] = field(default_factory=dict)
+    default: float = 1.0
+    errors: list[Exception] = field(default_factory=list)
+    delay_seconds: float = 0
+    calls: list[tuple[str, tuple[str, ...]]] = field(default_factory=list)
+    cancelled: int = 0
+
+    async def judge(self, question: str, passages: Sequence[str]) -> list[float]:
+        self.calls.append((question, tuple(passages)))
+        try:
+            await asyncio.sleep(self.delay_seconds)
+        except asyncio.CancelledError:
+            self.cancelled += 1
+            raise
+        if self.errors:
+            raise self.errors.pop(0)
+        return [self._judge(passage) for passage in passages]
+
+    def _judge(self, passage: str) -> float:
+        for key, value in self.relevance.items():
+            if key in passage:
+                return value
+        return self.default
+
+
+@dataclass
 class FakeAnswerGenerator:
     """Answers with scripted replies in order, then with ``default``.
 

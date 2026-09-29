@@ -1,0 +1,359 @@
+# Labeled questions for the reranked relevance gate (specs/004-reranked-relevance-gate).
+#
+# Each entry is one question sent to the system after the sample documents are
+# ingested. The label says what the relevance gate should decide:
+#   answerable     the document holds the answer, so the question must reach the
+#                  answer model. expected_document and expected_pages name where
+#                  the answer lives.
+#   hard_negative  the question is on the topic of expected_document, but the
+#                  document does not contain the requested fact, so the system must
+#                  answer that it does not have enough information.
+#   unrelated      the question has nothing to do with any ingested document.
+#
+# expected_pages are 1-based PDF page numbers (the first page of the file is 1),
+# not the page numbers printed in the document footers. identifier holds a token
+# with a digit exactly as the document writes it, for questions that hinge on it.
+questions:
+  # Short keyword questions.
+  - id: faa-short-magneto-timing
+    question: "magneto timing"
+    language: en
+    label: answerable
+    expected_document: faa-powerplant-ch4-ignition-electrical.pdf
+    expected_pages: [26, 29, 30]
+  - id: faa-short-e-gap
+    question: "E-gap"
+    language: en
+    label: answerable
+    expected_document: faa-powerplant-ch4-ignition-electrical.pdf
+    expected_pages: [29]
+  - id: faa-short-impulse-coupling
+    question: "impulse coupling"
+    language: en
+    label: answerable
+    expected_document: faa-powerplant-ch4-ignition-electrical.pdf
+    expected_pages: [20, 21]
+  - id: faa-short-shunt-generator
+    question: "shunt generator"
+    language: en
+    label: answerable
+    expected_document: faa-powerplant-ch4-ignition-electrical.pdf
+    expected_pages: [12]
+  - id: faa-short-spark-plug-reach
+    question: "spark plug reach"
+    language: en
+    label: answerable
+    expected_document: faa-powerplant-ch4-ignition-electrical.pdf
+    expected_pages: [25]
+  - id: faa-short-igniter-plugs
+    question: "igniter plugs"
+    language: en
+    label: answerable
+    expected_document: faa-powerplant-ch4-ignition-electrical.pdf
+    expected_pages: [46]
+  - id: faa-short-an-connectors
+    question: "AN connectors"
+    language: en
+    label: answerable
+    expected_document: faa-powerplant-ch4-ignition-electrical.pdf
+    expected_pages: [67, 68]
+  - id: faa-short-lenz-law
+    question: "Lenz's Law"
+    language: en
+    label: answerable
+    expected_document: faa-powerplant-ch4-ignition-electrical.pdf
+    expected_pages: [3]
+  - id: faa-short-twists-per-foot
+    question: "twists per foot"
+    language: en
+    label: answerable
+    expected_document: faa-powerplant-ch4-ignition-electrical.pdf
+    expected_pages: [54, 55]
+  - id: insst-short-reglas-de-oro
+    question: "reglas de oro"
+    language: es
+    label: answerable
+    expected_document: insst-guia-riesgo-electrico.pdf
+    expected_pages: [27]
+  - id: insst-short-zona-de-peligro
+    question: "zona de peligro"
+    language: es
+    label: answerable
+    expected_document: insst-guia-riesgo-electrico.pdf
+    expected_pages: [21, 22]
+  - id: insst-short-mbts
+    question: "MBTS"
+    language: es
+    label: answerable
+    expected_document: insst-guia-riesgo-electrico.pdf
+    expected_pages: [21]
+  - id: insst-short-electricidad-estatica
+    question: "electricidad estática"
+    language: es
+    label: answerable
+    expected_document: insst-guia-riesgo-electrico.pdf
+    expected_pages: [78]
+  - id: insst-short-codigo-ip
+    question: "código IP"
+    language: es
+    label: answerable
+    expected_document: insst-guia-riesgo-electrico.pdf
+    expected_pages: [23]
+  - id: quote-short-total-neto
+    question: "Total Neto"
+    language: es
+    label: answerable
+    expected_document: labeled_total.pdf
+    expected_pages: [2]
+
+  # Full-sentence questions.
+  - id: quote-sentence-mi-total-neto
+    question: "Cual es mi total Neto"
+    language: es
+    label: answerable
+    expected_document: labeled_total.pdf
+    expected_pages: [2]
+  - id: quote-sentence-filtro-combustible
+    question: "¿Cuánto cuesta el filtro de combustible en la cotización?"
+    language: es
+    label: answerable
+    expected_document: labeled_total.pdf
+    expected_pages: [1]
+  - id: quote-sentence-estado
+    question: "¿En qué estado está la cotización de mantenimiento?"
+    language: es
+    label: answerable
+    expected_document: labeled_total.pdf
+    expected_pages: [1]
+  - id: faa-sentence-four-conditions
+    question: "What four conditions must occur at the same instant for correct ignition timing?"
+    language: en
+    label: answerable
+    expected_document: faa-powerplant-ch4-ignition-electrical.pdf
+    expected_pages: [26]
+  - id: faa-sentence-series-generator
+    question: "Why is a series wound generator never used as an airplane generator?"
+    language: en
+    label: answerable
+    expected_document: faa-powerplant-ch4-ignition-electrical.pdf
+    expected_pages: [12]
+  - id: insst-sentence-trabajador-cualificado
+    question: "¿Qué es un trabajador cualificado según la guía?"
+    language: es
+    label: answerable
+    expected_document: insst-guia-riesgo-electrico.pdf
+    expected_pages: [25]
+
+  # Spanish questions about the English FAA manual.
+  - id: faa-es-bujia-caliente-fria
+    question: "¿Qué diferencia hay entre una bujía caliente y una bujía fría?"
+    language: es
+    label: answerable
+    expected_document: faa-powerplant-ch4-ignition-electrical.pdf
+    expected_pages: [25]
+  - id: faa-es-acoplamiento-impulso
+    question: "¿Para qué sirve el acoplamiento de impulso en un magneto?"
+    language: es
+    label: answerable
+    expected_document: faa-powerplant-ch4-ignition-electrical.pdf
+    expected_pages: [20, 21]
+  - id: faa-es-angulo-e-gap
+    question: "¿Qué es el ángulo E-gap de un magneto?"
+    language: es
+    label: answerable
+    expected_document: faa-powerplant-ch4-ignition-electrical.pdf
+    expected_pages: [29]
+
+  # English questions about the Spanish INSST guide.
+  - id: insst-en-golden-rules
+    question: "What are the five golden rules for working on de-energized electrical installations?"
+    language: en
+    label: answerable
+    expected_document: insst-guia-riesgo-electrico.pdf
+    expected_pages: [27]
+  - id: insst-en-high-voltage
+    question: "Above what nominal voltage is an installation considered high voltage?"
+    language: en
+    label: answerable
+    expected_document: insst-guia-riesgo-electrico.pdf
+    expected_pages: [20]
+  - id: insst-en-static-electricity
+    question: "How can the build-up of static electricity be prevented?"
+    language: en
+    label: answerable
+    expected_document: insst-guia-riesgo-electrico.pdf
+    expected_pages: [78]
+
+  # Identifier questions.
+  - id: faa-id-s-200
+    question: "What breaker point clearance does the S-200 magneto require?"
+    language: en
+    label: answerable
+    expected_document: faa-powerplant-ch4-ignition-electrical.pdf
+    expected_pages: [29]
+    identifier: "S-200"
+  - id: faa-id-e50
+    question: "E50"
+    language: en
+    label: answerable
+    expected_document: faa-powerplant-ch4-ignition-electrical.pdf
+    expected_pages: [28]
+    identifier: "E50"
+  - id: faa-id-general-handbook
+    question: "¿Qué dice el manual FAA-H-8083-30 sobre la ley de Lenz?"
+    language: es
+    label: answerable
+    expected_document: faa-powerplant-ch4-ignition-electrical.pdf
+    expected_pages: [3]
+    identifier: "FAA-H-8083-30"
+  - id: insst-id-real-decreto-614
+    question: "¿Qué regula el Real Decreto 614/2001?"
+    language: es
+    label: answerable
+    expected_document: insst-guia-riesgo-electrico.pdf
+    expected_pages: [7, 8]
+    identifier: "614/2001"
+  - id: insst-id-dpel-1
+    question: "What is the DPEL-1 distance for a 20 kV installation?"
+    language: en
+    label: answerable
+    expected_document: insst-guia-riesgo-electrico.pdf
+    expected_pages: [26]
+    identifier: "DPEL-1"
+  - id: insst-id-itc-bt-36
+    question: "ITC-BT-36"
+    language: es
+    label: answerable
+    expected_document: insst-guia-riesgo-electrico.pdf
+    expected_pages: [21]
+    identifier: "ITC-BT-36"
+  - id: insst-id-rebt-842
+    question: "¿Qué reglamento aprueba el Real Decreto 842/2002?"
+    language: es
+    label: answerable
+    expected_document: insst-guia-riesgo-electrico.pdf
+    expected_pages: [9]
+    identifier: "842/2002"
+  - id: quote-id-pe-204
+    question: "PE-204"
+    language: es
+    label: answerable
+    expected_document: labeled_total.pdf
+    expected_pages: [1]
+    identifier: "PE-204"
+  - id: quote-id-aceite-15w-40
+    question: "¿Cuántos galones de aceite 15W-40 incluye la cotización?"
+    language: es
+    label: answerable
+    expected_document: labeled_total.pdf
+    expected_pages: [1]
+    identifier: "15W-40"
+
+  # Hard negatives: on topic, but the document does not hold the answer.
+  - id: faa-neg-magneto-price
+    question: "How much does a new magneto cost in dollars?"
+    language: en
+    label: hard_negative
+    expected_document: faa-powerplant-ch4-ignition-electrical.pdf
+  - id: faa-neg-spark-plug-torque
+    question: "spark plug torque value"
+    language: en
+    label: hard_negative
+    expected_document: faa-powerplant-ch4-ignition-electrical.pdf
+  - id: faa-neg-overhaul-interval
+    question: "magneto overhaul interval"
+    language: en
+    label: hard_negative
+    expected_document: faa-powerplant-ch4-ignition-electrical.pdf
+  - id: faa-neg-author
+    question: "Who is the author of this chapter?"
+    language: en
+    label: hard_negative
+    expected_document: faa-powerplant-ch4-ignition-electrical.pdf
+  - id: faa-neg-continental-cylinders
+    question: "How many cylinders does the Continental O-470 engine have?"
+    language: en
+    label: hard_negative
+    expected_document: faa-powerplant-ch4-ignition-electrical.pdf
+  - id: faa-neg-precio-bujia-iridio
+    question: "¿Cuánto cuesta una bujía de iridio?"
+    language: es
+    label: hard_negative
+    expected_document: faa-powerplant-ch4-ignition-electrical.pdf
+  - id: insst-neg-multa
+    question: "¿Cuál es la multa por incumplir el Real Decreto 614/2001?"
+    language: es
+    label: hard_negative
+    expected_document: insst-guia-riesgo-electrico.pdf
+  - id: insst-neg-precio-guia
+    question: "precio de la guía"
+    language: es
+    label: hard_negative
+    expected_document: insst-guia-riesgo-electrico.pdf
+  - id: insst-neg-dpel-500-kv
+    question: "¿Cuál es la distancia DPEL-1 para una instalación de 500 kV?"
+    language: es
+    label: hard_negative
+    expected_document: insst-guia-riesgo-electrico.pdf
+  - id: insst-neg-accidents-2019
+    question: "How many electrical accidents were recorded in Spain in 2019?"
+    language: en
+    label: hard_negative
+    expected_document: insst-guia-riesgo-electrico.pdf
+  - id: insst-neg-empleados
+    question: "¿Cuántos empleados tiene el INSST?"
+    language: es
+    label: hard_negative
+    expected_document: insst-guia-riesgo-electrico.pdf
+  - id: insst-neg-salario
+    question: "salario trabajador cualificado"
+    language: es
+    label: hard_negative
+    expected_document: insst-guia-riesgo-electrico.pdf
+  - id: quote-neg-fecha
+    question: "¿Cuál es la fecha de la cotización?"
+    language: es
+    label: hard_negative
+    expected_document: labeled_total.pdf
+  - id: quote-neg-iva
+    question: "IVA cotización"
+    language: es
+    label: hard_negative
+    expected_document: labeled_total.pdf
+  - id: quote-neg-descuento
+    question: "¿Qué descuento se aplica al total neto?"
+    language: es
+    label: hard_negative
+    expected_document: labeled_total.pdf
+  - id: quote-neg-vigencia
+    question: "¿Hasta cuándo es válida la cotización?"
+    language: es
+    label: hard_negative
+    expected_document: labeled_total.pdf
+  - id: quote-neg-potencia
+    question: "potencia planta PE-204"
+    language: es
+    label: hard_negative
+    expected_document: labeled_total.pdf
+
+  # Unrelated questions.
+  - id: unrelated-paella
+    question: "¿Cómo se prepara una paella valenciana?"
+    language: es
+    label: unrelated
+  - id: unrelated-capital-australia
+    question: "What is the capital of Australia?"
+    language: en
+    label: unrelated
+  - id: unrelated-world-cup-2010
+    question: "¿Quién ganó el Mundial de fútbol de 2010?"
+    language: es
+    label: unrelated
+  - id: unrelated-bread-dough
+    question: "How long should I knead bread dough?"
+    language: en
+    label: unrelated
+  - id: unrelated-brownies
+    question: "receta de brownies"
+    language: es
+    label: unrelated

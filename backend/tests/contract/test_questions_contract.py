@@ -44,6 +44,7 @@ async def test_an_answer_matches_the_contract(
     members = [element(manual, page=3), element(manual, page=4)]
     generator = unit(manual, "A series wound generator is never used.", members=members)
     await library.add(manual, members, [generator])
+    library.judge.default = 0.93
     library.answer(GeneratedAnswer(text="It is never used [1].", not_covered=""))
 
     response = client.post(
@@ -60,6 +61,7 @@ async def test_an_answer_matches_the_contract(
     assert citation["pages"] == [3, 4]
     [source] = body["sources"]
     assert (source["cited"], source["citation_number"]) == (True, 1)
+    assert (source["rank"], source["relevance"]) == (1, 0.93)
     assert (body["primary_image"], body["related_images"]) == (None, [])
 
 

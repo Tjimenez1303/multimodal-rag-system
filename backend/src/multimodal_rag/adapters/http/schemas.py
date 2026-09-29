@@ -5,7 +5,7 @@ from collections.abc import Callable
 from datetime import datetime
 from typing import Literal, Self
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from multimodal_rag.answering.domain import (
     Answer,
@@ -418,8 +418,12 @@ class SourceBody(BaseModel):
 
     Attributes:
         unit_id: Retrieval unit id.
-        rank: Position in the fused ranking.
-        similarity: Dense cosine similarity to the question.
+        rank: Position in judged order, which is the order supplied to the answer
+            model.
+        relevance: The reranker's probability that the unit contains the
+            information that answers the question.
+        similarity: Dense cosine similarity to the question. Informational, it does
+            not gate.
         document_id: Document of the unit.
         document_name: File name of that document.
         section: Heading path, outermost first.
@@ -439,6 +443,7 @@ class SourceBody(BaseModel):
 
     unit_id: uuid.UUID
     rank: int
+    relevance: float = Field(ge=0, le=1)
     similarity: float
     document_id: uuid.UUID
     document_name: str
@@ -467,6 +472,7 @@ class SourceBody(BaseModel):
         return cls(
             unit_id=source.unit_id,
             rank=source.rank,
+            relevance=source.relevance,
             similarity=source.similarity,
             document_id=source.document_id,
             document_name=source.document_name,

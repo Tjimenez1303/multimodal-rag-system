@@ -23,6 +23,7 @@
     {
       "unit_id": "7c03a2cc-d29e-5d77-9d52-0c7edb552c11",
       "rank": 1,
+      "relevance": 0.98,
       "similarity": 0.46741962,
       "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
       "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
@@ -41,6 +42,7 @@
     {
       "unit_id": "6a68e4df-04ba-578c-9fbe-992c2c28b046",
       "rank": 2,
+      "relevance": 0.91,
       "similarity": 0.66103286,
       "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
       "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
@@ -62,6 +64,7 @@
     {
       "unit_id": "2bbd5565-d939-5321-a384-23a83a3cd5bd",
       "rank": 3,
+      "relevance": 0.84,
       "similarity": 0.5826355,
       "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
       "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
@@ -80,6 +83,7 @@
     {
       "unit_id": "a58a51b5-8e5b-5154-a0f4-49f72db30563",
       "rank": 4,
+      "relevance": 0.77,
       "similarity": 0.51980793,
       "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
       "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
@@ -101,6 +105,7 @@
     {
       "unit_id": "e6e8a461-7c70-588e-b988-d4224f9b9238",
       "rank": 5,
+      "relevance": 0.7,
       "similarity": 0.4965552,
       "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
       "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
@@ -122,6 +127,7 @@
     {
       "unit_id": "5af34635-fac6-54f8-be16-b6f82b1e04ae",
       "rank": 6,
+      "relevance": 0.63,
       "similarity": 0.58124065,
       "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
       "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
@@ -143,6 +149,7 @@
     {
       "unit_id": "ef60a339-6e0d-5ea0-a974-d8ce6f719031",
       "rank": 7,
+      "relevance": 0.56,
       "similarity": 0.5824237,
       "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
       "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
@@ -164,6 +171,7 @@
     {
       "unit_id": "8167e1dd-904f-536b-8736-ee73e2e8453e",
       "rank": 8,
+      "relevance": 0.49,
       "similarity": 0.46874395,
       "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
       "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",

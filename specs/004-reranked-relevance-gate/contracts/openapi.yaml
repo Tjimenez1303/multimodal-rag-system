@@ -1,0 +1,111 @@
+openapi: 3.1.0
+info:
+  title: Multimodal RAG question answering API with a reranked relevance gate
+  version: 0.2.0
+  description: >
+    The askQuestion operation of the question answering contract, with the reranker's
+    judgement of each source and the reranker's errors. Everything not redefined here,
+    such as the request body, citations and images, is the question answering contract.
+    Errors use RFC 9457 problem details, defined in the ingestion contract. Every
+    response carries an X-Request-ID header.
+servers:
+  - url: http://localhost:8000
+paths:
+  /api/v1/questions:
+    post:
+      operationId: askQuestion
+      summary: Answer a question from the ingested documents
+      description: >
+        Searches the completed documents by meaning and by exact keywords, asks the local
+        reranker how likely each candidate is to contain the answer, and asks the local
+        answer model only when a supplied source reaches the minimum relevance or holds an
+        identifier of the question. The sources are supplied and returned in judged order.
+        The answer text marks each supported statement with [n], which refers to the
+        citation with that number. When the documents do not support an answer, status is
+        not_enough_information and no citation or image is returned. The request is
+        cancelled when the client disconnects.
+      parameters:
+        - $ref: "../../001-async-pdf-ingestion/contracts/openapi.yaml#/components/parameters/RequestId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "../../002-grounded-question-answering/contracts/openapi.yaml#/components/schemas/QuestionRequest"
+      responses:
+        "200":
+          description: Answer, or a not-enough-information outcome
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Answer" }
+        "400":
+          description: >
+            invalid_question (empty or too long), unknown_documents (the restriction names
+            documents that do not exist) or invalid_request (malformed body)
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "409":
+          description: documents_not_ready (the restriction names documents whose ingestion has not completed)
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "502":
+          description: answer_model_invalid_response or reranker_invalid_response
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "503":
+          description: >
+            answering_busy (too many questions at once, retry after the Retry-After
+            seconds), answer_model_unavailable, search_unavailable or
+            reranker_unavailable
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying, sent with answering_busy
+              schema: { type: integer, minimum: 1 }
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "504":
+          description: >
+            answer_model_timeout, search_timeout, reranker_timeout or
+            answer_deadline_exceeded
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+components:
+  schemas:
+    Problem:
+      $ref: "../../001-async-pdf-ingestion/contracts/openapi.yaml#/components/schemas/Problem"
+    Answer:
+      allOf:
+        - $ref: "../../002-grounded-question-answering/contracts/openapi.yaml#/components/schemas/Answer"
+        - type: object
+          properties:
+            sources:
+              type: array
+              description: >
+                Every retrieval unit supplied to the answer model, in judged order. Empty
+                when the answer model was not asked.
+              items: { $ref: "#/components/schemas/Source" }
+    Source:
+      allOf:
+        - $ref: "../../002-grounded-question-answering/contracts/openapi.yaml#/components/schemas/Source"
+        - type: object
+          required: [relevance]
+          properties:
+            rank:
+              type: integer
+              minimum: 1
+              description: Position in judged order, which is the order supplied to the answer model.
+            relevance:
+              type: number
+              minimum: 0
+              maximum: 1
+              description: >
+                The reranker's probability that the unit contains the information that
+                answers the question.
+            similarity:
+              type: number
+              description: Dense cosine similarity to the question. Informational, it does not gate.

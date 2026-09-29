@@ -89,6 +89,9 @@ class ProviderSettings(CommonSettings):
         embedder_batch_size: Passages sent per embedding request.
         embedder_query_instruction: Task sentence prepended to questions before
             they are embedded, as the embedding model expects for retrieval.
+        embedder_tokenizer_path: ``tokenizer.json`` of the embedding model, baked
+            into the image. The worker sizes retrieval units with it, and the API
+            shortens reranker passages, since the reranker shares the tokenizer.
         provider_retry_attempts: Attempts for a transient provider failure.
         provider_retry_initial_wait_seconds: First backoff wait before jitter.
         provider_retry_max_wait_seconds: Longest backoff wait.
@@ -111,6 +114,7 @@ class ProviderSettings(CommonSettings):
         ),
         min_length=1,
     )
+    embedder_tokenizer_path: Path
     provider_retry_attempts: PositiveInt = 4
     provider_retry_initial_wait_seconds: PositiveFloat = 0.5
     provider_retry_max_wait_seconds: PositiveFloat = 10.0
@@ -133,7 +137,15 @@ class ApiSettings(ProviderSettings):
         answer_max_tokens: Longest answer the model may write, in tokens.
         answer_temperature: Sampling temperature of the answer model.
         retrieval_top_k: Retrieval units supplied to the answer model.
-        min_similarity: Lowest dense similarity that lets a unit pass the relevance
+        reranker_url: OpenAI-compatible base URL of the reranker.
+        reranker_model: Model reference of the reranker.
+        reranker_timeout_seconds: Timeout of one judging request.
+        reranker_instruction: Task sentence the reranker judges each unit with.
+        reranker_max_input_tokens: Longest judging request, one slot of the
+            reranker's context. Longer units are shortened to fit.
+        rerank_candidates: Retrieval units judged per question, of which the best
+            ``retrieval_top_k`` are supplied to the answer model.
+        min_relevance: Lowest judged relevance that lets a unit pass the relevance
             gate.
         low_confidence_threshold: Recognition confidence below which a source is
             flagged as low-confidence recognized text.
@@ -158,7 +170,19 @@ class ApiSettings(ProviderSettings):
     answer_max_tokens: PositiveInt = 800
     answer_temperature: float = Field(default=0.0, ge=0, le=2)
     retrieval_top_k: PositiveInt = 8
-    min_similarity: float = Field(default=0.60, ge=0, le=1)
+    reranker_url: HttpUrl
+    reranker_model: str = Field(min_length=1)
+    reranker_timeout_seconds: PositiveFloat = 15.0
+    reranker_instruction: str = Field(
+        default=(
+            "Given a question about a document, judge whether the passage contains "
+            "the information that answers it"
+        ),
+        min_length=1,
+    )
+    reranker_max_input_tokens: PositiveInt = 2048
+    rerank_candidates: PositiveInt = 16
+    min_relevance: float = Field(default=0.30, ge=0, le=1)
     low_confidence_threshold: float = Field(default=0.90, ge=0, le=1)
     max_question_chars: PositiveInt = 2000
     max_filter_documents: PositiveInt = 20
@@ -168,12 +192,18 @@ class ApiSettings(ProviderSettings):
     attribution_min_score: float = Field(default=0.5, ge=0, le=1)
 
     @pydantic.model_validator(mode="after")
-    def _generation_fits_the_deadline(self) -> Self:
+    def _answering_fits_its_limits(self) -> Self:
         if self.answer_model_timeout_seconds >= self.answer_deadline_seconds:
             raise ValueError(
                 "ANSWER_MODEL_TIMEOUT_SECONDS must be shorter than "
                 "ANSWER_DEADLINE_SECONDS"
             )
+        if self.reranker_timeout_seconds >= self.answer_deadline_seconds:
+            raise ValueError(
+                "RERANKER_TIMEOUT_SECONDS must be shorter than ANSWER_DEADLINE_SECONDS"
+            )
+        if self.rerank_candidates < self.retrieval_top_k:
+            raise ValueError("RERANK_CANDIDATES must be at least RETRIEVAL_TOP_K")
         return self
 
 
@@ -184,8 +214,6 @@ class WorkerSettings(ProviderSettings):
         vlm_url: OpenAI-compatible base URL of the vision model.
         vlm_model: Model reference of the vision model.
         vlm_timeout_seconds: Timeout of one figure description request.
-        embedder_tokenizer_path: ``tokenizer.json`` of the embedding model, baked
-            into the image.
         embedder_max_input_tokens: Longest input the embedding model accepts, the
             physical batch it runs with.
         lease_seconds: Lease granted to a worker for one job.
@@ -216,7 +244,6 @@ class WorkerSettings(ProviderSettings):
     vlm_url: HttpUrl
     vlm_model: str = Field(min_length=1)
     vlm_timeout_seconds: PositiveFloat = 120.0
-    embedder_tokenizer_path: Path
     embedder_max_input_tokens: PositiveInt = 2048
     lease_seconds: PositiveInt = 90
     heartbeat_seconds: PositiveInt = 30

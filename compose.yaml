@@ -74,9 +74,10 @@ services:
       QDRANT_URL: http://qdrant:6333
     volumes:
       - blobs:/data/blobs
-    # Questions are answered by the same model instances the worker uses. The API has
-    # no dependency on Qdrant and calls the models only when a question arrives, so
-    # uploads and job status keep working while search or the answer model is down.
+    # Questions are answered by the same model instances the worker uses, and the
+    # reranker judges the retrieved units for the API alone. The API has no dependency
+    # on Qdrant and calls the models only when a question arrives, so uploads and job
+    # status keep working while search, the reranker or the answer model is down.
     models:
       vlm:
         endpoint_var: ANSWER_MODEL_URL
@@ -84,6 +85,9 @@ services:
       embedder:
         endpoint_var: EMBEDDER_URL
         model_var: EMBEDDER_MODEL
+      reranker:
+        endpoint_var: RERANKER_URL
+        model_var: RERANKER_MODEL
     ports:
       - "127.0.0.1:${API_PUBLISHED_PORT:-8000}:8000"
     healthcheck:
@@ -180,6 +184,11 @@ models:
       - "2048"
       - --batch-size
       - "2048"
+  # Scored through chat completions with log probabilities, so it runs in completion
+  # mode. Each of its 4 slots holds one 2,048-token judging request.
+  reranker:
+    model: ai/qwen3-reranker:0.6B
+    context_size: 8192
 
 volumes:
   pgdata:

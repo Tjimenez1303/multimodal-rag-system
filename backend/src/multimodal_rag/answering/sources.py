@@ -9,7 +9,7 @@ unit carries the rows of each of its parts, so a client can render it as a table
 import uuid
 from collections.abc import Mapping, Sequence
 
-from multimodal_rag.answering.domain import RetrievedSource, TableContent
+from multimodal_rag.answering.domain import JudgedHit, RetrievedSource, TableContent
 from multimodal_rag.ingestion.domain import (
     DescriptionStatus,
     ElementKind,
@@ -18,7 +18,6 @@ from multimodal_rag.ingestion.domain import (
     TextOrigin,
     UnitType,
 )
-from multimodal_rag.ingestion.ports import SearchHit
 from multimodal_rag.shared.errors import DataInconsistencyError
 
 EXCERPT_CHARS = 300
@@ -37,17 +36,17 @@ def elements_of(unit: RetrievalUnit) -> tuple[uuid.UUID, ...]:
 
 
 def assemble_sources(
-    hits: Sequence[SearchHit],
+    judged: Sequence[JudgedHit],
     *,
     elements: Mapping[uuid.UUID, ExtractedElement],
     document_names: Mapping[uuid.UUID, str],
     citation_numbers: Mapping[uuid.UUID, int],
     low_confidence_threshold: float,
 ) -> tuple[RetrievedSource, ...]:
-    """Describe every supplied unit in rank order.
+    """Describe every supplied unit in judged order.
 
     Args:
-        hits: Units supplied to the model, best first.
+        judged: Units supplied to the model with their judgement, best first.
         elements: Every element returned by ``elements_of`` for those units.
         document_names: File name of every document of the units.
         citation_numbers: Citation number of every cited unit.
@@ -55,21 +54,22 @@ def assemble_sources(
             flagged.
 
     Returns:
-        One source per hit, ranked from 1.
+        One source per unit, ranked from 1.
 
     Raises:
         DataInconsistencyError: If an element of a unit is missing.
     """
     sources = []
-    for rank, hit in enumerate(hits, start=1):
-        unit = hit.unit
+    for rank, item in enumerate(judged, start=1):
+        unit = item.hit.unit
         members = _members(unit, elements)
         described = _described_figure(unit, members)
         sources.append(
             RetrievedSource(
                 unit_id=unit.id,
                 rank=rank,
-                similarity=hit.similarity,
+                relevance=item.relevance,
+                similarity=item.hit.similarity,
                 document_id=unit.document_id,
                 document_name=document_names[unit.document_id],
                 section=unit.heading_path,

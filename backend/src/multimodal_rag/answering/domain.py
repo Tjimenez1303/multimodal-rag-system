@@ -6,13 +6,15 @@ and unit types. This module imports nothing outside the standard library and the
 project's own domain and errors.
 """
 
+import math
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 
-from multimodal_rag.answering.errors import InvalidQuestionError
+from multimodal_rag.answering.errors import InvalidQuestionError, InvalidRelevanceError
 from multimodal_rag.ingestion.domain import BoundingBox, UnitType
+from multimodal_rag.ingestion.ports import SearchHit
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,13 +123,36 @@ class TableContent:
 
 
 @dataclass(frozen=True, slots=True)
+class JudgedHit:
+    """A search hit with the reranker's judgement of it.
+
+    Attributes:
+        hit: The unit, its fused score and its dense similarity.
+        relevance: Probability, from 0 to 1, that the unit contains the answer.
+    """
+
+    hit: SearchHit
+    relevance: float
+
+    def __post_init__(self) -> None:
+        """Reject a relevance that is not a probability."""
+        if not (math.isfinite(self.relevance) and 0 <= self.relevance <= 1):
+            raise InvalidRelevanceError(
+                f"Relevance must lie in 0 to 1: {self.relevance}"
+            )
+
+
+@dataclass(frozen=True, slots=True)
 class RetrievedSource:
     """A retrieval unit supplied to the answer model for the question.
 
     Attributes:
         unit_id: Id of the retrieval unit.
-        rank: Position in the fused ranking, from 1.
-        similarity: Dense cosine similarity to the question.
+        rank: Position in judged order, which is the order supplied to the answer
+            model, from 1.
+        relevance: The reranker's probability that the unit contains the answer.
+        similarity: Dense cosine similarity to the question. Informational, it does
+            not gate.
         document_id: Document of the unit.
         document_name: File name of that document.
         section: Heading path, outermost first.
@@ -147,6 +172,7 @@ class RetrievedSource:
 
     unit_id: uuid.UUID
     rank: int
+    relevance: float
     similarity: float
     document_id: uuid.UUID
     document_name: str

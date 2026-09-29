@@ -4,7 +4,7 @@ from typing import Any
 
 import pytest
 
-from multimodal_rag.answering.domain import RetrievedSource, TableContent
+from multimodal_rag.answering.domain import JudgedHit, RetrievedSource, TableContent
 from multimodal_rag.answering.sources import assemble_sources
 from multimodal_rag.ingestion.domain import (
     DescriptionStatus,
@@ -25,9 +25,17 @@ def assemble(
     hits: Sequence[SearchHit],
     elements: Sequence[ExtractedElement],
     numbers: dict[uuid.UUID, int] | None = None,
+    *,
+    relevances: Sequence[float] | None = None,
 ) -> tuple[RetrievedSource, ...]:
+    judged = [
+        JudgedHit(hit=searched, relevance=relevance)
+        for searched, relevance in zip(
+            hits, relevances or [0.9] * len(hits), strict=True
+        )
+    ]
     return assemble_sources(
-        hits,
+        judged,
         elements={e.id: e for e in elements},
         document_names=NAMES,
         citation_numbers=numbers or {},
@@ -43,17 +51,20 @@ def figure(**values: Any) -> ExtractedElement:
     return element(TM, kind=ElementKind.IMAGE, image_key="figures/x.png", **values)
 
 
-def test_a_source_describes_its_unit_rank_and_similarity() -> None:
+def test_a_source_describes_its_unit_rank_relevance_and_similarity() -> None:
     paragraph = element(TM, page=13)
     text_unit = unit(
         TM, "Code SPL-480 means low oil.", members=[paragraph], heading_path=("Codes",)
     )
 
-    [source] = assemble([hit(text_unit, similarity=0.42)], [paragraph])
+    [source] = assemble(
+        [hit(text_unit, similarity=0.42)], [paragraph], relevances=[0.97]
+    )
 
     assert source == RetrievedSource(
         unit_id=text_unit.id,
         rank=1,
+        relevance=0.97,
         similarity=0.42,
         document_id=TM.id,
         document_name="tm-5-3431.pdf",
@@ -193,3 +204,18 @@ def test_text_units_carry_no_tables() -> None:
     [source] = assemble([hit(unit(TM, "Text.", members=[paragraph]))], [paragraph])
 
     assert source.tables == ()
+
+
+def test_sources_are_ranked_in_judged_order_with_their_relevance() -> None:
+    first, second = element(TM), element(TM)
+    best = unit(TM, "Best judged.", members=[first])
+    next_best = unit(TM, "Next.", members=[second])
+
+    sources = assemble(
+        [hit(best), hit(next_best)], [first, second], relevances=[0.95, 0.40]
+    )
+
+    assert [(s.unit_id, s.rank, s.relevance) for s in sources] == [
+        (best.id, 1, 0.95),
+        (next_best.id, 2, 0.40),
+    ]

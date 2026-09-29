@@ -23,6 +23,7 @@
     {
       "unit_id": "37d2f56c-e11f-5f69-a7cd-2e121f3bbc6a",
       "rank": 1,
+      "relevance": 0.98,
       "similarity": 0.6282681,
       "document_id": "d875dd9a-4b58-414c-a79b-bdd4a858a19c",
       "document_name": "tm-5-3431-201-10-welding-machine-scanned.pdf",
@@ -41,6 +42,7 @@
     {
       "unit_id": "62891b4d-ba1a-5033-82d0-6928db451567",
       "rank": 2,
+      "relevance": 0.91,
       "similarity": 0.72002137,
       "document_id": "d875dd9a-4b58-414c-a79b-bdd4a858a19c",
       "document_name": "tm-5-3431-201-10-welding-machine-scanned.pdf",
@@ -97,6 +99,7 @@
     {
       "unit_id": "180abcf0-7548-547e-b843-8ae4425a2238",
       "rank": 3,
+      "relevance": 0.84,
       "similarity": 0.6544163,
       "document_id": "d875dd9a-4b58-414c-a79b-bdd4a858a19c",
       "document_name": "tm-5-3431-201-10-welding-machine-scanned.pdf",
@@ -115,6 +118,7 @@
     {
       "unit_id": "84f8dec5-876f-5d18-8c48-757e05083a05",
       "rank": 4,
+      "relevance": 0.77,
       "similarity": 0.5956051,
       "document_id": "d875dd9a-4b58-414c-a79b-bdd4a858a19c",
       "document_name": "tm-5-3431-201-10-welding-machine-scanned.pdf",
@@ -199,6 +203,7 @@
     {
       "unit_id": "d148f0a9-4c42-5886-adc7-87c660688ef5",
       "rank": 5,
+      "relevance": 0.7,
       "similarity": 0.6451742,
       "document_id": "d875dd9a-4b58-414c-a79b-bdd4a858a19c",
       "document_name": "tm-5-3431-201-10-welding-machine-scanned.pdf",
@@ -217,6 +222,7 @@
     {
       "unit_id": "a3c38315-dde4-54d4-abf0-b226c5c62043",
       "rank": 6,
+      "relevance": 0.63,
       "similarity": 0.36812255,
       "document_id": "5d3ff0f9-f671-4a1b-b3e6-3258071fa024",
       "document_name": "faa-powerplant-ch4-ignition-electrical.pdf",
@@ -238,6 +244,7 @@
     {
       "unit_id": "4a847bf8-1f6b-595a-89c8-5964d8b90fef",
       "rank": 7,
+      "relevance": 0.56,
       "similarity": 0.5876408,
       "document_id": "d875dd9a-4b58-414c-a79b-bdd4a858a19c",
       "document_name": "tm-5-3431-201-10-welding-machine-scanned.pdf",
@@ -256,6 +263,7 @@
     {
       "unit_id": "68d2dcd9-f063-548d-8782-55c7bed2540f",
       "rank": 8,
+      "relevance": 0.49,
       "similarity": 0.6052922,
       "document_id": "d875dd9a-4b58-414c-a79b-bdd4a858a19c",
       "document_name": "tm-5-3431-201-10-welding-machine-scanned.pdf",

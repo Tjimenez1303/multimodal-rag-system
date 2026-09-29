@@ -13,18 +13,6 @@ class ResizeObserverStandIn implements ResizeObserver {
   disconnect(): void {}
 }
 globalThis.ResizeObserver ??= ResizeObserverStandIn;
-
-window.matchMedia ??= (query: string): MediaQueryList => ({
-  matches: false,
-  media: query,
-  onchange: null,
-  addListener: () => {},
-  removeListener: () => {},
-  addEventListener: () => {},
-  removeEventListener: () => {},
-  dispatchEvent: () => false,
-});
-
 /** Elements passed to `scrollIntoView`, most recent last, so tests can see what scrolled. */
 export const scrolledIntoView: Element[] = [];
 Element.prototype.scrollIntoView = function scrollIntoView(this: Element) {

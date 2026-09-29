@@ -5,7 +5,6 @@
     "src/client/**",
     "src/components/ui/**",
     "src/components/ai-elements/**",
-    "src/hooks/use-mobile.ts",
     "dist/**",
     "coverage/**"
   ],

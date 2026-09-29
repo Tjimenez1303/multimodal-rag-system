@@ -85,12 +85,12 @@ tested and demonstrated on its own.
   - `frontend/.oxlintrc.json` enables the `react`, `typescript`, `jsx-a11y` and `import` plugins, with `react/rules-of-hooks` and `react/exhaustive-deps` as errors.
   - `frontend/.prettierrc.json` sets `printWidth: 88` to match the backend's line length.
   - `frontend/.prettierignore` excludes `src/client/`, `openapi.json`, `dist/`, `coverage/`, `playwright-report/` and `test-results/`.
-  - `frontend/.oxlintrc.json` also ignores `src/client/` and the registry code the shadcn/ui and AI Elements CLIs install (`src/components/ui/`, `src/components/ai-elements/`, `src/hooks/use-mobile.ts`), as the coverage gate does (research section 15). Prettier and the type check still cover it.
+  - `frontend/.oxlintrc.json` also ignores `src/client/` and the registry code the shadcn/ui and AI Elements CLIs install (`src/components/ui/`, `src/components/ai-elements/`), as the coverage gate does (research section 15). Prettier and the type check still cover it.
 - [X] T004 [P] Configure Vite and Vitest in `frontend/vite.config.ts`:
   - `@vitejs/plugin-react`, `@tailwindcss/vite`, the `@` alias to `./src`, and `server.proxy` sending `/api` to `http://localhost:8000` (research section 4).
   - A `test` block with `environment: "jsdom"` and `setupFiles: ["./tests/setup.ts"]`.
-  - `coverage` with the `v8` provider, `include: ["src/**"]`, `exclude: ["src/client/**", "src/components/ui/**", "src/components/ai-elements/**", "src/hooks/use-mobile.ts", "src/main.tsx", "**/*.test.*"]` and `thresholds: { lines: 90 }` (research section 15).
-  - Create `frontend/tests/setup.ts`, which imports `@testing-library/jest-dom/vitest`, installs minimal `ResizeObserver`, `matchMedia` and `Element.scrollIntoView` stand-ins for jsdom, starts the MSW server from `frontend/tests/msw/server.ts` with `onUnhandledFrame: "error"` (MSW 3's name for unhandled requests), and resets handlers and `sessionStorage` after each test.
+  - `coverage` with the `v8` provider, `include: ["src/**"]`, `exclude: ["src/client/**", "src/components/ui/**", "src/components/ai-elements/**", "src/main.tsx", "**/*.test.*"]` and `thresholds: { lines: 90 }` (research section 15).
+  - Create `frontend/tests/setup.ts`, which imports `@testing-library/jest-dom/vitest`, installs minimal `ResizeObserver` and `Element.scrollIntoView` stand-ins for jsdom, starts the MSW server from `frontend/tests/msw/server.ts` with `onUnhandledFrame: "error"` (MSW 3's name for unhandled requests), and resets handlers and `sessionStorage` after each test.
 - [X] T005 [P] Configure Playwright in `frontend/playwright.config.ts`:
   - `webServer` runs `npm run build && npm run preview -- --port 4173`, with `baseURL` `http://localhost:4173`.
   - Three projects, `chromium`, `firefox` and `webkit`, all with viewport `1280 × 720` (FR-043).

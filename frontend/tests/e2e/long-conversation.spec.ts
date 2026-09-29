@@ -65,17 +65,43 @@ test("a conversation of 50 turns with images stays responsive (SC-010)", async (
   });
   expect(typing).toBeLessThan(100);
 
-  // An image opens at full size within 300 ms.
+  // An image opens at full size within 300 ms: from the click to the first frame
+  // painted with the dialog, measured in the page so the test driver's own latency is
+  // left out.
   const opener = page.getByRole("button", { name: "View full size" }).last();
   await opener.scrollIntoViewIfNeeded();
-  const opened = Date.now();
+  await opener.evaluate((element) => {
+    const timing = { clicked: 0, painted: 0 };
+    Object.assign(window, { dialogTiming: timing });
+    element.addEventListener("click", () => (timing.clicked = performance.now()), {
+      once: true,
+    });
+    const observer = new MutationObserver(() => {
+      if (document.querySelector('[role="dialog"]') === null) return;
+      observer.disconnect();
+      requestAnimationFrame(() => (timing.painted = performance.now()));
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  });
   await opener.click();
   await expect(page.getByRole("dialog")).toBeVisible();
-  expect(Date.now() - opened).toBeLessThan(300);
+  const opening = await page.evaluate(() => {
+    const { clicked, painted } = (
+      window as unknown as { dialogTiming: { clicked: number; painted: number } }
+    ).dialogTiming;
+    return painted - clicked;
+  });
+  expect(opening).toBeGreaterThan(0);
+  expect(opening).toBeLessThan(300);
   await page.keyboard.press("Escape");
 
-  // Scrolling back to the first turn completes.
+  // Scrolling back to the first turn with the wheel completes. A user's scroll releases
+  // the conversation from following the newest turn.
   const first = page.getByRole("article").first();
-  await first.scrollIntoViewIfNeeded();
-  await expect(first).toBeInViewport();
+  const conversation = page.getByRole("log");
+  await conversation.hover();
+  await expect(async () => {
+    await page.mouse.wheel(0, -20_000);
+    await expect(first).toBeInViewport();
+  }).toPass();
 });

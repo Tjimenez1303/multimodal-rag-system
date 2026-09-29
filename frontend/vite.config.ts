@@ -33,7 +33,6 @@ export default defineConfig({
         "src/client/**",
         "src/components/ui/**",
         "src/components/ai-elements/**",
-        "src/hooks/use-mobile.ts",
         "src/main.tsx",
         "**/*.test.*",
       ],

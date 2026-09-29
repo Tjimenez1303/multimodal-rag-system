@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import type { DocumentBody, JobBody } from "../../src/client/types.gen.ts";
-import { expectAccessible, fakeService, LIBRARY } from "./fakes.ts";
+import { answer, ask, expectAccessible, fakeService, LIBRARY } from "./fakes.ts";
 
 const PDF = {
   name: "faa-manual.pdf",
@@ -207,4 +207,20 @@ test("the collapsed panel gives the conversation its width and counts what is pr
     .poll(async () => (await input.boundingBox())!.width)
     .toBeGreaterThan(openWidth);
   await expectAccessible(page);
+});
+
+test("in a window narrower than the layout, the panel stays and 'Upload a manual' reaches it", async ({
+  page,
+}) => {
+  await fakeService(page, [answer("no-information-no-documents")]);
+  await page.setViewportSize({ width: 700, height: 800 });
+  await page.goto("/");
+
+  await expect(page.getByRole("button", { name: "Hide documents" })).toBeVisible();
+  await page.getByRole("button", { name: "Hide documents" }).click();
+  await ask(page, "How is a shunt generator wired?");
+  await page.getByRole("button", { name: "Upload a manual" }).click();
+
+  await expect(page.getByRole("button", { name: "Upload a PDF" })).toBeFocused();
+  await expect(page.getByRole("button", { name: "Upload a PDF" })).toBeVisible();
 });

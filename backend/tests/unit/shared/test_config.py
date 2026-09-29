@@ -71,7 +71,7 @@ def test_api_settings_expose_the_documented_answering_defaults(
     assert settings.max_question_chars == 2000
     assert settings.max_filter_documents == 20
     assert settings.answer_concurrency == 2
-    assert settings.answer_queue_limit == 10
+    assert settings.answer_queue_limit == 6
     assert settings.answer_deadline_seconds == 90
     assert settings.embedder_query_instruction == (
         "Given a question about a technical manual, "

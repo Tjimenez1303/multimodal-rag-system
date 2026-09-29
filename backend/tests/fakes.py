@@ -613,7 +613,7 @@ class FakeAnswerGenerator:
 class FakeAnswerSlots:
     """Admits ``capacity`` questions at once and lets ``queue_limit`` more wait."""
 
-    def __init__(self, *, capacity: int = 2, queue_limit: int = 10) -> None:
+    def __init__(self, *, capacity: int = 2, queue_limit: int = 6) -> None:
         self._places = asyncio.Semaphore(capacity)
         self.queue_limit = queue_limit
         self.waiting = 0

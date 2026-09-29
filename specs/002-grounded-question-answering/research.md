@@ -345,7 +345,7 @@ https://github.com/pemistahl/lingua-py, https://pypi.org/project/fast-langdetect
 
 - **Admission.** An `AnswerSlots` port admits questions. Its adapter wraps
   `anyio.CapacityLimiter` with `ANSWER_CONCURRENCY` tokens (2 by default). A question
-  that finds no free token and `ANSWER_QUEUE_LIMIT` questions (10 by default) already
+  that finds no free token and `ANSWER_QUEUE_LIMIT` questions (6 by default) already
   waiting is rejected at once with `AnsweringBusyError`, and the response carries
   `Retry-After: 10`, about one answer's time. The check and the wait happen with no
   `await` in between, so they are atomic on the event loop.
@@ -368,8 +368,12 @@ https://github.com/pemistahl/lingua-py, https://pypi.org/project/fast-langdetect
 - A normal FastAPI endpoint is not cancelled when the client disconnects. After FastAPI
   has read the JSON body, `receive()` blocks until the disconnect, and the project's
   middlewares are pure ASGI, so the listener sees it.
-- With two slots and answers of about 10 seconds, the tenth question in line waits about
-  50 seconds, so a 90-second deadline covers a full line.
+- Two answers generated at once took about 20 seconds each, not the 10 seconds of one
+  answer alone, because they share the model. Measured with 16 simultaneous questions,
+  2 running and 10 waiting left the last 4 accepted questions at the 90-second deadline.
+  A line of 6 lets 2 running and 6 waiting finish in about 80 seconds, and further
+  questions get `answering_busy` at once, which is better than failing after 90
+  seconds. A longer line needs a longer `ANSWER_DEADLINE_SECONDS`.
 
 **Alternatives considered**:
 
@@ -439,7 +443,7 @@ names have no default and are injected by Compose.
 | `MAX_QUESTION_CHARS` | 2000 | Longest question (FR-002) |
 | `MAX_FILTER_DOCUMENTS` | 20 | Longest document restriction |
 | `ANSWER_CONCURRENCY` | 2 | Questions answered at once (FR-028) |
-| `ANSWER_QUEUE_LIMIT` | 10 | Questions waiting (FR-028) |
+| `ANSWER_QUEUE_LIMIT` | 6 | Questions waiting (FR-028) |
 | `ANSWER_DEADLINE_SECONDS` | 90 | Total deadline, waiting included (FR-022) |
 | `EMBEDDER_QUERY_INSTRUCTION` | retrieval task sentence | Query instruction (section 2) |
 | `EMBEDDER_BATCH_SIZE` | 32 | Passages per embedding request, now shared with the worker |

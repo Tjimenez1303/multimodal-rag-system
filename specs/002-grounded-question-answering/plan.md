@@ -33,7 +33,7 @@ request, while ingestion stays in the worker.
   closest to its text. Other figures of the cited units are listed as related images, and
   decorative ones are never returned.
 - **Resilience.** Every call has a timeout and bounded retries, and a 90-second deadline
-  covers the whole question. At most 2 questions run at once and 10 wait, and further
+  covers the whole question. At most 2 questions run at once and 6 wait, and further
   questions get 503 `answering_busy` at once. A client disconnect cancels the question and
   the generation.
 
@@ -97,7 +97,7 @@ chat client belongs to a later feature.
 **Scale/Scope**:
 
 - One organization, no authentication.
-- 2 questions answered at once and 10 waiting, both configurable.
+- 2 questions answered at once and 6 waiting, both configurable.
 - Libraries of at least 100 manuals, the ingestion target. Retrieval cost does not grow
   with the number of questions.
 

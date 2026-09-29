@@ -146,7 +146,7 @@ for i in $(seq 1 16); do (ask '{"question": "What is a shunt generator?"}' | jq 
 
 Expected:
 
-- **With the defaults** (2 at once, 10 waiting): 12 questions are answered and 4 return 503
+- **With the defaults** (2 at once, 6 waiting): 8 questions are answered and 8 return 503
   `answering_busy` with a `Retry-After` header in under 1 second.
 - **No timeouts.** No accepted question exceeds the deadline.
 

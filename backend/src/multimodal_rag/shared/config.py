@@ -163,7 +163,7 @@ class ApiSettings(ProviderSettings):
     max_question_chars: PositiveInt = 2000
     max_filter_documents: PositiveInt = 20
     answer_concurrency: PositiveInt = 2
-    answer_queue_limit: int = Field(default=10, ge=0)
+    answer_queue_limit: int = Field(default=6, ge=0)
     answer_deadline_seconds: PositiveFloat = 90.0
     attribution_min_score: float = Field(default=0.5, ge=0, le=1)
 

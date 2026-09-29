@@ -29,7 +29,7 @@ retries."
 - Q: How is a table the answer relies on presented? → A: Its source carries the table's rows and columns so a client can render it as a table. No picture of the table is produced, and a primary image is returned only when a figure is linked to that table.
 - Q: How is each citation tied to the part of the answer it supports? → A: The answer text carries numbered markers (for example `[1]`) placed after the statements they support, and each marker points to one entry of the structured citation list with its document name and pages.
 - Q: Which retrieval units does the response list as sources? → A: Every unit supplied to the answer model for the question (8 by default), each marked as cited or not cited by the answer.
-- Q: What happens when more questions arrive at once than the local answer model can handle? → A: A configurable number of questions is answered at the same time (2 by default) and a bounded line holds the rest (10 by default). When the line is full, new questions are rejected at once with a "busy, retry later" error. A client can cancel a waiting or running question, which frees its place. The chat client sends one question at a time and shows a stop button while an answer is being written. A question submitted meanwhile is held by the client and sent once the current answer arrives or is cancelled.
+- Q: What happens when more questions arrive at once than the local answer model can handle? → A: A configurable number of questions is answered at the same time (2 by default) and a bounded line holds the rest (6 by default). When the line is full, new questions are rejected at once with a "busy, retry later" error. A client can cancel a waiting or running question, which frees its place. The chat client sends one question at a time and shows a stop button while an answer is being written. A question submitted meanwhile is held by the client and sent once the current answer arrives or is cancelled.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -359,7 +359,7 @@ restricted to one of them, and confirm every source and image comes from that ma
   emphasis, so a client can render it.
 - **FR-028**: The number of questions answered at the same time MUST be limited by a
   configurable value (2 by default). Further questions MUST wait in a line of
-  configurable length (10 by default), and the waiting time counts toward the total
+  configurable length (6 by default), and the waiting time counts toward the total
   deadline. When the line is full, a new question MUST be rejected at once with an error
   stating that the system is busy and the question can be retried later.
 - **FR-029**: When the client cancels a question that is waiting or being answered, the

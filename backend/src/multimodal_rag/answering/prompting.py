@@ -4,7 +4,8 @@ The rules go in the system message. The user message holds the numbered sources 
 then the question. Both are fenced between ``<<<`` and ``>>>`` and declared as data, so
 text inside a manual or a question that reads like an instruction cannot change the
 rules. The source numbers are the only citations the model can give, and the core
-checks them afterwards.
+checks them afterwards. The marker and language rules are repeated after the question,
+because with several long sources a small model otherwise forgets them.
 """
 
 from collections.abc import Sequence
@@ -40,6 +41,9 @@ it."""
 # The fences mark where data starts and ends, so the rules can declare it as data.
 FENCE_OPEN = "<<<"
 FENCE_CLOSE = ">>>"
+# Read last, so the model still applies the rules after eight long sources.
+REMINDER = """Reply in the language of the question. End every factual sentence of the \
+answer with the markers of the sources that support it, such as [1]."""
 
 
 def build_prompt(question: Question, hits: Sequence[SearchHit]) -> GroundedPrompt:
@@ -50,13 +54,14 @@ def build_prompt(question: Question, hits: Sequence[SearchHit]) -> GroundedPromp
         hits: Retrieved units in rank order. The first one is source 1.
 
     Returns:
-        The grounding rules and the fenced, numbered sources followed by the question.
+        The grounding rules, and the fenced, numbered sources followed by the
+        question and a reminder of the marker and language rules.
     """
     sources = "\n\n".join(
         f"{_label(number, hit)}\n{_fenced(hit.unit.text)}"
         for number, hit in enumerate(hits, start=1)
     )
-    user = f"Sources:\n\n{sources}\n\nQuestion:\n{_fenced(question.text)}"
+    user = f"Sources:\n\n{sources}\n\nQuestion:\n{_fenced(question.text)}\n\n{REMINDER}"
     return GroundedPrompt(system=SYSTEM_RULES, user=user)
 
 

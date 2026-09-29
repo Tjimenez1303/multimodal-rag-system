@@ -60,8 +60,18 @@ def test_the_question_is_fenced_after_the_sources() -> None:
     user = build_prompt(QUESTION, [source("Series generators regulate poorly.")]).user
 
     fenced_question = f"Question:\n<<<\n{QUESTION.text}\n>>>"
-    assert user.endswith(fenced_question)
+    assert fenced_question in user
     assert user.index("[1] Pages") < user.index(fenced_question)
+
+
+def test_the_marker_and_language_rules_are_repeated_after_the_question() -> None:
+    # With eight sources, the model answered without markers unless reminded last.
+    user = build_prompt(QUESTION, [source("Series generators regulate poorly.")]).user
+
+    reminder = flat(user.split(f"{QUESTION.text}\n>>>")[-1])
+    assert "End every factual sentence" in reminder
+    assert "such as [1]" in reminder
+    assert "language of the question" in reminder
 
 
 def test_instructions_inside_a_source_stay_inside_its_fence_unchanged() -> None:

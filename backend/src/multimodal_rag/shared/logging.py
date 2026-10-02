@@ -15,6 +15,7 @@ import structlog
 
 LogFormat = Literal["json", "console"]
 
+# Processors applied to every record, from structlog or from the stdlib
 _SHARED_PROCESSORS: list[structlog.types.Processor] = [
     structlog.contextvars.merge_contextvars,
     structlog.stdlib.add_log_level,
@@ -50,11 +51,14 @@ def configure_logging(
             ``STEP_BY_STEP_LOGGERS`` emit only warnings unless it is ``DEBUG``.
         stream: Destination of the rendered records. Defaults to standard output.
     """
+    # Pick the final renderer: JSON in production, plain lines locally
     renderer: structlog.types.Processor = (
         structlog.processors.JSONRenderer()
         if log_format == "json"
         else structlog.dev.ConsoleRenderer(colors=False)
     )
+
+    # Format stdlib records with the same processors as structlog records
     formatter = structlog.stdlib.ProcessorFormatter(
         # An allow list keeps other libraries' extras, such as uvicorn's, out.
         foreign_pre_chain=[
@@ -69,16 +73,22 @@ def configure_logging(
             renderer,
         ],
     )
+
+    # Write every rendered record to a single stream
     handler = logging.StreamHandler(stream or sys.stdout)
     handler.setFormatter(formatter)
 
+    # Make that handler the only one on the root logger
     root = logging.getLogger()
     root.handlers = [handler]
     root.setLevel(level)
+
+    # Quiet the step-by-step libraries unless the level is DEBUG
     verbose = logging.getLevelNamesMapping()[level.upper()] <= logging.DEBUG
     for name in STEP_BY_STEP_LOGGERS:
         logging.getLogger(name).setLevel(logging.NOTSET if verbose else logging.WARNING)
 
+    # Send structlog's own loggers through the same stdlib formatter
     structlog.configure(
         processors=[
             *_SHARED_PROCESSORS,
@@ -99,6 +109,7 @@ def bind_correlation(
         request_id: Id of the HTTP request, or of the request that created a job.
         job_id: Id of the ingestion job being processed.
     """
+    # Bind only the ids that were given, leaving the others untouched
     values = {"request_id": request_id, "job_id": job_id}
     structlog.contextvars.bind_contextvars(
         **{name: value for name, value in values.items() if value is not None}

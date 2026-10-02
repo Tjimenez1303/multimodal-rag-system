@@ -18,6 +18,7 @@ RUN apt-get update \
         fonts-urw-base35 \
     && rm -rf /var/lib/apt/lists/*
 
+# Install uv and configure it for reproducible, non-editable installs
 FROM base AS dependencies
 COPY --from=ghcr.io/astral-sh/uv:0.12.20@sha256:100047e74f30778ab704942321a09750d6158739573ff58bf3924085cc6cd2d8 /uv /uvx /bin/
 ENV UV_COMPILE_BYTECODE=1 \
@@ -47,6 +48,7 @@ RUN --mount=type=bind,source=embedder_tokenizer.txt,target=/tmp/embedder_tokeniz
     /app/.venv/bin/hf download $(cat /tmp/embedder_tokenizer.txt) \
     --local-dir /opt/tokenizers/embedder
 
+# Install the project itself on top of the dependency layer
 FROM dependencies AS builder
 COPY pyproject.toml uv.lock ./
 COPY src ./src
@@ -54,6 +56,7 @@ COPY src ./src
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-editable
 
+# Runtime: the base image plus the virtual environment, models and migrations
 FROM base AS runtime
 
 LABEL org.opencontainers.image.title="multimodal-rag-backend" \
@@ -61,16 +64,19 @@ LABEL org.opencontainers.image.title="multimodal-rag-backend" \
     org.opencontainers.image.source="https://github.com/Tjimenez1303/multimodal-rag-system" \
     org.opencontainers.image.licenses="Apache-2.0"
 
+# Run as an unprivileged user that owns the blob volume
 RUN groupadd --system --gid 999 nonroot \
     && useradd --system --gid 999 --uid 999 --create-home nonroot \
     && mkdir -p /data/blobs \
     && chown nonroot:nonroot /data/blobs
+# Copy only what the processes need from the earlier stages
 COPY --from=builder --chown=nonroot:nonroot /app/.venv /app/.venv
 COPY --from=models --chown=nonroot:nonroot /opt/docling-models /opt/docling-models
 COPY --from=tokenizer --chown=nonroot:nonroot \
     /opt/tokenizers/embedder/tokenizer.json /opt/tokenizers/embedder/tokenizer.json
 COPY --chown=nonroot:nonroot alembic.ini /app/alembic.ini
 COPY --chown=nonroot:nonroot migrations /app/migrations
+# Put the environment on PATH and point the settings at the baked-in files
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     DOCLING_ARTIFACTS_PATH=/opt/docling-models \

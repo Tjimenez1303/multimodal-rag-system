@@ -42,7 +42,11 @@ _ENQUEUE_ATTEMPTS = 3
 _IMMUTABLE_COLUMNS = frozenset(
     {"id", "document_id", "max_attempts", "correlation_id", "created_at"}
 )
+
+# Counts a stored summary may carry
 _SUMMARY_FIELDS = frozenset(field.name for field in dataclasses.fields(JobSummary))
+
+# A job is claimable when pending, or processing under an expired lease
 _CLAIMABLE = sa.or_(
     ingestion_jobs.c.status == JobStatus.PENDING.value,
     sa.and_(
@@ -79,6 +83,7 @@ class PostgresJobQueue:
         Raises:
             DataInconsistencyError: If the conflict persists without an active job.
         """
+        # Insert the job unless the partial unique index finds an active one
         statement = (
             insert(ingestion_jobs)
             .values(**_values(job))
@@ -88,9 +93,13 @@ class PostgresJobQueue:
             .returning(ingestion_jobs.c.id)
         )
         async with transaction(self._engine) as connection:
+            # Retry when the conflicting job failed before it could be read
             for _ in range(_ENQUEUE_ATTEMPTS):
+                # Inserted: this upload created the job
                 if (await connection.execute(statement)).scalar_one_or_none():
                     return job, True
+
+                # Conflict: return the active job the document already has
                 existing = await self._active_job(connection, job.document_id)
                 if existing is not None:
                     return existing, False
@@ -101,6 +110,7 @@ class PostgresJobQueue:
     async def _active_job(
         self, connection: AsyncConnection, document_id: uuid.UUID
     ) -> IngestionJob | None:
+        # The document's job that has not failed, if any
         query = sa.select(ingestion_jobs).where(
             ingestion_jobs.c.document_id == document_id, _ACTIVE
         )
@@ -119,6 +129,7 @@ class PostgresJobQueue:
         Raises:
             JobNotFoundError: If no job has this id.
         """
+        # Read the row, failing with not found when there is none
         query = sa.select(ingestion_jobs).where(ingestion_jobs.c.id == job_id)
         async with connect(self._engine) as connection:
             row = (await connection.execute(query)).mappings().one_or_none()
@@ -135,6 +146,7 @@ class PostgresJobQueue:
         Returns:
             The newest job, or ``None`` when the document has none.
         """
+        # Newest job of the document, the id breaking timestamp ties
         query = (
             sa.select(ingestion_jobs)
             .where(ingestion_jobs.c.document_id == document_id)
@@ -161,6 +173,8 @@ class PostgresJobQueue:
         """
         if not document_ids:
             return {}
+
+        # DISTINCT ON keeps the newest job of each document in one query
         query = (
             sa.select(ingestion_jobs)
             .ext(distinct_on(ingestion_jobs.c.document_id))
@@ -189,6 +203,7 @@ class PostgresJobQueue:
             The claimed job in ``processing`` with a fresh lease, or ``None`` when no
             job is claimable.
         """
+        # Oldest claimable job, skipping rows another worker has locked
         candidate = (
             sa.select(ingestion_jobs)
             .where(_CLAIMABLE)
@@ -197,15 +212,20 @@ class PostgresJobQueue:
             .with_for_update(skip_locked=True)
         )
         async with transaction(self._engine) as connection:
+            # Use the database clock, the same for every worker
             now = await _database_now(connection)
             while row := (await connection.execute(candidate)).mappings().first():
                 job = _job(row)
+
+                # A job out of attempts fails for good, and the next one is tried
                 if job.attempts_exhausted:
                     logger.warning(
                         "job %s failed after %s attempts", job.id, job.attempt
                     )
                     await _save(connection, job.fail_interrupted(now=now))
                     continue
+
+                # Start a new attempt under a fresh lease token
                 claimed = job.claim(
                     lease_token=uuid.uuid4(),
                     lease_expires_at=now + timedelta(seconds=lease_seconds),
@@ -229,6 +249,7 @@ class PostgresJobQueue:
         Raises:
             LeaseLostError: If the token is no longer current.
         """
+        # Push the lease expiry forward from now
         await self._fenced_update(
             job_id,
             lease_token,
@@ -261,6 +282,7 @@ class PostgresJobQueue:
             LeaseLostError: If the token is no longer current.
             InvalidJobTransitionError: If the progress is inconsistent.
         """
+        # Record the new stage and page counts
         await self._fenced_update(
             job_id,
             lease_token,
@@ -324,7 +346,10 @@ class PostgresJobQueue:
         change: Callable[[IngestionJob, datetime], IngestionJob],
     ) -> IngestionJob:
         async with transaction(self._engine) as connection:
+            # Lock the row only if this attempt still holds the lease
             job = await lock_leased_job(connection, job_id, lease_token)
+
+            # Apply the domain transition at the database's time and save it
             changed = change(job, await _database_now(connection))
             await _save(connection, changed)
         return changed
@@ -349,6 +374,7 @@ async def lock_leased_job(
     Raises:
         LeaseLostError: If the job no longer carries this token.
     """
+    # The row of the job, only while its lease token matches
     query = (
         sa.select(ingestion_jobs)
         .where(
@@ -371,6 +397,7 @@ async def _database_now(connection: AsyncConnection) -> datetime:
 
 
 async def _save(connection: AsyncConnection, job: IngestionJob) -> None:
+    # Write every column a later change may touch
     values = {
         name: value
         for name, value in _values(job).items()
@@ -381,6 +408,7 @@ async def _save(connection: AsyncConnection, job: IngestionJob) -> None:
     )
 
 
+# Domain job to table row
 def _values(job: IngestionJob) -> dict[str, Any]:
     return {
         "id": job.id,
@@ -405,6 +433,7 @@ def _values(job: IngestionJob) -> dict[str, Any]:
     }
 
 
+# Table row back to a domain job
 def _job(row: sa.RowMapping) -> IngestionJob:
     return IngestionJob(
         id=row["id"],

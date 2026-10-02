@@ -17,11 +17,16 @@ export function CitationProvider({
   response: AnswerBody;
   children: ReactNode;
 }) {
+  // The citation number currently highlighted in this answer
   const [highlighted, setHighlighted] = useState<number | null>(null);
+
+  // Every source line gets an id unique to its turn
   const sourceLineId = useCallback(
     (number: number) => `turn-${turnId}-source-${number}`,
     [turnId],
   );
+
+  // Highlight a citation, then scroll to its source line and focus it
   const activate = useCallback(
     (number: number) => {
       setHighlighted(number);
@@ -31,6 +36,8 @@ export function CitationProvider({
     },
     [sourceLineId],
   );
+
+  // Share the answer and the helpers with the markers and the source lines
   const value = useMemo(
     () => ({ response, highlighted, sourceLineId, activate }),
     [response, highlighted, sourceLineId, activate],

@@ -14,6 +14,7 @@ map $request_time $request_time_ms {
   default 0;
 }
 
+# Cache-Control value by path
 map $uri $cache_control {
   "~^/assets/" "public, max-age=31536000, immutable";
   "/config.json" "no-store";
@@ -31,25 +32,30 @@ server {
 
   access_log /dev/stdout json_access;
 
+  # Security and cache headers on every response, errors included
   add_header Cache-Control $cache_control always;
   add_header Content-Security-Policy "default-src 'self'; img-src 'self' data: blob:; connect-src 'self'; script-src 'self'; style-src 'self' 'nonce-$request_id'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'" always;
   add_header X-Content-Type-Options nosniff always;
   add_header Referrer-Policy no-referrer always;
 
+  # Health probe of the container
   location = /healthz {
     access_log off;
     default_type text/plain;
     return 200 "ok";
   }
 
+  # Runtime configuration of the client, built from the environment
   location = /config.json {
     default_type application/json;
     return 200 '{"answerWaitSeconds":${ANSWER_WAIT_SECONDS},"maxFilterDocuments":${MAX_FILTER_DOCUMENTS},"statusPollSeconds":${STATUS_POLL_SECONDS}}';
   }
 
+  # Every API call is proxied to the API container
   location /api/ {
     # Docker's DNS, re-read every 10 s, so a recreated API container is found again.
     resolver 127.0.0.11 valid=10s;
+    # A variable, so nginx resolves the name per request instead of once at start
     set $api http://api:8000;
     proxy_pass $api;
     proxy_http_version 1.1;
@@ -62,6 +68,7 @@ server {
     proxy_read_timeout ${NGINX_PROXY_READ_TIMEOUT}s;
   }
 
+  # The single-page client: unknown paths fall back to index.html
   location / {
     try_files $uri /index.html;
     # Radix injects a <style> element to lock scrolling behind dialogs. The page

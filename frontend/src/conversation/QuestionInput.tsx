@@ -24,11 +24,13 @@ export interface QuestionInputProps {
  * It must be rendered inside AI Elements' `PromptInputProvider`, which holds the text.
  */
 export function QuestionInput({ onSubmit, busy, onStop }: QuestionInputProps) {
+  // Read the shared input text to disable sending a blank question
   const { textInput } = usePromptInputController();
   const blank = textInput.value.trim() === "";
   return (
     <PromptInput
       className="rounded-xl bg-background shadow-xs"
+      // Enter sends the text; blank questions are ignored
       onSubmit={({ text }) => {
         if (text.trim() !== "") onSubmit(text);
       }}
@@ -48,6 +50,7 @@ export function QuestionInput({ onSubmit, busy, onStop }: QuestionInputProps) {
               : "Enter to send, Shift+Enter for a new line"}
           </span>
         </PromptInputTools>
+        {/* The send button becomes a stop button while an answer is pending */}
         <PromptInputSubmit
           aria-label={busy ? "Stop" : "Send question"}
           status={busy ? "streaming" : "ready"}

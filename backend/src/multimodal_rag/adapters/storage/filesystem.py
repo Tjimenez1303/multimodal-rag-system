@@ -47,10 +47,12 @@ class FilesystemBlobStorage:
         Raises:
             InvalidBlobKeyError: If the key is not a safe relative path.
         """
+        # Write to a temporary file next to the destination
         final_path = self._path(key)
         temp_path = self._temporary_path(final_path)
         size = 0
         try:
+            # Copy the stream chunk by chunk, off the event loop
             handle = await asyncio.to_thread(temp_path.open, "wb")
             try:
                 async for chunk in chunks:
@@ -58,8 +60,11 @@ class FilesystemBlobStorage:
                     size += len(chunk)
             finally:
                 await asyncio.to_thread(handle.close)
+
+            # Swap the finished file into place in one atomic rename
             await asyncio.to_thread(os.replace, temp_path, final_path)
         except BaseException:
+            # Never leave a half-written temporary file behind
             temp_path.unlink(missing_ok=True)
             raise
         return size
@@ -74,6 +79,7 @@ class FilesystemBlobStorage:
         Raises:
             InvalidBlobKeyError: If the key is not a safe relative path.
         """
+        # Write to a temporary file, then rename it into place
         final_path = self._path(key)
         temp_path = self._temporary_path(final_path)
         try:
@@ -130,6 +136,8 @@ class FilesystemBlobStorage:
             InvalidBlobKeyError: If the prefix is not a safe relative path.
         """
         path = self._path(prefix)
+
+        # Remove the whole folder of the prefix, if it exists
         if await asyncio.to_thread(path.is_dir):
             await asyncio.to_thread(shutil.rmtree, path)
 
@@ -150,6 +158,7 @@ class FilesystemBlobStorage:
         Raises:
             OSError: If the root directory cannot be written.
         """
+        # Write and delete a throwaway file under a private prefix
         probe = f".probes/{uuid.uuid4().hex}"
         await self.save_bytes(probe, b"ok")
         await self.delete(probe)
@@ -170,9 +179,12 @@ class FilesystemBlobStorage:
         yield self._existing_path(key)
 
     def _path(self, key: str) -> Path:
+        # Refuse keys that are empty, absolute or climb out of the root
         relative = PurePosixPath(key)
         if not key or relative.is_absolute() or ".." in relative.parts:
             raise InvalidBlobKeyError(f"Blob key {key!r} is not a safe relative path")
+
+        # Map the key to a path under the root, creating its folders
         path = self._root.joinpath(*relative.parts)
         path.parent.mkdir(parents=True, exist_ok=True)
         return path

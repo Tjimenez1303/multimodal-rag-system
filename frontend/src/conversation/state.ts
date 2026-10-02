@@ -82,6 +82,7 @@ export function conversationReducer(
 ): Conversation {
   switch (action.type) {
     case "submitted": {
+      // A new turn waits only when no other turn is waiting or held
       const busy = conversation.turns.some(
         (turn) => turn.state === "waiting" || turn.state === "held",
       );
@@ -94,6 +95,7 @@ export function conversationReducer(
         return conversation;
       return updateTurn(conversation, action.turnId, { state: "waiting" }, ["held"]);
     case "answered":
+      // Store the answer; a not-enough-information reply gets its own state
       return updateTurn(
         conversation,
         action.turnId,
@@ -105,6 +107,7 @@ export function conversationReducer(
         ["waiting"],
       );
     case "failed":
+      // Keep the failure and the reference the user can quote
       return updateTurn(
         conversation,
         action.turnId,
@@ -123,6 +126,7 @@ export function conversationReducer(
         ["waiting"],
       );
     case "retried":
+      // Put the turn back in the queue with its old outcome cleared
       return updateTurn(
         conversation,
         action.turnId,

@@ -15,8 +15,10 @@ import { ConnectionNotice } from "@/failures/ConnectionNotice";
  * conversation, laid out for desktop windows of 1280 px or wider (FR-043).
  */
 export function App({ config }: { config: RuntimeConfig }) {
+  // One query cache for the lifetime of the page
   const [queryClient] = useState(() => new QueryClient());
   return (
+    // Providers, outermost first: config, query cache, tooltips, document panel
     <ConfigContext value={config}>
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
@@ -30,9 +32,11 @@ export function App({ config }: { config: RuntimeConfig }) {
 }
 
 function Layout() {
+  // The panel's controls, so the conversation can ask it to open the upload
   const panel = useDocumentPanel();
   return (
     <div className="flex h-dvh w-full min-w-[1280px] bg-background text-foreground">
+      {/* Document panel on the left, conversation on the right */}
       <DocumentPanel />
       <SidebarInset className="min-w-0">
         <div className="px-6 pt-3 empty:hidden">

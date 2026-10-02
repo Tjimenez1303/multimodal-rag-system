@@ -83,8 +83,13 @@ class OpenAICompatibleFigureDescriber:
                 without text.
             DataInconsistencyError: If the stored crop is not a readable image.
         """
+        # Shrink the crop so its longest side fits MAX_IMAGE_SIDE
         image = await asyncio.to_thread(_downscaled_png, image_png)
+
+        # Fill the prompt with the caption and nearby text, or (none)
         prompt = PROMPT.format(caption=caption or "(none)", context=context or "(none)")
+
+        # Send the prompt and the image, inlined as a base64 data URL
         encoded = base64.b64encode(image).decode()
         payload = {
             "model": self._model,
@@ -104,6 +109,8 @@ class OpenAICompatibleFigureDescriber:
             "max_tokens": MAX_DESCRIPTION_TOKENS,
             "chat_template_kwargs": {"enable_thinking": False},
         }
+
+        # Call chat/completions with retries on transient failures
         completion = await post_json(
             self._client,
             "chat/completions",
@@ -112,6 +119,8 @@ class OpenAICompatibleFigureDescriber:
             service=SERVICE,
             retry=self._retry,
         )
+
+        # An empty description is useless for search
         content = completion.content.strip()
         if not content:
             raise ProviderResponseError(f"The {SERVICE} answered an empty description")
@@ -119,13 +128,18 @@ class OpenAICompatibleFigureDescriber:
 
 
 def _downscaled_png(image_png: bytes) -> bytes:
+    # Decode the stored crop
     try:
         image = Image.open(io.BytesIO(image_png))
         image.load()
     except UnidentifiedImageError as error:
         raise DataInconsistencyError("A stored figure crop is not an image") from error
+
+    # Small crops are sent as they are
     if max(image.size) <= MAX_IMAGE_SIDE:
         return image_png
+
+    # Shrink in place, keeping the aspect ratio, and encode as PNG again
     image.thumbnail((MAX_IMAGE_SIDE, MAX_IMAGE_SIDE))
     buffer = io.BytesIO()
     image.save(buffer, format="PNG")

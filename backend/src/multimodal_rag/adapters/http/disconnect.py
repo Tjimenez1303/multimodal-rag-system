@@ -33,6 +33,7 @@ async def run_until_disconnect[T](
         Exception: The error the operation raised, as itself, so the problem details
             handlers map it.
     """
+    # Race the operation against the client's disconnection
     results: list[T] = []
     try:
         await _race(request, operation, results)
@@ -42,19 +43,24 @@ async def run_until_disconnect[T](
             error = failure.exceptions[0]
             raise error from error.__cause__
         raise
+
+    # No result means the client left before the operation finished
     return results[0] if results else None
 
 
 async def _race[T](
     request: Request, operation: Callable[[], Awaitable[T]], results: list[T]
 ) -> None:
+    # Whichever task finishes first cancels the other
     async with anyio.create_task_group() as group:
 
         async def run() -> None:
+            # Run the work, store its result and stop listening
             results.append(await operation())
             group.cancel_scope.cancel()
 
         async def listen() -> None:
+            # Read messages until the client disconnects, then cancel the work
             while (await request.receive())["type"] != "http.disconnect":
                 pass
             logger.info("client disconnected, the request was cancelled")

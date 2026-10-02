@@ -62,6 +62,7 @@ export async function callService<T>(
     timeoutSeconds = SERVICE_CALL_TIMEOUT_SECONDS,
   }: { signal?: AbortSignal; timeoutSeconds?: number } = {},
 ): Promise<ServiceResult<T>> {
+  // Tag the call with an id the user can quote, and prepare to abort it
   const requestId = crypto.randomUUID();
   const controller = new AbortController();
   let timedOut = false;
@@ -70,33 +71,46 @@ export async function callService<T>(
     timedOut = true;
     controller.abort();
   }, timeoutSeconds * 1000);
+
+  // Abort as well when the caller aborts, for example with the stop button
   const abortFromCaller = () => controller.abort(signal?.reason);
   if (signal?.aborted) abortFromCaller();
   signal?.addEventListener("abort", abortFromCaller, { once: true });
   try {
+    // Run the generated SDK call with the id header and the abort signal
     const result = await operation({
       headers: { "X-Request-ID": requestId },
       signal: controller.signal,
     });
+
+    // Our own timer fired: report a timeout, not an abort
     if (timedOut) {
       return { ok: false, failure: { kind: "timed_out", requestId } };
     }
+
+    // The caller aborted: let them handle it
     if (signal?.aborted) {
       throw new DOMException("The call was aborted.", "AbortError");
     }
+
+    // Sort the response into success or one kind of failure
     return classify(result, requestId);
   } finally {
+    // Always clear the timer and the abort listener
     clearTimeout(timer);
     signal?.removeEventListener("abort", abortFromCaller);
   }
 }
 
 function classify<T>(result: SdkResult<T>, requestId: string): ServiceResult<T> {
+  // No response at all: the network or nginx could not be reached
   const { response } = result;
   if (response === undefined) {
     reportUnreachable();
     return { ok: false, failure: { kind: "unreachable", requestId } };
   }
+
+  // A success status still needs a readable JSON body
   if (response.ok) {
     reportReachable();
     // A deletion answers 204 with no body, so there is nothing to read.
@@ -109,6 +123,8 @@ function classify<T>(result: SdkResult<T>, requestId: string): ServiceResult<T> 
     }
     return { ok: true, data: result.data as T, requestId };
   }
+
+  // An error with an RFC 9457 body comes from the API itself
   const problem = zProblem.safeParse(result.error);
   if (problem.success) {
     reportReachable();
@@ -125,15 +141,20 @@ function classify<T>(result: SdkResult<T>, requestId: string): ServiceResult<T> 
       },
     };
   }
+
+  // A gateway error without a problem body means the API is down
   if (GATEWAY_STATUSES.has(response.status)) {
     reportUnreachable();
     return { ok: false, failure: { kind: "unreachable", requestId } };
   }
+
+  // Anything else answered, but could not be read
   reportReachable();
   return { ok: false, failure: { kind: "unreadable", requestId } };
 }
 
 function retryAfterSeconds(response: Response): number | null {
+  // Only a whole number of seconds is accepted
   const header = response.headers.get("Retry-After");
   if (header === null || !/^\d+$/.test(header.trim())) return null;
   return Number(header.trim());

@@ -39,6 +39,7 @@ def decode_cursor[T](cursor: str, parse: Callable[[list[str]], T]) -> T:
         InvalidCursorError: If the token is not a cursor this API issued.
     """
     try:
+        # Undo the base64 encoding, then let the caller parse the parts
         decoded = base64.urlsafe_b64decode(cursor.encode()).decode()
         return parse(decoded.split(_SEPARATOR))
     except ValueError as error:  # also covers bad base64 and bad UTF-8

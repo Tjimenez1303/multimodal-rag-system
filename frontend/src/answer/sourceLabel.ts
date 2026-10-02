@@ -8,6 +8,7 @@ import { nounFor } from "@/lib/plural";
  * @returns "page 12", "pages 12–13" or "pages 3–4, 9".
  */
 export function formatPages(pages: readonly number[]): string {
+  // Sort the distinct pages, then group consecutive ones into runs like 3–5
   const sorted = [...new Set(pages)].sort((a, b) => a - b);
   const runs: string[] = [];
   let start = sorted[0];
@@ -19,6 +20,8 @@ export function formatPages(pages: readonly number[]): string {
       start = next;
     }
   }
+
+  // Prefix with page or pages, as the count requires
   return `${nounFor(sorted.length, "page")} ${runs.join(", ")}`;
 }
 

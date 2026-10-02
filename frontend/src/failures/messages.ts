@@ -39,6 +39,7 @@ export interface UploadFailure {
   action: "upload_again" | "none";
 }
 
+// Fixed messages of the problem codes that name a failing component
 const PROBLEM_MESSAGES: Record<string, { kind: FailureKind; message: string }> = {
   answer_model_unavailable: {
     kind: "answer_model",
@@ -60,6 +61,7 @@ const PROBLEM_MESSAGES: Record<string, { kind: FailureKind; message: string }> =
   },
 };
 
+// Codes caused by the documents a question was restricted to
 const RESTRICTION_CODES = new Set(["unknown_documents", "documents_not_ready"]);
 const UNREACHABLE = "The service could not be reached.";
 const UNREADABLE = "The service sent a response that could not be read.";
@@ -72,6 +74,7 @@ const TIMED_OUT = "The service did not answer in time.";
  * @returns The message, the action offered and the reference to show.
  */
 export function toTurnFailure(failure: ServiceFailure): TurnFailure {
+  // Describe the failure, then add whether it can be retried and its reference
   const { kind, message, action, retryAfterSeconds = null } = describe(failure);
   return {
     kind,
@@ -90,6 +93,7 @@ function describe(failure: ServiceFailure): Omit<
   retryAfterSeconds?: number | null;
 } {
   switch (failure.kind) {
+    // Failures before or without a readable answer can always be retried
     case "unreachable":
       return { kind: "unreachable", message: UNREACHABLE, action: "retry" };
     case "timed_out":
@@ -105,12 +109,18 @@ function describeProblem(
   failure: Extract<ServiceFailure, { kind: "problem" }>,
 ): ReturnType<typeof describe> {
   const { code, detail, status } = failure;
+
+  // The question itself was refused: show the service's reason
   if (code === "invalid_question") {
     return { kind: "invalid_question", message: detail ?? "", action: "none" };
   }
+
+  // The chosen documents are unknown or not ready: let the user edit
   if (RESTRICTION_CODES.has(code)) {
     return { kind: "restriction", message: detail ?? "", action: "edit" };
   }
+
+  // Every answering place is taken: say when to retry
   if (code === "answering_busy") {
     const wait =
       failure.retryAfterSeconds === null
@@ -123,6 +133,8 @@ function describeProblem(
       retryAfterSeconds: failure.retryAfterSeconds,
     };
   }
+
+  // A component with a fixed message, then other client errors, then server errors
   const known = PROBLEM_MESSAGES[code];
   if (known !== undefined) return { ...known, action: "retry" };
   if (status < 500) {
@@ -154,6 +166,7 @@ export interface DeletionFailure {
  *   when the document no longer exists, which is what the user asked for.
  */
 export function toDeletionFailure(failure: ServiceFailure): DeletionFailure | null {
+  // Network-level failures can be retried
   const reference = failure.requestId;
   switch (failure.kind) {
     case "unreachable":
@@ -165,7 +178,11 @@ export function toDeletionFailure(failure: ServiceFailure): DeletionFailure | nu
     case "problem":
       break;
   }
+
+  // A document that is already gone counts as deleted
   if (failure.code === "document_not_found") return null;
+
+  // A document still being ingested cannot be deleted yet
   if (failure.code === "ingestion_in_progress") {
     return {
       message:
@@ -174,6 +191,8 @@ export function toDeletionFailure(failure: ServiceFailure): DeletionFailure | nu
       retryable: false,
     };
   }
+
+  // Other failures keep the service's reason when it is a client error
   const detail = failure.status < 500 ? failure.detail : null;
   const message = ["The document could not be deleted.", detail]
     .filter(Boolean)
@@ -197,6 +216,8 @@ export const NOT_A_PDF: UploadFailure = {
  */
 export function toUploadFailure(failure: ServiceFailure): UploadFailure {
   const reference = failure.requestId;
+
+  // A client error means the file itself was refused
   if (failure.kind === "problem" && failure.status < 500) {
     return {
       state: "rejected",
@@ -205,6 +226,8 @@ export function toUploadFailure(failure: ServiceFailure): UploadFailure {
       action: "none",
     };
   }
+
+  // Otherwise the file can be sent again
   const message =
     failure.kind === "problem"
       ? "The file could not be stored."

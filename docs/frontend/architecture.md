@@ -1,0 +1,105 @@
+# Frontend architecture
+
+## Bird's-eye view
+
+The client is a static bundle. nginx serves it and forwards every `/api/` request to the
+API container, so the browser only ever talks to one origin and needs no CORS. The
+client keeps no data of its own beyond the current tab: the conversation and the panel
+state live in `sessionStorage`, and everything else is read from the API.
+
+```
+Browser ── :3000 ──> nginx ─┬─ /            index.html and /assets (the React bundle)
+                            ├─ /config.json runtime settings from environment variables
+                            ├─ /healthz     container healthcheck
+                            └─ /api/        proxied to http://api:8000
+```
+
+## Serving
+
+`frontend/Dockerfile` has two stages. Node builds the bundle with `npm run build`, and
+nginx serves the result with the configuration in
+[`nginx/default.conf.template`](../../frontend/nginx/default.conf.template). The nginx
+image fills `${...}` placeholders from environment variables when the container starts.
+
+- `/config.json` is written by nginx itself from `ANSWER_WAIT_SECONDS`,
+  `MAX_FILTER_DOCUMENTS` and `STATUS_POLL_SECONDS`. One build serves every deployment,
+  and the settings change with the container's environment, not with a rebuild.
+- `/api/` is proxied with request buffering off, so uploads stream straight to the API,
+  and with a read timeout above the client's own answer wait, so nginx never cuts a
+  question the browser is still waiting for.
+- Every response carries a Content Security Policy that allows scripts and styles from
+  the same origin only. Radix injects one `<style>` element to lock scrolling behind
+  dialogs, so nginx writes a per-request nonce into the page and the policy accepts
+  that nonce alone.
+
+## Boot sequence
+
+1. [`index.html`](../../frontend/index.html) loads `src/main.tsx`. Vite has added a
+   `csp-nonce` meta tag holding the `__CSP_NONCE__` placeholder, which nginx replaces.
+2. [`main.tsx`](../../frontend/src/main.tsx) hands the nonce to Radix
+   (`applyStyleNonce` in `csp.ts`), then calls `loadConfig()`.
+3. [`config.ts`](../../frontend/src/config.ts) fetches `/config.json` and validates it
+   with zod. Until a valid config arrives, the page shows a connection notice and tries
+   again after 1, 2, 4 and then at most 10 seconds. The client never starts with guessed
+   values.
+4. [`App.tsx`](../../frontend/src/App.tsx) renders the providers, outermost first:
+
+   | Provider | Provides |
+   | --- | --- |
+   | `ConfigContext` | The runtime configuration, read with `useConfig()` |
+   | `QueryClientProvider` | The TanStack Query cache of the document library |
+   | `TooltipProvider` | Radix tooltips |
+   | `DocumentPanelProvider` | The panel's open state and the `requestUpload` control |
+
+   Inside them, `Layout` puts the `DocumentPanel` on the left and the `ConversationView`
+   on the right, with the global `ConnectionNotice` above the conversation.
+
+## Feature folders
+
+Code is grouped by feature under `src/`. Each arrow below means "imports".
+
+```
+App ──> conversation ──> answer ──> images ──> api ──> client (generated)
+  │          │                        ▲          ▲
+  │          └──> failures            │          │
+  └──> documents ─────────────────────┴──────────┘
+```
+
+| Folder | Responsibility |
+| --- | --- |
+| `api/` | The transport layer. Every call goes through `callService`, which adds an `X-Request-ID`, a timeout and abort handling, and sorts the outcome into success or one kind of failure |
+| `conversation/` | The chat: turns, the pure reducer that moves them between states, the one-at-a-time question queue, and its views |
+| `answer/` | Rendering an answered turn: Markdown with clickable citation markers, source lines, the not-enough-information view |
+| `images/` | Figure cards and the two dialogs, a figure at full size and the rendered pages of a document |
+| `documents/` | The side panel: library listing and polling, upload with progress, status, view and delete |
+| `failures/` | Turning failures into plain-English messages, and the notices that show them |
+| `lib/` | Small helpers: class name merging and English plurals |
+
+Two folders hold code nobody edits by hand:
+
+- `src/client/` is generated from `frontend/openapi.json` by `npm run generate-client`.
+  It contains one typed function per endpoint, the TypeScript types and zod schemas of
+  every body. A change to the API reaches the client by regenerating it, and CI fails
+  when the committed client is out of date.
+- `src/components/ui/` (shadcn/ui) and `src/components/ai-elements/` (AI Elements) are
+  copied in from their registries with the shadcn CLI. They are excluded from linting
+  and coverage, and customized only through props and class names.
+
+## Invariants
+
+- No streaming. A question gets one JSON answer, rendered at once.
+- One question is answered at a time. Questions asked meanwhile are held and sent in
+  order.
+- Every call carries an `X-Request-ID` generated by the client, and every failure shows
+  it as a reference the user can copy and quote.
+- Answer Markdown never renders raw HTML, never loads remote images, and only links out
+  with `rel="noopener noreferrer"`.
+- The layout targets desktop windows of at least 1280 pixels.
+
+## Known gaps
+
+- The client follows ingestion by polling `GET /api/v1/documents/{id}`. The
+  `GET /api/v1/jobs/{job_id}` endpoint exists but the client does not use it.
+- `maxFilterDocuments` is loaded and validated, and the conversation state can carry a
+  document restriction, but there is no control yet to restrict a question to chosen
+  documents.

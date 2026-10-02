@@ -47,11 +47,13 @@ export interface UploadControlProps {
  * "Already ingested" (FR-032, FR-036, FR-037).
  */
 export function UploadControl({ documents, onAccepted, ref }: UploadControlProps) {
+  // The hidden file input, the visible button and the uploads sent from this tab
   const input = useRef<HTMLInputElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   const [uploads, setUploads] = useState<TrackedUpload[]>([]);
   const panel = useDocumentPanel();
 
+  // Let the document list open the picker, and the panel focus the button
   const openFilePicker = useCallback(() => input.current?.click(), []);
   useImperativeHandle(ref, () => ({ openFilePicker }), [openFilePicker]);
   useEffect(() => {
@@ -59,12 +61,14 @@ export function UploadControl({ documents, onAccepted, ref }: UploadControlProps
     return () => panel?.registerUploadFocus(null);
   }, [panel]);
 
+  // Change one tracked upload
   const update = (id: string, changes: Partial<TrackedUpload>) =>
     setUploads((current) =>
       current.map((upload) => (upload.id === id ? { ...upload, ...changes } : upload)),
     );
 
   const send = async (file: File, id: string = crypto.randomUUID()) => {
+    // Track the file as sending, replacing an earlier attempt with the same id
     const tracked: TrackedUpload = {
       id,
       file,
@@ -75,14 +79,19 @@ export function UploadControl({ documents, onAccepted, ref }: UploadControlProps
       failure: null,
     };
     setUploads((current) => [...current.filter((upload) => upload.id !== id), tracked]);
+
+    // Reject non-PDF files without sending them
     if (!isPdf(file)) {
       update(id, { state: "rejected", failure: NOT_A_PDF });
       return;
     }
+
+    // Send the file, updating its progress bar as it goes
     const result = await uploadDocument(file, {
       onProgress: (sentFraction) => update(id, { sentFraction }),
     });
     if (result.ok) {
+      // Accepted: refresh the library so the new document appears
       update(id, {
         state: "accepted",
         documentId: result.data.document_id,
@@ -90,6 +99,7 @@ export function UploadControl({ documents, onAccepted, ref }: UploadControlProps
       });
       onAccepted();
     } else {
+      // Rejected or failed: keep the reason and the action it allows
       update(id, { state: result.failure.state, failure: result.failure });
     }
   };
@@ -105,11 +115,14 @@ export function UploadControl({ documents, onAccepted, ref }: UploadControlProps
         listed.has(upload.documentId)
       ),
   );
+
+  // Remove an upload row
   const dismiss = (id: string) =>
     setUploads((current) => current.filter((upload) => upload.id !== id));
 
   return (
     <div className="flex flex-col gap-2">
+      {/* Hidden input; several PDFs can be picked at once */}
       <input
         ref={input}
         type="file"
@@ -132,6 +145,7 @@ export function UploadControl({ documents, onAccepted, ref }: UploadControlProps
         <UploadIcon aria-hidden="true" />
         Upload a PDF
       </Button>
+      {/* One row per upload still worth showing */}
       {visible.length > 0 && (
         <ul aria-label="Uploads" className="flex flex-col gap-2">
           {visible.map((upload) => (
@@ -162,6 +176,8 @@ function UploadRow({
   onDismiss: () => void;
 }) {
   const name = upload.file.name;
+
+  // Sending: the file name and a progress bar
   if (upload.state === "sending") {
     return (
       <>
@@ -175,6 +191,8 @@ function UploadRow({
       </>
     );
   }
+
+  // Accepted: confirm, or name the identical document already in the library
   if (upload.state === "accepted") {
     const existing = documents.find((document) => document.id === upload.documentId);
     return (
@@ -199,6 +217,8 @@ function UploadRow({
       </div>
     );
   }
+
+  // Rejected or failed: the reason, with upload again or dismiss
   return (
     <>
       <span className="truncate font-medium" title={name}>

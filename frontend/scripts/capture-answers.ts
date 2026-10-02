@@ -12,15 +12,18 @@ interface ReferenceQuestion {
   document_ids?: string[];
 }
 
+// Where the running system is, and where the questions and answers live
 const baseUrl = process.env["BASE_URL"] ?? "http://localhost:3000";
 const questionsFile = new URL("./reference-questions.json", import.meta.url);
 const outputDirectory = new URL("../tests/fixtures/answers/", import.meta.url);
 
+// Load the reference questions and make sure the output folder exists
 const questions = JSON.parse(
   await readFile(questionsFile, "utf8"),
 ) as ReferenceQuestion[];
 await mkdir(outputDirectory, { recursive: true });
 
+// Ask each question in turn and save the raw answer as a fixture
 for (const { slug, question, document_ids } of questions) {
   const started = performance.now();
   const response = await fetch(new URL("/api/v1/questions", baseUrl), {
@@ -30,6 +33,8 @@ for (const { slug, question, document_ids } of questions) {
   });
   const body: unknown = await response.json();
   const seconds = ((performance.now() - started) / 1000).toFixed(1);
+
+  // A failed question is reported and skipped
   if (!response.ok) {
     console.error(`${slug}: ${response.status} after ${seconds} s`);
     continue;

@@ -42,6 +42,7 @@ class PostgresDocumentRepository:
         Returns:
             The stored document and ``True``, or the existing document and ``False``.
         """
+        # Insert the row, doing nothing when the fingerprint is already stored
         statement = (
             insert(documents)
             .values(**_values(document))
@@ -49,9 +50,12 @@ class PostgresDocumentRepository:
             .returning(documents.c.id)
         )
         async with transaction(self._engine) as connection:
+            # A new row means the document is new
             inserted = (await connection.execute(statement)).scalar_one_or_none()
             if inserted is not None:
                 return document, True
+
+            # Otherwise return the document stored earlier with the same fingerprint
             existing = await connection.execute(
                 sa.select(documents).where(documents.c.sha256 == document.sha256)
             )
@@ -69,6 +73,7 @@ class PostgresDocumentRepository:
         Raises:
             DocumentNotFoundError: If no document has this id.
         """
+        # Read the row, failing with not found when there is none
         query = sa.select(documents).where(documents.c.id == document_id)
         async with connect(self._engine) as connection:
             row = (await connection.execute(query)).mappings().one_or_none()
@@ -85,6 +90,7 @@ class PostgresDocumentRepository:
         Returns:
             The stored documents, in no particular order. Unknown ids are skipped.
         """
+        # No ids, no query
         if not document_ids:
             return ()
         query = sa.select(documents).where(documents.c.id.in_(document_ids))
@@ -107,11 +113,14 @@ class PostgresDocumentRepository:
             IngestionInProgressError: If a job of the document is pending or
                 processing.
         """
+        # Lock the document row so no upload can enqueue a job meanwhile
         locked = (
             sa.select(documents.c.id)
             .where(documents.c.id == document_id)
             .with_for_update()
         )
+
+        # Whether the document has a pending or processing job
         active = sa.select(
             sa.exists().where(
                 ingestion_jobs.c.document_id == document_id,
@@ -119,12 +128,15 @@ class PostgresDocumentRepository:
             )
         )
         async with transaction(self._engine) as connection:
+            # Check both conditions inside the transaction that holds the lock
             if (await connection.execute(locked)).scalar_one_or_none() is None:
                 raise DocumentNotFoundError(f"Document {document_id} not found")
             if (await connection.execute(active)).scalar_one():
                 raise IngestionInProgressError(
                     f"Document {document_id} is being ingested"
                 )
+
+            # Delete the row; foreign keys cascade to jobs, elements and relationships
             await connection.execute(
                 sa.delete(documents).where(documents.c.id == document_id)
             )
@@ -142,19 +154,24 @@ class PostgresDocumentRepository:
         Raises:
             InvalidCursorError: If the cursor was not issued by this repository.
         """
+        # Newest first, with the id breaking ties between equal timestamps
         query = sa.select(documents).order_by(
             documents.c.created_at.desc(), documents.c.id.desc()
         )
         if cursor is not None:
+            # Continue after the last row of the previous page
             created_at, document_id = decode_cursor(cursor, _position)
             query = query.where(
                 sa.tuple_(documents.c.created_at, documents.c.id)
                 < sa.tuple_(sa.literal(created_at), sa.literal(document_id))
             )
         async with connect(self._engine) as connection:
+            # Read one row more than asked to know whether another page exists
             rows = (await connection.execute(query.limit(limit + 1))).mappings().all()
         items = tuple(_document(row) for row in rows[:limit])
         next_cursor = None
+
+        # The cursor encodes the sort key of the last row returned
         if len(rows) > limit:
             last = items[-1]
             next_cursor = encode_cursor(last.created_at.isoformat(), str(last.id))

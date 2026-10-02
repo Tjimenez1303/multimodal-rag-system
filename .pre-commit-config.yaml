@@ -2,15 +2,18 @@
 # Files generated and refreshed by Spec Kit are excluded so its upgrades stay clean.
 exclude: ^(\.specify/|\.claude/skills/)
 repos:
+  # Python lint and format
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: a56c0b927e6465d37cae3e97d35d4d18ab2b96cd  # frozen: v0.16.9
     hooks:
       - id: ruff-check
       - id: ruff-format
+  # Spelling in code and docs
   - repo: https://github.com/crate-ci/typos
     rev: 00f422f3b19c57bc6338715ebfe3316d38768461  # frozen: v1.50.3
     hooks:
       - id: typos
+  # File hygiene and secret detection
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c  # frozen: v6.0.0
     hooks:
@@ -21,6 +24,7 @@ repos:
       - id: check-toml
   - repo: local
     hooks:
+      # Backend type checking and architecture contracts, through the uv project
       - id: mypy
         name: mypy (strict)
         entry: uv run --directory backend mypy
@@ -33,6 +37,7 @@ repos:
         language: system
         pass_filenames: false
         files: ^backend/.*\.py$
+      # Frontend lint, format and types, through npm
       - id: frontend-lint
         name: frontend lint (oxlint)
         entry: npm --prefix frontend run lint

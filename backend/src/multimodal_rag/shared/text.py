@@ -34,5 +34,8 @@ def fold(text: str) -> str:
     Returns:
         The case-folded text with every combining accent removed.
     """
+    # Split accented letters into a base letter plus combining marks
     decomposed = unicodedata.normalize("NFKD", text.casefold())
+
+    # Drop the combining marks, keeping the base letters
     return "".join(char for char in decomposed if not unicodedata.combining(char))

@@ -9,13 +9,18 @@ import { ConnectionNotice } from "@/failures/ConnectionNotice";
 import "./index.css";
 
 const MAX_BACKOFF_SECONDS = 10;
+
+// Hand the CSP nonce to Radix before any component injects a style tag
 applyStyleNonce(document);
+
+// Mount React on the #root element of index.html
 const root = createRoot(document.getElementById("root")!);
 
 // The client never starts with guessed values: it waits for a valid /config.json,
 // retrying after 1, 2, 4 and then at most 10 seconds (research section 11).
 async function start(attempt = 0): Promise<void> {
   try {
+    // With a valid config, render the app
     const config = await loadConfig();
     root.render(
       <StrictMode>
@@ -23,6 +28,7 @@ async function start(attempt = 0): Promise<void> {
       </StrictMode>,
     );
   } catch {
+    // Without one, show the connection notice and try again later
     root.render(
       <StrictMode>
         <div className="p-4">

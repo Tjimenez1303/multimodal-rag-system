@@ -8,6 +8,7 @@ export const PANEL_KEY = "multimodal-rag.panel.v1";
  */
 export function loadPanelCollapsed(): boolean {
   try {
+    // Read the saved state; anything unreadable means expanded
     const stored = JSON.parse(sessionStorage.getItem(PANEL_KEY) ?? "null") as {
       collapsed?: unknown;
     } | null;

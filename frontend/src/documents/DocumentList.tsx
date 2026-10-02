@@ -38,6 +38,7 @@ export function DocumentList({
   onUploadAgain,
   onDeleted,
 }: DocumentListProps) {
+  // A loading line, then an empty state, then the list
   if (isLoading) {
     return <p className="px-1 text-xs text-muted-foreground">Loading documents…</p>;
   }
@@ -55,6 +56,7 @@ export function DocumentList({
         className="flex flex-col divide-y rounded-lg border bg-background"
       >
         {documents.map((document) => {
+          // One row per document: name, status and the actions its status allows
           const status = displayStatus(document);
           return (
             <li key={document.id} className="flex flex-col gap-1.5 px-3 py-2.5">
@@ -62,6 +64,7 @@ export function DocumentList({
                 {document.file_name}
               </span>
               <DocumentStatus document={document} />
+              {/* Ready ones can be viewed, failed ones sent again, both deleted */}
               {(status === "ready" || status === "failed") && (
                 <div className="flex flex-wrap items-center gap-1.5">
                   {status === "ready" ? (
@@ -95,6 +98,7 @@ export function DocumentList({
           );
         })}
       </ul>
+      {/* The library is paged, more documents load on demand */}
       {hasMore && (
         <Button variant="ghost" size="sm" onClick={onLoadMore}>
           Load more

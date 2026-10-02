@@ -18,14 +18,18 @@ import { useLibrary } from "@/documents/useLibrary";
  * statuses. Collapsed, it keeps a count of the documents still processing (FR-031).
  */
 export function DocumentPanel() {
+  // Panel state from the sidebar, the library, and a handle on the upload control
   const { open, toggleSidebar } = useSidebar();
   const library = useLibrary();
   const upload = useRef<UploadControlHandle>(null);
+
+  // Documents still being ingested, shown as a count when the panel is collapsed
   const processing = library.documents.filter((document) => {
     const status = displayStatus(document);
     return status === "pending" || status === "processing";
   }).length;
   return (
+    // Collapses to a narrow strip of icons
     <Sidebar collapsible="icon" aria-label="Documents panel">
       <SidebarHeader className="flex-row items-center justify-between gap-2 border-b px-3 py-2 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:px-1.5">
         <h2 className="text-sm font-semibold group-data-[collapsible=icon]:hidden">
@@ -45,11 +49,13 @@ export function DocumentPanel() {
           )}
         </Button>
       </SidebarHeader>
+      {/* The processing count stays visible while collapsed */}
       {!open && processing > 0 && (
         <p className="mx-auto mt-3 rounded-sm bg-primary/8 px-1 py-2 text-xs font-medium text-primary [writing-mode:vertical-rl]">
           {processing} processing
         </p>
       )}
+      {/* Upload first, then the library; both refresh the list when they change it */}
       <SidebarContent className="gap-4 p-3 group-data-[collapsible=icon]:hidden">
         <UploadControl
           ref={upload}

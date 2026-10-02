@@ -5,6 +5,7 @@ let reachable = true;
 const listeners = new Set<() => void>();
 
 function publish(next: boolean): void {
+  // Notify the subscribers only when the value changes
   if (next === reachable) return;
   reachable = next;
   for (const listener of listeners) listener();

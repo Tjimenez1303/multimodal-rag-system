@@ -56,6 +56,7 @@ class AnsweringState(TypedDict):
     answer_question: AnswerQuestion
 
 
+# Each provider reads a use case that the lifespan stored in the request state
 def provide_submit_document(request: Request) -> SubmitDocument:
     """Return the upload use case built at startup.
 
@@ -185,6 +186,7 @@ def provide_request_id(request: Request) -> str:
     return request_id_of(request)
 
 
+# Annotated aliases the routes declare as parameters
 SubmitDocumentDep = Annotated[SubmitDocument, Depends(provide_submit_document)]
 GetJobDep = Annotated[GetJob, Depends(provide_get_job)]
 RequestIdDep = Annotated[str, Depends(provide_request_id)]

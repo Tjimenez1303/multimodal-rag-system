@@ -11,6 +11,7 @@ export function citationSources(
   response: AnswerBody,
   citation: CitationBody,
 ): SourceBody[] {
+  // Sources whose unit the citation points to
   const units = new Set(citation.unit_ids);
   return response.sources.filter((source) => units.has(source.unit_id));
 }

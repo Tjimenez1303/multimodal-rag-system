@@ -69,11 +69,14 @@ def build_prompt(
         The grounding rules, and the tagged sources followed by the tagged question
         and a reminder of the marker and language rules.
     """
+    # Wrap every passage in a numbered source tag with its document, pages and section
     sources = "\n".join(
         f"<source {_attributes(number, hit, document_names)}>\n"
         f"{_escaped(hit.unit.text)}\n</source>"
         for number, hit in enumerate(hits, start=1)
     )
+
+    # Put the sources first, then the question, then the reminder
     user = (
         f"<sources>\n{sources}\n</sources>\n\n"
         f"<question>\n{_escaped(question.text)}\n</question>\n\n{REMINDER}"
@@ -84,6 +87,7 @@ def build_prompt(
 def _attributes(
     number: int, hit: SearchHit, document_names: Mapping[uuid.UUID, str]
 ) -> str:
+    # Attributes the model reads and cites the source by
     values = {
         "id": str(number),
         "document": document_names[hit.unit.document_id],

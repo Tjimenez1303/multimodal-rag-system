@@ -14,6 +14,7 @@ import stamina
 from multimodal_rag.shared.config import ProviderSettings, WorkerSettings
 from multimodal_rag.shared.errors import ProviderTimeoutError, ProviderUnavailableError
 
+# Failures worth retrying: the service may answer on a later attempt
 TRANSIENT_ERRORS: tuple[type[Exception], ...] = (
     ProviderUnavailableError,
     ProviderTimeoutError,
@@ -102,6 +103,7 @@ async def call_with_retry[T](
         Exception: One of the ``on`` errors once the attempts or the time budget
             run out, or any other error on the attempt that produced it.
     """
+    # Let stamina drive the attempts and the backoff between them
     async for attempt in stamina.retry_context(
         on=on,
         attempts=policy.attempts,
@@ -110,6 +112,7 @@ async def call_with_retry[T](
         wait_max=policy.max_wait_seconds,
         wait_jitter=policy.jitter_seconds,
     ):
+        # Run one attempt; stamina retries it when it raises one of the on errors
         with attempt:
             return await operation()
     raise AssertionError("stamina always returns or raises")  # pragma: no cover

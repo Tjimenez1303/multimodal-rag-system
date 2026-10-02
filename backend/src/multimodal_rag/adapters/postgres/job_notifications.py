@@ -16,6 +16,8 @@ logger = logging.getLogger(__name__)
 
 # Channel notified by the trigger on ingestion_jobs inserts (migration 0001).
 CHANNEL = "ingestion_jobs"
+
+# Failures of the dedicated LISTEN connection
 _CONNECTION_ERRORS = (
     OSError,
     TimeoutError,
@@ -36,6 +38,7 @@ class PostgresJobNotifications:
     def __init__(
         self, database_url: str, *, timeout_seconds: float, channel: str = CHANNEL
     ) -> None:
+        # asyncpg takes a plain postgresql URL, without the SQLAlchemy driver name
         self._dsn = (
             make_url(database_url)
             .set(drivername="postgresql")
@@ -53,6 +56,7 @@ class PostgresJobNotifications:
         The first call after (re)connecting returns at once, because jobs enqueued
         while the connection was down sent no notification.
         """
+        # Connect if needed, wait for a notification, then reset the signal
         await self._ensure_listening()
         await self._notified.wait()
         self._notified.clear()
@@ -68,8 +72,11 @@ class PostgresJobNotifications:
             connection.terminate()
 
     async def _ensure_listening(self) -> None:
+        # Already listening on a live connection
         if self._connection is not None and not self._connection.is_closed():
             return
+
+        # Open a dedicated connection outside the pool; on failure, poll only
         try:
             connection = await asyncpg.connect(
                 self._dsn, timeout=self._timeout, command_timeout=self._timeout
@@ -78,12 +85,15 @@ class PostgresJobNotifications:
             self._degrade(error)
             return
         try:
+            # Subscribe to the channel the insert trigger notifies
             await connection.add_listener(self._channel, self._on_notification)
         except _CONNECTION_ERRORS as error:
             # Never keep a connection that does not listen, or each retry leaks one.
             connection.terminate()
             self._degrade(error)
             return
+
+        # Keep the connection and wake the caller once, in case a job arrived meanwhile
         if self._degraded or self._connection is not None:
             logger.info("job notifications restored")
         self._connection = connection
@@ -91,6 +101,7 @@ class PostgresJobNotifications:
         self._notified.set()
 
     def _degrade(self, error: BaseException) -> None:
+        # Warn once per outage, not on every retry
         if not self._degraded:
             logger.warning(
                 "job notifications unavailable, polling only: %s", type(error).__name__

@@ -42,6 +42,7 @@ from multimodal_rag.ingestion.domain import (
     element_id_for,
 )
 
+# Docling labels that map to a specific element kind; the rest are paragraphs
 _KIND_BY_LABEL = {
     DocItemLabel.TITLE: ElementKind.HEADING,
     DocItemLabel.SECTION_HEADER: ElementKind.HEADING,
@@ -50,6 +51,8 @@ _KIND_BY_LABEL = {
     DocItemLabel.PAGE_HEADER: ElementKind.PAGE_FURNITURE,
     DocItemLabel.PAGE_FOOTER: ElementKind.PAGE_FURNITURE,
 }
+
+# Body content plus page headers and footers
 LAYERS = {ContentLayer.BODY, ContentLayer.FURNITURE}
 
 
@@ -109,6 +112,7 @@ def map_document(
     Raises:
         InvalidBoundingBoxError: If an item lies outside its page.
     """
+    # Walk every Docling item in reading order, figures' children included
     mapper = _Mapper(document, context, ocr_scores)
     elements: list[ExtractedElement] = []
     ids_by_ref: dict[str, list[uuid.UUID]] = {}
@@ -116,8 +120,11 @@ def map_document(
     for item, _ in document.iterate_items(
         included_content_layers=LAYERS, traverse_pictures=True
     ):
+        # Skip items without a position and items that belong to a figure
         if not (isinstance(item, DocItem) and item.prov and mapper.is_element(item)):
             continue
+
+        # Text becomes one element per page it spans
         if isinstance(item, TextItem):
             # A paragraph that continues on the next page becomes one element per
             # page, so every element keeps a single page and position.
@@ -127,9 +134,12 @@ def map_document(
                 ids_by_ref.setdefault(item.self_ref, []).append(element.id)
                 elements.append(element)
         elif isinstance(item, PictureItem | TableItem):
+            # Figures and tables become one element each, captions linked later
             element = mapper.floating(item, order=first_order + len(elements))
             floating.append((element, item))
             elements.append(element)
+
+    # Return the elements, the crops, the caption links and the page sizes
     return MappedBatch(
         elements=tuple(elements),
         images=mapper.images,
@@ -146,6 +156,8 @@ def _caption_links(
     ids_by_ref: dict[str, list[uuid.UUID]],
 ) -> tuple[ElementRelationship, ...]:
     links = []
+
+    # Link every caption Docling attached to a figure or a table
     for element, item in floating:
         kind = (
             RelationshipKind.CAPTION_OF
@@ -171,6 +183,8 @@ class _Mapper:
         self._context = context
         self._ocr_scores = ocr_scores
         self.images: dict[uuid.UUID, bytes] = {}
+
+        # References of every text that some figure or table claims as caption
         self._captions = {
             ref.cref
             for item, _ in document.iterate_items(
@@ -181,8 +195,11 @@ class _Mapper:
         }
 
     def is_element(self, item: DocItem) -> bool:
+        # Only text, tables and figures become elements
         if not isinstance(item, TextItem | TableItem | PictureItem):
             return False
+
+        # Items outside any figure or table are always kept
         owner = self._owner(item)
         if owner is None:
             return True
@@ -194,10 +211,13 @@ class _Mapper:
     def text(
         self, item: TextItem, provenance: ProvenanceItem, text: str, *, order: int
     ) -> ExtractedElement:
+        # Pick the kind from Docling's label, captions recognized by reference
         kind = _KIND_BY_LABEL.get(item.label, ElementKind.PARAGRAPH)
         if item.self_ref in self._captions:
             kind = ElementKind.CAPTION
         level = None
+
+        # Headings get their level from the outline or their section number
         if kind is ElementKind.HEADING:
             level = self._context.headings.level_of(text, page=provenance.page_no)
         return self._build(provenance, order, kind=kind, text=text, heading_level=level)
@@ -205,6 +225,7 @@ class _Mapper:
     def floating(
         self, item: PictureItem | TableItem, *, order: int
     ) -> ExtractedElement:
+        # Figures become images, tables keep their Markdown and their cell grid
         if isinstance(item, PictureItem):
             return self._image(item, order)
         return self._build(
@@ -225,12 +246,17 @@ class _Mapper:
         return None
 
     def _image(self, item: PictureItem, order: int) -> ExtractedElement:
+        # Encode the figure crop as PNG, kept under the element id
         image = item.get_image(self._doc)
         if image is not None:
             buffer = io.BytesIO()
             image.save(buffer, format="PNG")
             self.images[self._id(order)] = buffer.getvalue()
+
+        # The classifier's best class, such as logo or diagram
         classification = item.meta.classification if item.meta else None
+
+        # Texts printed inside the figure become its labels
         labels = tuple(
             child.text
             for child, _ in self._doc.iterate_items(
@@ -269,6 +295,7 @@ class _Mapper:
         image_class: str | None = None,
         labels: tuple[str, ...] = (),
     ) -> ExtractedElement:
+        # Text on a page without a text layer was recognized by OCR
         page = provenance.page_no
         # Images keep the text-layer origin, their labels carry no confidence.
         recognized = (
@@ -291,6 +318,7 @@ class _Mapper:
         )
 
     def _box(self, provenance: ProvenanceItem) -> BoundingBox:
+        # Convert the box to a top-left origin and clamp it to the page
         size = self._doc.pages[provenance.page_no].size
         box = provenance.bbox.to_top_left_origin(page_height=size.height)
         return BoundingBox.on_page(
@@ -303,6 +331,7 @@ class _Mapper:
         )
 
     def _ocr_score(self, page: int) -> float | None:
+        # Keep only finite OCR scores
         score = self._ocr_scores.get(page)
         return score if score is not None and math.isfinite(score) else None
 
@@ -315,12 +344,15 @@ def _fragments(item: TextItem) -> list[tuple[ProvenanceItem, str]]:
     recorded span always assumes the space. Spans that do not fit the text keep the
     whole text on the first fragment.
     """
+    # Fragment offsets must start at zero and grow, otherwise keep the item whole
     text = item.text
     starts = [provenance.charspan[0] for provenance in item.prov]
     if len(starts) == 1 or starts[0] != 0 or starts != sorted(set(starts)):
         return [(item.prov[0], text)]
     if starts[-1] > len(text) + 1:
         return [(item.prov[0], text)]
+
+    # Cut the text at each fragment start, pairing every piece with its page
     pieces = []
     begin = 0
     for provenance, start in zip(item.prov, [*starts[1:], None], strict=True):
@@ -339,5 +371,6 @@ def _fragments(item: TextItem) -> list[tuple[ProvenanceItem, str]]:
 
 def _is_attached_text(item: TextItem, owner: FloatingItem) -> bool:
     """Whether a text is the caption or a footnote of its figure or table."""
+    # Captions and footnotes referenced by the figure or table
     attached = {ref.cref for ref in (*owner.captions, *owner.footnotes)}
     return item.self_ref in attached or item.label is DocItemLabel.CAPTION

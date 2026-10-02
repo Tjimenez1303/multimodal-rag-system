@@ -19,6 +19,7 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     """Apply this revision."""
+    # Make the reading order unique per document, replacing the plain index
     op.drop_index(
         "ix_extracted_elements_document_id_reading_order",
         table_name="extracted_elements",
@@ -28,6 +29,8 @@ def upgrade() -> None:
         "extracted_elements",
         ["document_id", "reading_order"],
     )
+
+    # Partial index of pending jobs, in the order the worker claims them
     op.create_index(
         "ix_ingestion_jobs_pending_created_at",
         "ingestion_jobs",
@@ -38,6 +41,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Revert this revision."""
+    # Restore the plain reading order index and drop the claim index
     op.drop_index("ix_ingestion_jobs_pending_created_at", table_name="ingestion_jobs")
     op.drop_constraint(
         "uq_extracted_elements_document_id_reading_order",

@@ -45,6 +45,7 @@ def question_identifiers(question: str) -> set[str]:
         The tokens of at least ``MIN_IDENTIFIER_CHARS`` characters that contain a
         digit, in lowercase and without accents.
     """
+    # Keep words of three or more characters that contain a digit
     return {
         token
         for token in _TOKEN.findall(fold(question))
@@ -73,15 +74,20 @@ def rank_by_relevance(
         that holds none. Sorted by descending relevance, the search order breaking
         ties.
     """
+    # Pair every hit with the reranker's relevance
     judged = [
         JudgedHit(hit=hit, relevance=relevance)
         for hit, relevance in zip(hits, relevances, strict=True)
     ]
     # Python's sort is stable, so equal judgements keep the search order.
     order = sorted(range(len(judged)), key=lambda index: -judged[index].relevance)
+
+    # Units holding an identifier from the question are kept first
     identifiers = question_identifiers(question)
     pinned = [i for i in order if _holds_identifier(judged[i].hit, identifiers)]
     kept = set(pinned[:limit])
+
+    # Fill the remaining places with the best judged units
     kept.update([i for i in order if i not in kept][: limit - len(kept)])
     return [judged[i] for i in order if i in kept]
 
@@ -100,8 +106,11 @@ def passes_gate(
         ``True`` when at least one unit reaches ``min_relevance`` or holds an
         identifier of the question as a whole token.
     """
+    # Open the gate when any unit is relevant enough
     if any(item.relevance >= min_relevance for item in judged):
         return True
+
+    # Or when a unit holds an identifier the question mentions
     identifiers = question_identifiers(question)
     return any(_holds_identifier(item.hit, identifiers) for item in judged)
 
@@ -119,6 +128,8 @@ def distinct_hits(hits: Sequence[SearchHit], *, limit: int) -> list[SearchHit]:
     """
     seen: set[str] = set()
     kept: list[SearchHit] = []
+
+    # Compare texts without case, accents or extra spaces
     for hit in hits:
         key = " ".join(fold(hit.unit.text).split())
         if key not in seen and len(kept) < limit:

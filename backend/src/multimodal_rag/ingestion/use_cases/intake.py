@@ -29,6 +29,7 @@ from multimodal_rag.ingestion.ports import (
 
 logger = logging.getLogger(__name__)
 
+# Slashes and backslashes, to strip any folder from the uploaded name
 _PATH_SEPARATORS = re.compile(r"[\\/]")
 
 
@@ -121,8 +122,13 @@ class SubmitDocument:
             UnsupportedMediaTypeError: If the file is not a PDF by content.
             PageLimitExceededError: If the PDF exceeds the page limit.
         """
+        # Keep only the base name of the file
         name = _base_name(file_name)
+
+        # Stream the bytes to storage, hashing and checking them on the way
         stored = await self._store(content)
+
+        # Register the document by fingerprint; a known file returns the existing row
         document, _ = await self._documents.register(
             Document(
                 id=uuid.uuid4(),
@@ -134,6 +140,8 @@ class SubmitDocument:
                 created_at=self._clock.now(),
             )
         )
+
+        # Reuse the document's job or enqueue a new one
         submission = await self._job_for(document, correlation_id=correlation_id)
         logger.info(
             "document %s uploaded, job %s, %s bytes, %s pages, already ingested %s",
@@ -148,17 +156,24 @@ class SubmitDocument:
     async def _store(self, content: AsyncIterable[bytes]) -> _StoredFile:
         # The file lands under a staging key first, so a rejected upload never
         # reaches its content-addressed key.
+        # Hash the bytes while they stream to a temporary key
         digest = hashlib.sha256()
         staging_key = f"uploads/{uuid.uuid4().hex}.pdf"
         try:
+            # Save the stream, enforcing the size limit chunk by chunk
             size = await self._blobs.save_stream(
                 staging_key, self._limited(content, digest.update)
             )
+
+            # Count the pages, rejecting files that are not PDFs or are too long
             page_count = await self._checked_page_count(staging_key)
+
+            # Move the file to its content-addressed key
             await self._blobs.move(
                 staging_key, Document.blob_key_for(digest.hexdigest())
             )
         except BaseException:
+            # Never leave a rejected upload behind
             await self._blobs.delete(staging_key)
             raise
         return _StoredFile(digest.hexdigest(), size, page_count)
@@ -167,6 +182,8 @@ class SubmitDocument:
         self, content: AsyncIterable[bytes], update: Callable[[bytes], object]
     ) -> AsyncIterator[bytes]:
         size = 0
+
+        # Pass each chunk through, failing as soon as the size limit is crossed
         async for chunk in content:
             size += len(chunk)
             if size > self._limits.max_bytes:
@@ -180,8 +197,11 @@ class SubmitDocument:
             yield chunk
 
     async def _checked_page_count(self, key: str) -> int | None:
+        # Inspect the stored file as a local path, off the event loop
         with self._blobs.materialize(key) as path:
             info = await asyncio.to_thread(self._inspector.inspect, path)
+
+        # Encrypted PDFs report no page count and are accepted
         if info.page_count is not None and info.page_count > self._limits.max_pages:
             raise PageLimitExceededError(
                 f"The PDF has {info.page_count} pages, more than the limit of "
@@ -190,6 +210,7 @@ class SubmitDocument:
         return info.page_count
 
     async def _job_for(self, document: Document, *, correlation_id: str) -> Submission:
+        # A document that never ran or whose last job failed gets a new job
         job = await self._jobs.latest_for_document(document.id)
         if job is None or job.status is JobStatus.FAILED:
             job, _ = await self._jobs.enqueue(
@@ -201,6 +222,8 @@ class SubmitDocument:
                     now=self._clock.now(),
                 )
             )
+
+        # A completed job means the same file was ingested before
         return Submission(
             document=document,
             job=job,
@@ -209,6 +232,7 @@ class SubmitDocument:
 
 
 def _base_name(file_name: str) -> str:
+    # Drop any folder the browser sent with the name
     name = _PATH_SEPARATORS.split(file_name)[-1].strip()
     # PostgreSQL text cannot hold NUL, and control characters break log lines.
     if not 0 < len(name) <= MAX_FILE_NAME_LENGTH or not name.isprintable():

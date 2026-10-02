@@ -65,12 +65,15 @@ class PostgresElementRepository:
             DataInconsistencyError: If the job ingests another document.
         """
         async with transaction(self._engine) as connection:
+            # Lock the job row and prove this attempt still holds its lease
             job = await lock_leased_job(connection, job_id, lease_token)
             # The lease covers only the document of its own job.
             if job.document_id != document_id:
                 raise DataInconsistencyError(
                     f"Job {job_id} does not ingest document {document_id}"
                 )
+
+            # Delete what any earlier attempt stored, then insert the new rows in bulk
             await connection.execute(
                 sa.delete(extracted_elements).where(
                     extracted_elements.c.document_id == document_id
@@ -110,20 +113,26 @@ class PostgresElementRepository:
         Raises:
             InvalidCursorError: If the cursor was not issued by this repository.
         """
+        # Elements of the document in reading order
         query = (
             sa.select(extracted_elements)
             .where(extracted_elements.c.document_id == document_id)
             .order_by(extracted_elements.c.reading_order)
         )
+
+        # Optional filters by page and by kind
         if page_number is not None:
             query = query.where(extracted_elements.c.page == page_number)
         if kind is not None:
             query = query.where(extracted_elements.c.kind == kind.value)
+
+        # Continue after the last element of the previous page
         if cursor is not None:
             query = query.where(
                 extracted_elements.c.reading_order > decode_cursor(cursor, _position)
             )
         async with connect(self._engine) as connection:
+            # Read one row more than asked to know whether another page exists
             rows = (await connection.execute(query.limit(limit + 1))).mappings().all()
         items = tuple(_element(row) for row in rows[:limit])
         next_cursor = (
@@ -142,6 +151,7 @@ class PostgresElementRepository:
         Returns:
             Every relationship whose source or target is one of the elements.
         """
+        # Links where the elements appear as source or as target
         query = sa.select(element_relationships).where(
             sa.or_(
                 element_relationships.c.source_id.in_(element_ids),
@@ -175,6 +185,7 @@ class PostgresElementRepository:
         Raises:
             ElementNotFoundError: If the document has no such element.
         """
+        # Read the element, failing with not found when there is none
         query = sa.select(extracted_elements).where(
             extracted_elements.c.document_id == document_id,
             extracted_elements.c.id == element_id,
@@ -196,6 +207,7 @@ class PostgresElementRepository:
         Returns:
             The stored elements, in no particular order. Unknown ids are skipped.
         """
+        # No ids, no query
         if not element_ids:
             return ()
         query = sa.select(extracted_elements).where(
@@ -211,6 +223,7 @@ def _position(parts: list[str]) -> int:
     return int(reading_order)
 
 
+# Domain element to table row
 def _values(element: ExtractedElement) -> dict[str, Any]:
     return {
         "id": element.id,
@@ -241,6 +254,7 @@ def _values(element: ExtractedElement) -> dict[str, Any]:
     }
 
 
+# Domain relationship to table row
 def _link_values(document_id: uuid.UUID, link: ElementRelationship) -> dict[str, Any]:
     return {
         "document_id": document_id,
@@ -251,6 +265,7 @@ def _link_values(document_id: uuid.UUID, link: ElementRelationship) -> dict[str,
     }
 
 
+# Table row back to a domain element, which validates itself again
 def _element(row: sa.RowMapping) -> ExtractedElement:
     table = row["table_rows"]
     status = row["description_status"]

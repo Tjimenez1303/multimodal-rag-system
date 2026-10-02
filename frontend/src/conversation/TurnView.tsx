@@ -23,6 +23,7 @@ import { ImageColumn } from "@/images/ImageColumn";
 export const TurnView = memo(function TurnView({ turn }: { turn: Turn }) {
   return (
     <article aria-label={`Question: ${turn.question}`} className="flex flex-col gap-4">
+      {/* The question, then whatever its state produced */}
       <Message from="user">
         <MessageContent className="text-[0.9375rem] leading-6 whitespace-pre-wrap">
           {turn.question}
@@ -34,9 +35,11 @@ export const TurnView = memo(function TurnView({ turn }: { turn: Turn }) {
 });
 
 function TurnOutcome({ turn }: { turn: Turn }) {
+  // Pick the view of the turn from its state
   const actions = useTurnActions();
   switch (turn.state) {
     case "held":
+      // Queued behind the question being answered
       return (
         <p className="flex items-center gap-2 text-sm text-muted-foreground">
           <ClockIcon aria-hidden="true" className="size-4" />
@@ -44,6 +47,7 @@ function TurnOutcome({ turn }: { turn: Turn }) {
         </p>
       );
     case "waiting":
+      // Sent and waiting for the service
       return (
         <div
           role="status"
@@ -54,6 +58,7 @@ function TurnOutcome({ turn }: { turn: Turn }) {
         </div>
       );
     case "stopped":
+      // Stopped by the user or by a reload, with a retry button
       return (
         <div className="flex w-fit flex-wrap items-center gap-3 rounded-lg border bg-muted/40 px-3 py-2 text-sm">
           <CircleStopIcon aria-hidden="true" className="size-4 text-muted-foreground" />
@@ -67,6 +72,7 @@ function TurnOutcome({ turn }: { turn: Turn }) {
         </div>
       );
     case "failed": {
+      // A failure offers retry or edit, depending on its cause
       const failure = turn.failure;
       if (failure === null) return null;
       const action =
@@ -87,6 +93,7 @@ function TurnOutcome({ turn }: { turn: Turn }) {
       );
     }
     case "no_information":
+      // The documents did not support an answer
       return turn.response === null ? null : (
         <NoInformationState
           response={turn.response}
@@ -96,6 +103,7 @@ function TurnOutcome({ turn }: { turn: Turn }) {
         />
       );
     case "answered":
+      // A grounded answer with citations and figures
       return turn.response === null ? null : (
         <AnsweredTurn turnId={turn.id} response={turn.response} />
       );
@@ -103,9 +111,11 @@ function TurnOutcome({ turn }: { turn: Turn }) {
 }
 
 function AnsweredTurn({ turnId, response }: { turnId: string; response: AnswerBody }) {
+  // Figures get their own column only when the answer has any
   const withImages =
     response.primary_image !== null || response.related_images.length > 0;
   return (
+    // Shares the highlighted citation between the markers and the source lines
     <CitationProvider turnId={turnId} response={response}>
       <Message from="assistant" className="max-w-full">
         <section
@@ -118,13 +128,16 @@ function AnsweredTurn({ turnId, response }: { turnId: string; response: AnswerBo
           }
         >
           <div className="flex min-w-0 flex-col gap-5">
+            {/* Answer text with clickable [n] markers */}
             <AnswerMarkdown
               answer={response.answer}
               citationNumbers={response.citations.map((citation) => citation.number)}
             />
+            {/* What the documents left unanswered, if anything */}
             {response.not_covered !== null && (
               <NotCoveredNote text={response.not_covered} />
             )}
+            {/* One numbered line per citation */}
             {response.citations.length > 0 && (
               <div className="flex flex-col gap-2">
                 <h3 className="text-xs font-medium text-muted-foreground">Sources</h3>
@@ -132,6 +145,7 @@ function AnsweredTurn({ turnId, response }: { turnId: string; response: AnswerBo
               </div>
             )}
           </div>
+          {/* Primary figure first, then the related ones */}
           {withImages && (
             <aside aria-label="Figures" className="border-l pl-6">
               <ImageColumn

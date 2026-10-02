@@ -38,8 +38,11 @@ class AnyioAnswerSlots:
         Raises:
             AnsweringBusyError: When every place is taken and the line is full.
         """
+        # Refuse at once when every place is taken and the queue is full
         full = self._limiter.available_tokens == 0
         if full and self._limiter.statistics().tasks_waiting >= self._queue_limit:
             raise AnsweringBusyError()
+
+        # Otherwise wait for a place and hold it for the whole block
         async with self._limiter:
             yield

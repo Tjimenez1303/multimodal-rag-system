@@ -22,6 +22,8 @@ class HuggingFaceTokenCounter:
 
     def __init__(self, tokenizer: Tokenizer) -> None:
         self._tokenizer = tokenizer
+
+        # Tokens the tokenizer adds even to an empty text
         self._special_tokens = len(tokenizer.encode("").ids)
 
     @classmethod
@@ -62,8 +64,11 @@ class HuggingFaceTokenCounter:
         Returns:
             The text itself when it fits, or its longest prefix that fits.
         """
+        # Short texts are returned untouched
         if self.count(text) <= max_tokens:
             return text
+
+        # Leave room for the special tokens the model adds
         budget = max_tokens - self._special_tokens
         if budget <= 0:
             return ""

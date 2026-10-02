@@ -47,6 +47,7 @@ export interface Library {
 }
 
 function unfinished(document: DocumentBody): boolean {
+  // A document without a job, or whose job is still running, is followed
   const status = document.latest_job?.status;
   return status === undefined || status === "pending" || status === "processing";
 }
@@ -58,13 +59,16 @@ function unfinished(document: DocumentBody): boolean {
  * @returns The documents and the actions on the library.
  */
 export function useLibrary(): Library {
+  // The poll interval from the runtime config
   const { statusPollSeconds } = useConfig();
   const queryClient = useQueryClient();
 
+  // The library, read page by page with an opaque cursor
   const library = useInfiniteQuery({
     queryKey: LIBRARY_KEY,
     initialPageParam: null as string | null,
     queryFn: async ({ pageParam }) => {
+      // Read one page of documents; failures are thrown so the query retries
       const result = await callService((options) =>
         listDocuments({
           ...options,
@@ -83,17 +87,22 @@ export function useLibrary(): Library {
     retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 10_000),
   });
 
+  // Every loaded document, newest first
   const documents = useMemo(
     () => library.data?.pages.flatMap((page) => page.items) ?? [],
     [library.data],
   );
+
+  // Ids of the documents whose ingestion has not finished
   const followed = documents.filter(unfinished).map((document) => document.id);
 
+  // Poll each unfinished document every statusPollSeconds
   useQueries({
     queries: followed.map((documentId) => ({
       queryKey: [...LIBRARY_KEY, documentId],
       refetchInterval: statusPollSeconds * 1000,
       queryFn: async () => {
+        // Read the document with its latest job
         const result = await callService((options) =>
           getDocument({ ...options, path: { document_id: documentId } }),
         );
@@ -117,11 +126,13 @@ export function useLibrary(): Library {
     })),
   });
 
+  // Actions the panel calls: load more, refresh after an upload, remove after a delete
   const { fetchNextPage, refetch } = library;
   const loadMore = useCallback(() => fetchNextPage(), [fetchNextPage]);
   const refresh = useCallback(() => refetch(), [refetch]);
   const remove = useCallback(
     (documentId: string) => {
+      // Drop the deleted document from the cached list at once
       queryClient.setQueryData<InfiniteData<DocumentPageBody>>(LIBRARY_KEY, (data) =>
         data === undefined
           ? data

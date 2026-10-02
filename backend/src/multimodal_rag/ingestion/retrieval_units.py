@@ -25,6 +25,7 @@ from multimodal_rag.ingestion.ports import TokenCounter
 from multimodal_rag.ingestion.relationships import repeats_header
 from multimodal_rag.shared.text import split_sentences
 
+# Element kinds whose text flows into the open text unit
 _FLOWING_KINDS = frozenset(
     {ElementKind.PARAGRAPH, ElementKind.LIST_ITEM, ElementKind.CAPTION}
 )
@@ -55,6 +56,7 @@ def build_units(
     Returns:
         The units in reading order.
     """
+    # Index the relationships once so every element can find its links
     builder = _Builder(
         document_id=document_id,
         sha256=document_sha256,
@@ -63,6 +65,8 @@ def build_units(
         max_tokens=max_tokens,
         elements={element.id: element for element in elements},
     )
+
+    # Feed the elements in reading order, then close the last open unit
     for element in sorted(elements, key=lambda e: e.reading_order):
         builder.add(element)
     builder.flush()
@@ -79,6 +83,7 @@ class _Links:
 
     @classmethod
     def of(cls, relationships: Sequence[ElementRelationship]) -> _Links:
+        # Captions by target, nearby images by text, and the next part of each table
         captions: dict[uuid.UUID, list[uuid.UUID]] = {}
         near: dict[uuid.UUID, list[uuid.UUID]] = {}
         next_part: dict[uuid.UUID, uuid.UUID] = {}
@@ -89,6 +94,8 @@ class _Links:
                 near.setdefault(link.source_id, []).append(link.target_id)
             elif link.kind is RelationshipKind.CONTINUES:
                 next_part[link.target_id] = link.source_id
+
+        # Freeze the lookups and remember which ids are captions or later parts
         return cls(
             captions={key: tuple(value) for key, value in captions.items()},
             caption_ids=frozenset(c for ids in captions.values() for c in ids),
@@ -116,16 +123,19 @@ class _Builder:
 
     def add(self, element: ExtractedElement) -> None:
         if element.kind is ElementKind.HEADING:
+            # A heading closes the open text unit and updates the heading path
             self.flush()
             level = element.heading_level or 1
             # A heading replaces every heading at its level or deeper.
             self.headings = {k: v for k, v in self.headings.items() if k < level}
             self.headings[level] = element.text or ""
         elif element.kind is ElementKind.TABLE:
+            # A table becomes its own unit; later parts join the unit of their head
             self.flush()
             if element.id not in self.links.continuation_ids:
                 self._table(element)
         elif element.kind is ElementKind.IMAGE and not element.is_decorative:
+            # A content figure becomes its own unit
             self.flush()
             self._figure(element)
         elif (
@@ -133,28 +143,36 @@ class _Builder:
             and element.id not in self.links.caption_ids
             and element.text
         ):
+            # Free paragraphs, list items and captions join the open text unit
             self._flow(element)
 
     def flush(self) -> None:
         if self.pending:
+            # Turn the pending text blocks into one text unit
             members = tuple(self.pending)
             self.pending = []
             text = "\n".join(member.text or "" for member in members)
             self._emit(UnitType.TEXT, f"text:{members[0].id}", text, members)
 
     def _flow(self, element: ExtractedElement) -> None:
+        # Grow the open unit while it fits the token ceiling
         if self._tokens([*self.pending, element]) <= self.max_tokens:
             self.pending.append(element)
             return
+
+        # Otherwise close it and start a new one with this element
         self.flush()
         if self._tokens([element]) <= self.max_tokens:
             self.pending.append(element)
             return
+
+        # An element too long on its own is split into pieces of whole sentences
         for number, piece in enumerate(self._pieces(element.text or "")):
             key = f"text:{element.id}:{number}"
             self._emit(UnitType.TEXT, key, piece, (element,))
 
     def _pieces(self, text: str) -> Iterator[str]:
+        # Add sentences to a piece until the next one would exceed the ceiling
         piece: list[str] = []
         for sentence in split_sentences(text):
             candidate = " ".join([*piece, sentence])
@@ -166,21 +184,29 @@ class _Builder:
             yield " ".join(piece)
 
     def _table(self, head: ExtractedElement) -> None:
+        # Follow the continues links to collect every part of the table
         parts = [head]
         while (following := self.links.next_part.get(parts[-1].id)) is not None:
             parts.append(self.elements[following])
+
+        # Put the titles first, then each part as Markdown
         titles = [self.elements[c] for part in parts for c in self._captions(part)]
         texts = [title.text or "" for title in titles]
         for part in parts:
             texts.append(_part_markdown(head, part))
+
+        # Emit one unit holding the titles and every part
         members = tuple(sorted([*titles, *parts], key=lambda e: e.reading_order))
         self._emit(UnitType.TABLE, f"table:{head.id}", "\n".join(texts), members)
 
     def _figure(self, image: ExtractedElement) -> None:
+        # A figure is searched by its captions, labels and description
         captions = [self.elements[c] for c in self._captions(image)]
         texts = [caption.text or "" for caption in captions]
         texts += [" ".join(image.labels), image.description or ""]
         text = "\n".join(t for t in texts if t)
+
+        # Figures with no text at all are left out of the index
         if text:
             members = tuple(sorted([image, *captions], key=lambda e: e.reading_order))
             key = f"figure:{image.id}"
@@ -198,12 +224,15 @@ class _Builder:
         *,
         image_key: str | None = None,
     ) -> None:
+        # Nearby content figures of any member, for the image of an answer
         figures = dict.fromkeys(
             figure_id
             for member in members
             for figure_id in self.links.near.get(member.id, ())
             if not self.elements[figure_id].is_decorative
         )
+
+        # Build the unit with a stable id, its heading path, pages and boxes
         self.units.append(
             RetrievalUnit(
                 id=unit_id_for(document_sha256=self.sha256, unit_key=key),
@@ -227,6 +256,7 @@ class _Builder:
 
 
 def _part_markdown(head: ExtractedElement, part: ExtractedElement) -> str:
+    # The head and parts that do not repeat the header are kept as they are
     text = part.text or ""
     if part is head or not repeats_header(head, part):
         return text

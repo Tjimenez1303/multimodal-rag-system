@@ -25,12 +25,15 @@ export function askQuestion({
   signal,
   waitSeconds,
 }: QuestionRequest): Promise<ServiceResult<AnswerBody>> {
+  // Send the question through callService, waiting up to waitSeconds
   return callService(
     (options) =>
       askQuestionOperation({
         ...options,
         body: {
           question,
+
+          // Restrict the search only when documents were chosen
           ...(documentIds.length > 0 ? { document_ids: [...documentIds] } : {}),
         },
       }),

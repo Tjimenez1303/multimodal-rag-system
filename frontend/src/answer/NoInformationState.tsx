@@ -26,6 +26,7 @@ export function NoInformationState({
   onRequestUpload,
   onAskAcrossAll,
 }: NoInformationStateProps) {
+  // With no document ready, the user is offered an upload instead
   const noDocuments = response.reason === "no_searchable_documents";
   return (
     <section
@@ -41,6 +42,7 @@ export function NoInformationState({
         <h3 id="no-information-title" className="text-sm font-semibold">
           No information found
         </h3>
+        {/* The service's own explanation, then guidance that fits the reason */}
         <p className="text-sm leading-6">{response.answer}</p>
         <p className="text-sm leading-6 text-muted-foreground">
           {noDocuments
@@ -49,6 +51,7 @@ export function NoInformationState({
               ? "The selected documents do not contain this information."
               : "Try rephrasing the question, for example with the names of the parts or systems the manual uses."}
         </p>
+        {/* Offer an upload when nothing is ready */}
         {noDocuments && onRequestUpload !== undefined && (
           <Button
             variant="outline"
@@ -60,6 +63,7 @@ export function NoInformationState({
             Upload a manual
           </Button>
         )}
+        {/* Offer to widen a restricted question to every document */}
         {!noDocuments && restricted && onAskAcrossAll !== undefined && (
           <Button
             variant="outline"

@@ -78,12 +78,17 @@ class BodySizeLimitMiddleware:
             ProblemHTTPException: If a body without ``Content-Length`` grows past the
                 limit while it is read.
         """
+        # Only HTTP requests carry a body; other ASGI calls pass through
         if scope["type"] != "http":
             await self._app(scope, receive, send)
             return
+
+        # Find the limit of this route
         path = scope["path"].removeprefix(scope.get("root_path", ""))
         limit = self._limits.for_path(path)
         detail = f"The request body exceeds the limit of {limit} bytes"
+
+        # Refuse at once when the declared length is already too large
         declared = _content_length(scope)
         if declared is not None and declared > limit:
             response = problem_response(
@@ -94,6 +99,8 @@ class BodySizeLimitMiddleware:
             )
             await response(scope, receive, send)
             return
+
+        # Otherwise count the bytes as they arrive and stop past the limit
         received = 0
 
         async def receive_with_limit() -> Message:
@@ -107,6 +114,7 @@ class BodySizeLimitMiddleware:
                     )
             return message
 
+        # Hand the request to the app with the counting receive
         await self._app(scope, receive_with_limit, send)
 
 

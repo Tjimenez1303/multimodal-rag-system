@@ -70,6 +70,7 @@ def health_router(
         Returns:
             The checked dependencies, or 503 problem details naming the failing ones.
         """
+        # Probe every dependency; any failure makes the API not ready
         failing = await _failing_checks(readiness_checks, timeout_seconds)
         if failing:
             return problem_response(
@@ -78,6 +79,8 @@ def health_router(
                 code=NOT_READY_CODE,
                 detail=f"Unavailable: {', '.join(sorted(failing))}",
             )
+
+        # Every probe passed
         return {"status": "ready", "checks": sorted(readiness_checks)}
 
     return router
@@ -88,6 +91,7 @@ async def _failing_checks(
 ) -> list[str]:
     # Concurrent probes, so the whole check takes at most one probe timeout.
     async def probe(name: str, check: ReadinessCheck) -> str | None:
+        # Run one probe within the timeout, reporting its name if it fails
         try:
             async with asyncio.timeout(timeout_seconds):
                 await check()
@@ -96,6 +100,7 @@ async def _failing_checks(
             return name
         return None
 
+    # Run every probe at once and keep the names of those that failed
     results = await asyncio.gather(*(probe(n, c) for n, c in checks.items()))
     return [name for name in results if name is not None]
 
@@ -126,8 +131,11 @@ def create_app(
         The FastAPI application. The composition root wraps it with the request id
         middleware.
     """
+    # Create the app and map every domain error to a problem response
     app = FastAPI(title="Multimodal RAG API", version=version, lifespan=lifespan)
     install_problem_handlers(app)
+
+    # Health routes first, then the feature routes
     app.include_router(
         health_router(
             readiness_checks=readiness_checks,
@@ -136,7 +144,11 @@ def create_app(
     )
     for router in routers:
         app.include_router(router)
+
+    # Refuse oversized bodies before any route reads them
     app.add_middleware(BodySizeLimitMiddleware, limits=body_limits or BodyLimits())
+
+    # Publish an OpenAPI document that matches the responses really sent
     app.openapi = _problem_aware_openapi(app)  # type: ignore[method-assign]
     return app
 
@@ -155,12 +167,17 @@ def _problem_aware_openapi(app: FastAPI) -> Callable[[], dict[str, Any]]:
     """
 
     def openapi() -> dict[str, Any]:
+        # Build the document once and cache it on the app
         if app.openapi_schema is None:
             schema = get_openapi(
                 title=app.title, version=app.version, routes=app.routes
             )
+
+            # Fix every operation's error responses
             for operation in _operations(schema):
                 _correct_responses(operation["responses"])
+
+            # Drop the validation schemas no response uses any more
             components = schema.get("components", {}).get("schemas", {})
             for unused in ("HTTPValidationError", "ValidationError"):
                 components.pop(unused, None)
@@ -180,6 +197,7 @@ def _operations(schema: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _correct_responses(responses: dict[str, Any]) -> None:
+    # FastAPI's default 422 is never sent, problems use their own media type
     for status in list(responses):
         content = responses[status].get("content", {})
         body = content.get("application/json", {}).get("schema")

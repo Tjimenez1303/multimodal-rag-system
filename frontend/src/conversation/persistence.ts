@@ -10,9 +10,11 @@ export const CONVERSATION_KEY = "multimodal-rag.conversation.v1";
  * @returns The stored conversation, or an empty one when nothing valid is stored.
  */
 export function loadConversation(): Conversation {
+  // Read the saved conversation of this tab, if any
   const stored = sessionStorage.getItem(CONVERSATION_KEY);
   if (stored === null) return emptyConversation;
   try {
+    // Ignore values written by another version of the client
     const parsed = JSON.parse(stored) as Partial<Conversation>;
     if (parsed.version !== 1 || !Array.isArray(parsed.turns)) return emptyConversation;
     // A waiting turn lost its request with the old page, so it can only be retried.
@@ -38,6 +40,7 @@ export function saveConversation(
   conversation: Conversation,
 ): "saved" | "quota_exceeded" {
   try {
+    // Save the whole conversation, reporting a full storage quota
     sessionStorage.setItem(CONVERSATION_KEY, JSON.stringify(conversation));
     return "saved";
   } catch (error) {

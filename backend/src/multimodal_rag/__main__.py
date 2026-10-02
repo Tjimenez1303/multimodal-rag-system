@@ -18,10 +18,12 @@ def main(argv: Sequence[str] | None = None) -> None:
         argv: Command-line arguments without the program name. Defaults to
             ``sys.argv[1:]``.
     """
+    # Read which process to run from the command line
     parser = argparse.ArgumentParser(prog="python -m multimodal_rag")
     parser.add_argument("role", choices=["api", "worker", "worker-health"])
     role = parser.parse_args(argv).role
     if role == "api":
+        # Serve the REST API, building the app through the composition root
         settings = ApiSettings.load()
         # log_config=None keeps uvicorn's records on the JSON root handler, and the
         # request context middleware writes the per-request line instead of uvicorn.
@@ -35,8 +37,10 @@ def main(argv: Sequence[str] | None = None) -> None:
             proxy_headers=False,
         )
     elif role == "worker":
+        # Run the ingestion worker until it is told to stop
         asyncio.run(run_worker())
     else:
+        # Healthcheck: exit 0 when the worker is alive, 1 otherwise
         sys.exit(0 if worker_is_alive() else 1)
 
 

@@ -115,8 +115,19 @@ are these:
 
 - Google-style docstrings (Args, Returns, Raises) on every public module, class and
   function.
-- Inline comments are one line and explain what non-obvious code does and why it
-  is there, without ticket references.
+- Inline comments are one line. A comment above each logical step of a function
+  body names what the step achieves, and when the step calls another function it
+  says what the call is for. Non-obvious code also gets a comment explaining why
+  it is there. Comments never reference tickets.
+
+  ```python
+  # Build the grounded prompt from the passages that passed the gate
+  prompt = build_prompt(question, hits, document_names=names)
+
+  # Ask the answer model, translating its failures into answering errors
+  with _named(_ANSWER_MODEL_FAILURES):
+      generated = await self._generator.generate(prompt)
+  ```
 - Documentation describes the current state of the system, not its history. ADRs in
   `docs/adr/` are written in business language, with technical evidence in a final
   annex.

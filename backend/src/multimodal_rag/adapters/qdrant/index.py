@@ -30,6 +30,7 @@ from multimodal_rag.ingestion.ports import SearchHit
 from multimodal_rag.shared.errors import DataInconsistencyError, ProviderResponseError
 from multimodal_rag.shared.resilience import RetryPolicy, call_with_retry
 
+# Names of the two vectors stored with every point
 SERVICE = "vector index"
 DENSE = "dense"
 BM25 = "bm25"
@@ -42,6 +43,8 @@ BM25_OPTIONS = models.Bm25Config(
     stemmer=models.DisabledStemmerParams(type=models.NoStemmer.NONE),
     stopwords=models.StopwordsSet(languages=[], custom=[]),
 )
+
+# Payload fields that search filters on, indexed for speed
 PAYLOAD_INDEXES = {
     "document_id": models.PayloadSchemaType.UUID,
     "unit_type": models.PayloadSchemaType.KEYWORD,
@@ -56,6 +59,7 @@ _NOT_FOUND = 404
 _CONFLICT = 409
 
 
+# A bounding box as stored in the payload
 class _Box(pydantic.BaseModel):
     page: int
     left: float
@@ -184,6 +188,7 @@ class QdrantVectorIndex:
             ProviderTimeoutError: If Qdrant keeps timing out after retries.
             ProviderResponseError: If Qdrant rejects the request.
         """
+        # Create the collection once, then make sure every payload index exists
         if not await self._call(
             lambda: self._client.collection_exists(self.collection)
         ):
@@ -213,6 +218,7 @@ class QdrantVectorIndex:
             ProviderTimeoutError: If Qdrant keeps timing out after retries.
             ProviderResponseError: If Qdrant rejects the request.
         """
+        # One point per unit: dense vector, BM25 text and hidden payload
         points = [
             models.PointStruct(
                 id=str(unit.id),
@@ -224,6 +230,8 @@ class QdrantVectorIndex:
             )
             for unit, vector in zip(units, vectors, strict=True)
         ]
+
+        # Upload the points in batches, waiting until each one is stored
         for batch in batched(points, UPSERT_BATCH, strict=False):
             await self._call(
                 partial(
@@ -242,6 +250,7 @@ class QdrantVectorIndex:
             ProviderTimeoutError: If Qdrant keeps timing out after retries.
             ProviderResponseError: If Qdrant rejects the request.
         """
+        # Flip the visible flag on every point of the document
         await self._call(
             lambda: self._client.set_payload(
                 self.collection,
@@ -291,6 +300,7 @@ class QdrantVectorIndex:
             DataInconsistencyError: If a stored payload is invalid, or a fused point
                 has no dense score.
         """
+        # Search visible units only, and only in the requested documents if any
         conditions: list[models.Condition] = [
             models.FieldCondition(key="visible", match=models.MatchValue(value=True))
         ]
@@ -302,6 +312,8 @@ class QdrantVectorIndex:
                 )
             )
         visible = models.Filter(must=conditions)
+
+        # Run the dense and the keyword searches side by side
         prefetch = [
             models.Prefetch(
                 query=list(query_vector),
@@ -316,6 +328,8 @@ class QdrantVectorIndex:
                 limit=limit * PREFETCH_FACTOR,
             ),
         ]
+
+        # Fuse both rankings with reciprocal rank fusion
         fused = await self._call(
             partial(
                 self._points_or_none,
@@ -327,6 +341,8 @@ class QdrantVectorIndex:
         )
         if not fused:
             return []
+
+        # Rebuild the units and give each one its exact cosine similarity
         units = [_unit(point.id, point.payload) for point in fused]
         similarities = await self._similarities(query_vector, units)
         return [
@@ -351,6 +367,8 @@ class QdrantVectorIndex:
                 with_payload=False,
             )
         )
+
+        # Every fused point must have a dense score
         similarities = {uuid.UUID(str(point.id)): point.score for point in scored or []}
         missing = [unit.id for unit in units if unit.id not in similarities]
         if missing:
@@ -383,6 +401,7 @@ class QdrantVectorIndex:
 
     async def _create_collection(self) -> None:
         try:
+            # Dense vectors with cosine distance, sparse BM25 vectors weighted by IDF
             await self._client.create_collection(
                 self.collection,
                 vectors_config={
@@ -401,6 +420,7 @@ class QdrantVectorIndex:
 
     async def _call[T](self, operation: Callable[[], Awaitable[T]]) -> T:
         async def attempt() -> T:
+            # Run one attempt, translating client errors into provider errors
             try:
                 return await operation()
             except ResponseHandlingException as error:
@@ -412,6 +432,7 @@ class QdrantVectorIndex:
             except UnexpectedResponse as error:
                 raise status_error(error.status_code, service=SERVICE) from error
 
+        # Retry the attempt on transient failures
         return await call_with_retry(self._retry, attempt)
 
 
@@ -433,6 +454,7 @@ def _unit(
     point_id: models.ExtendedPointId, payload: dict[str, Any] | None
 ) -> RetrievalUnit:
     try:
+        # Validate the stored payload before turning it into a unit
         return UnitPayload.model_validate(payload).to_unit(point_id)
     except pydantic.ValidationError as error:
         raise DataInconsistencyError(

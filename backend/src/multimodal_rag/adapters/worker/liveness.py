@@ -41,6 +41,7 @@ class LivenessFile:
             stop: Event that ends the loop.
             interval_seconds: Seconds between two touches.
         """
+        # Touch the file, then sleep until the next interval or until stopped
         while not stop.is_set():
             self.touch()
             try:

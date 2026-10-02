@@ -36,6 +36,7 @@ const TURN_TOP_MARGIN = 24;
 // "Bottom" is the top of the newest turn when that turn is taller than the view, so a
 // long answer arrives with its question and first lines in view.
 const newestTurnTop: GetTargetScrollTop = (bottom, { contentElement }) => {
+  // Fall back to the real bottom when there is no turn element
   const newest = contentElement.lastElementChild;
   if (!(newest instanceof HTMLElement)) return bottom;
   return Math.max(0, Math.min(bottom, newest.offsetTop - TURN_TOP_MARGIN));
@@ -60,12 +61,17 @@ export function ConversationView(props: ConversationViewProps) {
 }
 
 function ConversationBody({ onRequestUpload }: ConversationViewProps) {
+  // Load the conversation and the shared input text
   const { conversation, dispatch, persisted } = useConversation();
   const { textInput } = usePromptInputController();
   const { setInput } = textInput;
+
+  // Send questions one at a time; rejected ones return to the input
   const { submit, stop, retry, busy } = useQuestionQueue(conversation, dispatch, {
     onReturnQuestion: setInput,
   });
+
+  // Actions the turns call, provided through context so turns stay memoized
   const actions = useMemo<TurnActions>(
     () => ({
       retry,
@@ -75,11 +81,14 @@ function ConversationBody({ onRequestUpload }: ConversationViewProps) {
     }),
     [retry, setInput, submit, onRequestUpload],
   );
+
+  // Header, optional storage notice, turns, then the question input
   const { turns } = conversation;
   return (
     <div className="flex h-full min-h-0 flex-col">
       <header className="flex h-12 shrink-0 items-center justify-between border-b px-6">
         <h1 className="text-sm font-semibold">Manual Assistant</h1>
+        {/* Clearing first stops any question being answered */}
         <NewConversationButton
           disabled={turns.length === 0}
           onConfirm={() => {
@@ -88,6 +97,7 @@ function ConversationBody({ onRequestUpload }: ConversationViewProps) {
           }}
         />
       </header>
+      {/* Shown when sessionStorage refused to save the conversation */}
       {!persisted && (
         <output className="block border-b bg-amber-50 px-6 py-2 text-xs text-amber-950">
           This conversation won&apos;t survive a reload: the browser&apos;s storage for
@@ -97,6 +107,7 @@ function ConversationBody({ onRequestUpload }: ConversationViewProps) {
       <TurnActionsContext value={actions}>
         <Conversation className="min-h-0 flex-1" targetScrollTop={newestTurnTop}>
           <ConversationContent className="mx-auto w-full max-w-6xl gap-10 px-6 py-6">
+            {/* An empty state until the first question, then one view per turn */}
             {turns.length === 0 ? (
               <ConversationEmptyState
                 className="py-24"
@@ -111,6 +122,7 @@ function ConversationBody({ onRequestUpload }: ConversationViewProps) {
           <ConversationScrollButton aria-label="Scroll to the latest turn" />
         </Conversation>
       </TurnActionsContext>
+      {/* The question input stays pinned below the turns */}
       <div className="shrink-0 border-t bg-muted/30 px-6 py-3">
         <div className="mx-auto max-w-6xl">
           <QuestionInput

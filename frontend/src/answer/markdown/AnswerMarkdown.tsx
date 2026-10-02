@@ -14,6 +14,7 @@ import { CitationMarker } from "./CitationMarker";
 import { CITATION_ATTRIBUTE, CITATION_TAG, citationMarkers } from "./citationMarkers";
 import { noRemoteMedia } from "./noRemoteMedia";
 
+// Streamdown's link confirmation is off; links open in a new tab instead
 const LINK_SAFETY = { enabled: false };
 
 // Streamdown's sanitizer, with its own schema extended to let the citation element
@@ -33,6 +34,7 @@ const citationSanitize: Pluggable = [
 // Without rehype-raw, Streamdown turns raw HTML into text itself (FR-009).
 const REHYPE_PLUGINS = [citationSanitize, defaultRehypePlugins["harden"]!];
 
+// Element overrides: emphasis, citation markers, links and tables
 const components: Components = {
   // Bold as <strong>, so assistive technology conveys the emphasis.
   strong: ({ children }) => (
@@ -41,6 +43,8 @@ const components: Components = {
   [CITATION_TAG]: ({ [CITATION_ATTRIBUTE]: number }) => (
     <CitationMarker number={Number(number)} />
   ),
+
+  // External links open in a new tab without access to this page
   a: ({ href, children }) => (
     <a
       href={href as string | undefined}
@@ -84,6 +88,7 @@ export const AnswerMarkdown = memo(function AnswerMarkdown({
   answer,
   citationNumbers,
 }: AnswerMarkdownProps) {
+  // Rebuild the plugins only when the cited numbers change
   const numbersKey = citationNumbers.join(",");
   const remarkPlugins = useMemo(
     (): Pluggable[] => [
@@ -94,6 +99,7 @@ export const AnswerMarkdown = memo(function AnswerMarkdown({
     [numbersKey],
   );
   return (
+    // Rendered once, in full: the service answers in one JSON body, not a stream
     <MessageResponse
       className="h-auto text-[0.9375rem] leading-7"
       mode="static"

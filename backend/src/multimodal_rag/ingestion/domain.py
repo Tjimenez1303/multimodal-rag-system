@@ -28,6 +28,7 @@ from multimodal_rag.ingestion.errors import (
 # every stored element and unit id derives from it.
 ID_NAMESPACE = uuid.UUID("e7ff7153-60c1-4d27-ab14-b11734f890b0")
 
+# A SHA-256 fingerprint written as lowercase hex
 _SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 MAX_FILE_NAME_LENGTH = 255
 
@@ -154,11 +155,14 @@ class BoundingBox:
 
     def __post_init__(self) -> None:
         """Reject boxes with non-finite, negative or inverted coordinates."""
+        # Every coordinate must be a finite, non-negative number
         values = (self.left, self.top, self.right, self.bottom)
         if not all(math.isfinite(value) and value >= 0 for value in values):
             raise InvalidBoundingBoxError(
                 f"Coordinates must be finite and >= 0: {values}"
             )
+
+        # The right and bottom edges must lie past the left and top edges
         if self.left >= self.right or self.top >= self.bottom:
             raise InvalidBoundingBoxError(f"Box edges are inverted or empty: {values}")
 
@@ -196,6 +200,7 @@ class BoundingBox:
             InvalidBoundingBoxError: If the box lies outside the page by more than the
                 tolerance or has inverted edges.
         """
+        # Refuse boxes that stick out of the page by more than the tolerance
         if (
             min(left, top) < -tolerance
             or right > page_width + tolerance
@@ -205,6 +210,8 @@ class BoundingBox:
                 f"Box ({left}, {top}, {right}, {bottom}) lies outside a "
                 f"{page_width}x{page_height} page"
             )
+
+        # Clamp the small overshoot the tolerance allows back onto the page
         return cls(
             left=max(left, 0.0),
             top=max(top, 0.0),
@@ -237,6 +244,7 @@ class BoundingBox:
             The distance in PDF points between the closest edges or corners, 0 when
             the boxes touch or overlap.
         """
+        # Distance between the boxes along each axis, zero when they overlap on it
         horizontal = max(0.0, other.left - self.right, self.left - other.right)
         vertical = max(0.0, other.top - self.bottom, self.top - other.bottom)
         return math.hypot(horizontal, vertical)
@@ -312,12 +320,15 @@ class Document:
 
     def __post_init__(self) -> None:
         """Enforce the identity and size rules of a document."""
+        # The id of a document is the fingerprint of its bytes
         if not _SHA256_PATTERN.fullmatch(self.sha256):
             raise InvalidDocumentError("sha256 must be 64 lowercase hex characters")
         if not 0 < len(self.file_name) <= MAX_FILE_NAME_LENGTH:
             raise InvalidDocumentError(
                 f"file_name must have 1 to {MAX_FILE_NAME_LENGTH} characters"
             )
+
+        # Size and page count must be positive when known
         if self.size_bytes <= 0:
             raise InvalidDocumentError("size_bytes must be positive")
         if self.page_count is not None and self.page_count < 1:
@@ -365,6 +376,7 @@ class JobSummary:
     recognized_pages: int = 0
 
 
+# States from which a job can still move on
 _OPEN_STATES = frozenset({JobStatus.PENDING, JobStatus.PROCESSING})
 
 
@@ -494,11 +506,14 @@ class IngestionJob:
         Raises:
             InvalidJobTransitionError: If the job is terminal or has no attempt left.
         """
+        # Only an open job with attempts left can be claimed
         self._require_open("claim")
         if self.attempts_exhausted:
             raise InvalidJobTransitionError(
                 f"Job {self.id} has used its {self.max_attempts} attempts"
             )
+
+        # Start the attempt: processing, new lease, progress reset
         return replace(
             self,
             status=JobStatus.PROCESSING,
@@ -535,11 +550,14 @@ class IngestionJob:
             InvalidJobTransitionError: If the job is not processing or the page counts
                 are inconsistent.
         """
+        # Only the running attempt reports progress, within the page range
         self._require_status(JobStatus.PROCESSING, "advance")
         if pages_done < 0 or (pages_total is not None and pages_done > pages_total):
             raise InvalidJobTransitionError(
                 f"pages_done={pages_done} is outside 0..{pages_total}"
             )
+
+        # Record the new stage and page count
         return replace(
             self,
             stage=stage,
@@ -561,7 +579,10 @@ class IngestionJob:
         Raises:
             InvalidJobTransitionError: If the job is not processing.
         """
+        # Only a running job can complete
         self._require_status(JobStatus.PROCESSING, "complete")
+
+        # Store the summary and release the lease
         return replace(
             self,
             status=JobStatus.COMPLETED,
@@ -588,11 +609,14 @@ class IngestionJob:
             InvalidJobTransitionError: If the job is already terminal or the reason is
                 empty.
         """
+        # A failure needs an open job and a reason a person can read
         self._require_open("fail")
         if not reason.strip():
             raise InvalidJobTransitionError(
                 "A failed job needs a human-readable reason"
             )
+
+        # Store the failure and release the lease
         return replace(
             self,
             status=JobStatus.FAILED,
@@ -690,22 +714,29 @@ class ExtractedElement:
 
     def __post_init__(self) -> None:
         """Enforce position and kind-specific fields."""
+        # Every element has a page and a bounding box
         if not isinstance(self.page, int) or self.page < 1:
             raise ElementWithoutPositionError(f"Element {self.id} has no valid page")
         if not isinstance(self.bbox, BoundingBox):
             raise ElementWithoutPositionError(f"Element {self.id} has no bounding box")
+
+        # Confidence exists only for recognized text, between 0 and 1
         if self.confidence is not None and (
             self.origin is not TextOrigin.RECOGNIZED or not 0 <= self.confidence <= 1
         ):
             raise InvalidElementError(
                 f"Element {self.id}: confidence is 0..1 and only for recognized text"
             )
+
+        # Kind-specific fields must match the element's kind
         if (self.heading_level is not None) != (self.kind is ElementKind.HEADING):
             raise InvalidElementError(
                 f"Element {self.id}: heading_level is required for headings only"
             )
         if self.table is not None and self.kind is not ElementKind.TABLE:
             raise InvalidElementError(f"Element {self.id}: table data on a {self.kind}")
+
+        # Image fields belong to images only
         if self.kind is not ElementKind.IMAGE and (
             any(getattr(self, name) is not None for name in _IMAGE_ONLY_FIELDS)
             or self.labels
@@ -778,6 +809,7 @@ class ExtractedElement:
         Raises:
             InvalidElementError: If the element is not an image.
         """
+        # Only images have crops
         if self.kind is not ElementKind.IMAGE:
             raise InvalidElementError(f"Element {self.id} is not an image")
         return replace(self, image_key=image_key)
@@ -816,12 +848,15 @@ class ExtractedElement:
             InvalidElementError: If the element is not an image or a described status
                 has no text.
         """
+        # Only images get a description, and only a described one has text
         if self.kind is not ElementKind.IMAGE:
             raise InvalidElementError(f"Element {self.id} is not an image")
         if (status is DescriptionStatus.DESCRIBED) != bool(description):
             raise InvalidElementError(
                 f"Element {self.id}: description text is required only when described"
             )
+
+        # Store the outcome of the description
         return replace(
             self,
             description=description,

@@ -61,21 +61,30 @@ def resolve_citations(
         The rewritten text, its citations and the citation number of each cited
         unit. A text without a valid marker has no citations.
     """
+    # Rewrite variants such as [[2]] or [1-3] as plain markers first
     text = _separate_variants(text, sources=len(units))
+
+    # One number per cited document and page set, and the units behind each number
     numbers: dict[tuple[uuid.UUID, tuple[int, ...]], int] = {}
     members: dict[int, list[RetrievalUnit]] = {}
 
     def renumber(marker: re.Match[str]) -> str:
+        # Drop markers that point past the supplied sources
         position = int(marker["number"])
         if not 1 <= position <= len(units):
             return ""
+
+        # Units on the same pages of the same document share one number
         cited = units[position - 1]
         number = numbers.setdefault((cited.document_id, cited.pages), len(numbers) + 1)
         if cited not in members.setdefault(number, []):
             members[number].append(cited)
         return f"{marker['space']}[{number}]"
 
+    # Renumber every marker, then merge the repeats the merge produced
     rewritten = _REPEATED_MARKER.sub(r"\1", _MARKER.sub(renumber, text))
+
+    # Turn each number into a citation of its document and pages
     citations = tuple(
         Citation(
             number=number,
@@ -109,9 +118,12 @@ def has_markers(text: str) -> bool:
 
 def _separate_variants(text: str, *, sources: int) -> str:
     def separate(variant: re.Match[str]) -> str:
+        # A doubled or wide bracket holds a single number
         single = variant["doubled"] or variant["wide"]
         if single is not None:
             return f"[{single}]"
+
+        # A group lists numbers and ranges, each becoming its own marker
         numbers: list[int] = []
         for part in re.split(r"\s*,\s*", variant["group"]):
             if (span := _RANGE.fullmatch(part)) is not None:

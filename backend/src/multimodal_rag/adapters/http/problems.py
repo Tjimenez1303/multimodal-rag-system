@@ -157,6 +157,7 @@ def status_for(error: MultimodalRagError) -> int:
     Returns:
         The status mapped to the most specific class of the error.
     """
+    # Walk from the error's own class up to the root error
     for cls in type(error).__mro__:
         if cls in _STATUS_BY_ERROR:
             return _STATUS_BY_ERROR[cls]
@@ -172,6 +173,7 @@ def http_problem_code(status: int) -> str:
     Returns:
         The status phrase in lowercase snake case, with punctuation removed.
     """
+    # Turn the status phrase into snake case, such as method_not_allowed
     return re.sub(r"[^a-z0-9]+", "_", HTTPStatus(status).phrase.lower()).strip("_")
 
 
@@ -195,6 +197,7 @@ def problem_response(
     Returns:
         A JSON response with the ``application/problem+json`` media type.
     """
+    # Fill the problem body from the status, the path and the request id
     problem = Problem(
         title=HTTPStatus(status).phrase,
         status=status,
@@ -214,6 +217,7 @@ def problem_response(
 async def _handle_domain_error(
     request: Request, error: MultimodalRagError
 ) -> JSONResponse:
+    # Pick the status; a busy answer also tells the client when to retry
     status = status_for(error)
     headers = (
         {"Retry-After": str(BUSY_RETRY_AFTER_SECONDS)}
@@ -224,8 +228,12 @@ async def _handle_domain_error(
         # Internal details stay in the logs, and clients only get the stable code.
         logger.error("request failed with %s", error.code, exc_info=error)
         return problem_response(request, status=status, code=error.code)
+
+    # Known server errors keep their fixed message, logged as a warning
     if status >= 500:
         logger.warning("request failed with %s", error.code, exc_info=error)
+
+    # Client errors show their message, which names the broken rule
     return problem_response(
         request, status=status, code=error.code, detail=str(error), headers=headers
     )
@@ -234,6 +242,7 @@ async def _handle_domain_error(
 async def _handle_validation_error(
     request: Request, error: RequestValidationError
 ) -> JSONResponse:
+    # Name every invalid or missing field
     fields = ", ".join(
         ".".join(str(part) for part in issue["loc"]) for issue in error.errors()
     )
@@ -248,10 +257,13 @@ async def _handle_validation_error(
 async def _handle_http_error(
     request: Request, error: StarletteHTTPException
 ) -> JSONResponse:
+    # An error that carries its own problem code keeps it
     if isinstance(error, ProblemHTTPException):
         return problem_response(
             request, status=error.status_code, code=error.code, detail=error.detail
         )
+
+    # Plain HTTP errors such as 404 or 405 get a code from their status
     return problem_response(
         request,
         status=error.status_code,
@@ -261,6 +273,7 @@ async def _handle_http_error(
 
 
 async def _handle_unexpected_error(request: Request, error: Exception) -> JSONResponse:
+    # Any unhandled error becomes a generic 500 problem
     logger.error("unexpected error while handling a request", exc_info=error)
     return problem_response(request, status=500, code=MultimodalRagError.code)
 

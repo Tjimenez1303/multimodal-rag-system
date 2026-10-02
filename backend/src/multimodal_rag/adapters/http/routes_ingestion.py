@@ -16,6 +16,8 @@ from multimodal_rag.adapters.http.schemas import JobBody, UploadAccepted
 
 # Size of each read from the spooled upload while it is streamed to storage.
 UPLOAD_CHUNK_BYTES = 1024 * 1024
+
+# Response header that points to the job's status URL
 _LOCATION: dict[str, Any] = {
     "Location": {
         "description": "Status URL of the job",
@@ -75,10 +77,15 @@ async def upload_document(
     Returns:
         The document and job identifiers.
     """
+    # Hand the streamed file to the upload use case
     submission = await submit(
         file_name=file.filename or "", content=_chunks(file), correlation_id=request_id
     )
+
+    # 200 when the same content was already ingested, 202 while a job runs
     response.status_code = 200 if submission.already_ingested else 202
+
+    # Point the client to the status URL of the job
     response.headers["Location"] = request.url_for(
         "get_job", job_id=str(submission.job.id)
     ).path
@@ -101,6 +108,7 @@ async def get_job(job_id: uuid.UUID, find_job: GetJobDep) -> JobBody:
     Returns:
         The job without lease or worker details.
     """
+    # Load the job and serialize it as the response body
     return JobBody.model_validate(await find_job(job_id))
 
 

@@ -21,12 +21,15 @@ export interface ConversationStore {
  * @returns The conversation, its dispatcher and its persistence status.
  */
 export function useConversation(): ConversationStore {
+  // Start from the conversation saved in this tab
   const [conversation, dispatch] = useReducer(
     conversationReducer,
     undefined,
     loadConversation,
   );
   const [persisted, setPersisted] = useState(true);
+
+  // Save after every change and remember whether the browser accepted it
   useEffect(() => {
     // The effect writes to sessionStorage, an external system, and keeps its outcome.
     // oxlint-disable-next-line react/set-state-in-effect

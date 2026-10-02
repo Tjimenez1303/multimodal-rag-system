@@ -31,6 +31,7 @@ from multimodal_rag.shared.errors import DataInconsistencyError
 
 logger = logging.getLogger(__name__)
 
+# Job states during which a document cannot be deleted
 _ACTIVE_STATUSES = frozenset({JobStatus.PENDING, JobStatus.PROCESSING})
 
 
@@ -75,10 +76,13 @@ class ListDocuments:
         Raises:
             InvalidCursorError: If the cursor was not issued by the API.
         """
+        # Read one page of documents, then the newest job of each in one query
         page = await self._documents.list_page(limit=limit, cursor=cursor)
         latest = await self._jobs.latest_for_documents(
             [document.id for document in page.items]
         )
+
+        # Pair every document with its newest job
         views = tuple(
             DocumentView(document=document, latest_job=latest.get(document.id))
             for document in page.items
@@ -110,6 +114,7 @@ class GetDocument:
         Raises:
             DocumentNotFoundError: If no document has this id.
         """
+        # Fail with not found first, then attach the newest job
         document = await self._documents.get(document_id)
         job = await self._jobs.latest_for_document(document_id)
         return DocumentView(document=document, latest_job=job)
@@ -175,12 +180,15 @@ class ListDocumentElements:
                 completed.
             InvalidCursorError: If the cursor was not issued by the API.
         """
+        # The document must exist and its ingestion must have completed
         await self._documents.get(document_id)
         job = await self._jobs.latest_for_document(document_id)
         if job is None or job.status is not JobStatus.COMPLETED:
             raise IngestionNotCompletedError(
                 f"Document {document_id} has no completed ingestion"
             )
+
+        # Read one page of elements in reading order
         page = await self._elements.list_page(
             document_id=document_id,
             page_number=page_number,
@@ -188,8 +196,12 @@ class ListDocumentElements:
             limit=limit,
             cursor=cursor,
         )
+
+        # Load the relationships of those elements in one query
         ids = [element.id for element in page.items]
         links = await self._elements.relationships_for(ids) if ids else ()
+
+        # Attach to each element the links that touch it
         views = tuple(
             ElementView(
                 element=element,
@@ -231,11 +243,14 @@ class GetElementImage:
             ImageNotFoundError: If the element has no stored image.
             DataInconsistencyError: If the stored crop of an image is missing.
         """
+        # Find the element and make sure it is an image with a crop
         element = await self._elements.get(
             document_id=document_id, element_id=element_id
         )
         if element.image_key is None:
             raise ImageNotFoundError(f"Element {element_id} has no image")
+
+        # Read the crop; a missing file is an internal inconsistency
         try:
             return await self._blobs.read_bytes(element.image_key)
         except BlobNotFoundError as error:
@@ -280,6 +295,7 @@ class GetPageImage:
             PageNotFoundError: If the page is outside 1 to the document's page count.
             DataInconsistencyError: If the stored image of the page is missing.
         """
+        # The document must exist and its ingestion must have completed
         document = await self._documents.get(document_id)
         job = await self._jobs.latest_for_document(document_id)
         if job is None or job.status is not JobStatus.COMPLETED:
@@ -288,10 +304,14 @@ class GetPageImage:
             )
         # A completed job learned the page count even when the upload could not.
         page_count = document.page_count or (job.summary.pages if job.summary else 0)
+
+        # The page must exist in the document
         if not 1 <= page_number <= page_count:
             raise PageNotFoundError(
                 f"Page {page_number} is outside the document's {page_count} pages"
             )
+
+        # Read the page image stored at ingestion
         key = ExtractedElement.page_image_key_for(
             document_id=document_id, page_number=page_number
         )
@@ -344,13 +364,20 @@ class DeleteDocument:
             ProviderError: If the index stays unavailable, leaving the document
                 listed.
         """
+        # Refuse while a job is still pending or processing
         document = await self._documents.get(document_id)
         job = await self._jobs.latest_for_document(document_id)
         if job is not None and job.status in _ACTIVE_STATUSES:
             raise IngestionInProgressError(f"Document {document_id} is being ingested")
+
+        # Remove the searchable units first, so the document stops appearing in answers
         await self._index.delete_document(document_id)
+
+        # Then the figure crops, the page images and the PDF itself
         await self._blobs.delete_tree(ExtractedElement.figures_prefix_for(document_id))
         await self._blobs.delete_tree(ExtractedElement.pages_prefix_for(document_id))
         await self._blobs.delete(document.blob_key)
+
+        # Finally the rows, which cascade to jobs, elements and relationships
         await self._documents.delete(document_id)
         logger.info("document %s deleted", document_id)

@@ -18,7 +18,10 @@ from multimodal_rag.ingestion.domain import (
     RelationshipKind,
 )
 
+# Text kinds that can describe a nearby image
 _NEAR_KINDS = frozenset({ElementKind.PARAGRAPH, ElementKind.LIST_ITEM})
+
+# Relationship created when a caption is linked to each kind of element
 _CAPTIONED_KINDS = {
     ElementKind.IMAGE: RelationshipKind.CAPTION_OF,
     ElementKind.TABLE: RelationshipKind.TITLE_OF,
@@ -52,8 +55,11 @@ def link_elements(
     Raises:
         UnknownPageSizeError: If a table lies on a page of unknown size.
     """
+    # Work in reading order, keeping the links the extractor already found
     ordered = sorted(elements, key=lambda element: element.reading_order)
     links = list(dict.fromkeys(extracted))
+
+    # Add captions the extractor missed, then nearby text, then continued tables
     links += _caption_fallback(ordered, links, near_max_points)
     links += _near(ordered, links, near_max_points)
     links += _continuations(ordered, links, page_sizes)
@@ -70,6 +76,7 @@ def repeats_header(head: ExtractedElement, part: ExtractedElement) -> bool:
     Returns:
         Whether both first rows hold the same cells, ignoring case and spacing.
     """
+    # Two tables without rows cannot share a header
     if not head.table or not part.table:
         return False
     return _normalized_row(head.table[0]) == _normalized_row(part.table[0])
@@ -80,14 +87,19 @@ def _caption_fallback(
     links: Sequence[ElementRelationship],
     max_gap: float,
 ) -> list[ElementRelationship]:
+    # Captions and targets that are already linked
     linked = {link.source_id for link in links if link.kind in _CAPTION_LINKS}
     captioned = {link.target_id for link in links if link.kind in _CAPTION_LINKS}
     found: list[ElementRelationship] = []
     candidates = [e for e in elements if e.kind in _CAPTIONED_KINDS]
+
+    # Link each unlinked caption to the closest free image or table
     for index, caption in enumerate(elements):
         if caption.kind is not ElementKind.CAPTION or caption.id in linked:
             continue
         free = (e for e in candidates if e.id not in captioned)
+
+        # Look below and above on the same page, then across a page break
         target = _closest(caption, free, max_gap) or _across_break(elements, index)
         if target is None or target.id in captioned:
             continue
@@ -106,10 +118,13 @@ def _across_break(
     elements: Sequence[ExtractedElement], index: int
 ) -> ExtractedElement | None:
     # A caption that opens its page belongs to a figure or table closing the last one.
+    # Only a caption with nothing above it on its page qualifies
     caption = elements[index]
     before = [e for e in elements[:index] if e.kind is not ElementKind.PAGE_FURNITURE]
     if not before or any(e.page == caption.page for e in before):
         return None
+
+    # Take the figure or table that closes the previous page
     previous = before[-1]
     if previous.page == caption.page - 1 and previous.kind in _CAPTIONED_KINDS:
         return previous
@@ -121,9 +136,12 @@ def _near(
     links: Sequence[ElementRelationship],
     max_gap: float,
 ) -> list[ElementRelationship]:
+    # Elements by id, and the paragraphs and list items that can be near an image
     by_id = {element.id: element for element in elements}
     texts = [element for element in elements if element.kind in _NEAR_KINDS]
     found: list[ElementRelationship] = []
+
+    # For each image, measure from the image and from a caption on the next page
     for image in (e for e in elements if e.kind is ElementKind.IMAGE):
         anchors = [image] + [
             by_id[link.source_id]
@@ -132,12 +150,16 @@ def _near(
             and link.target_id == image.id
             and by_id[link.source_id].page == image.page + 1
         ]
+
+        # Keep the text blocks in the same column within the allowed gap
         scored = [
             (gap, text)
             for anchor in anchors
             for text in texts
             if (gap := _gap(anchor, text)) is not None and gap <= max_gap
         ]
+
+        # Link the closest one, scored higher the closer it is
         if scored:
             gap, text = min(scored, key=lambda pair: (pair[0], pair[1].reading_order))
             found.append(
@@ -156,17 +178,23 @@ def _continuations(
     links: Sequence[ElementRelationship],
     page_sizes: Mapping[int, PageSize],
 ) -> list[ElementRelationship]:
+    # Captions that title a table, mapped to the table they title
     titles = {
         link.source_id: link.target_id
         for link in links
         if link.kind is RelationshipKind.TITLE_OF
     }
+
+    # Positions of the tables in reading order
     tables = [index for index, e in enumerate(elements) if e.kind is ElementKind.TABLE]
     found: list[ElementRelationship] = []
+
+    # Compare each table with the next one
     for first, second in zip(tables, tables[1:], strict=False):
         earlier, later = elements[first], elements[second]
         between = elements[first + 1 : second]
         if _continues(earlier, later, between, titles, page_sizes):
+            # A caption saying continued makes the link certain
             continued = any(
                 _is_continued(e) for e in between if titles.get(e.id) == later.id
             )
@@ -188,15 +216,20 @@ def _continues(
     titles: Mapping[uuid.UUID, uuid.UUID],
     page_sizes: Mapping[int, PageSize],
 ) -> bool:
+    # The tables must sit on consecutive pages with the same number of columns
     if later.page != earlier.page + 1 or _columns(earlier) != _columns(later):
         return False
     if not _columns(earlier):
         return False
+
+    # Only page furniture, images or their own titles may sit between them
     interrupted = any(
         element.kind not in (ElementKind.PAGE_FURNITURE, ElementKind.IMAGE)
         and titles.get(element.id) not in (earlier.id, later.id)
         for element in between
     )
+
+    # The first must end low on its page and the second start high on the next
     return (
         not interrupted
         and earlier.bbox.bottom > PageSize.of_page(page_sizes, earlier.page).height / 2
@@ -207,6 +240,7 @@ def _continues(
 def _closest(
     caption: ExtractedElement, candidates: Iterable[ExtractedElement], max_gap: float
 ) -> ExtractedElement | None:
+    # Keep the candidates in the same column within the allowed gap
     scored = [
         (gap, candidate)
         for candidate in candidates
@@ -219,6 +253,7 @@ def _closest(
 
 def _gap(first: ExtractedElement, second: ExtractedElement) -> float | None:
     """Vertical gap between two elements of one page and one column, else ``None``."""
+    # Elements on different pages or columns have no gap
     if first.page != second.page or not _overlap(first.bbox, second.bbox):
         return None
     return max(

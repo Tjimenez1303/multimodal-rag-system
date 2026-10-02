@@ -12,10 +12,13 @@ export interface ImageColumnProps {
  * secondary group, in the order the service returned them (FR-015, FR-017).
  */
 export function ImageColumn({ primary, related }: ImageColumnProps) {
+  // Nothing to show when the answer has no figure
   if (primary === null && related.length === 0) return null;
   return (
     <div className="flex flex-col gap-4">
+      {/* The primary figure first, larger */}
       {primary !== null && <FigureCard image={primary} />}
+      {/* Then the related figures in a two-column grid */}
       {related.length > 0 && (
         <section
           role="group"

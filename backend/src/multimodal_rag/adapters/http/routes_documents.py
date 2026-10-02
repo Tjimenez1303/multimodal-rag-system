@@ -26,6 +26,8 @@ from multimodal_rag.ingestion.domain import ElementKind
 PNG_MEDIA_TYPE = "image/png"
 MAX_PAGE_SIZE = 200
 DEFAULT_PAGE_SIZE = 50
+
+# OpenAPI description of the PNG responses
 _PNG_RESPONSE: dict[str, Any] = {
     "description": "PNG image",
     "content": {PNG_MEDIA_TYPE: {"schema": {"type": "string", "format": "binary"}}},
@@ -55,6 +57,7 @@ async def list_documents(
     Returns:
         The documents with their latest jobs and the cursor of the next page.
     """
+    # Read one page of documents, then serialize each with its latest job
     result = await list_page(limit=limit, cursor=cursor)
     return DocumentPageBody(
         items=[DocumentBody.from_view(view) for view in result.items],
@@ -132,9 +135,12 @@ async def list_document_elements(
     Returns:
         The elements with their relationships and the cursor of the next page.
     """
+    # Read one page of elements with the optional page and kind filters
     result = await list_elements(
         document_id, page_number=page, kind=kind, limit=limit, cursor=cursor
     )
+
+    # Serialize each element, adding the URL of its crop when it has one
     items = [
         ElementBody.from_view(
             view,

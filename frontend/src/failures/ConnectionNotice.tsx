@@ -8,6 +8,7 @@ import { Alert, AlertTitle } from "@/components/ui/alert";
  * call gets a response again (FR-030).
  */
 export function ConnectionNotice({ forceVisible = false }: { forceVisible?: boolean }) {
+  // Shown while the latest call could not reach the service
   const reachable = useServiceReachable();
   if (reachable && !forceVisible) return null;
   // <output> is a polite live region with the status role, so the notice is announced.

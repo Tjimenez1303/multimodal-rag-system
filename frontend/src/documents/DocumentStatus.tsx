@@ -15,6 +15,7 @@ const STAGE_WORDS: Record<JobStage, string> = {
   finalizing: "Finishing",
 };
 
+// Label and colours of the badge of each status
 const BADGE: Record<DisplayStatus, { label: string; className: string }> = {
   pending: {
     label: "Pending",
@@ -41,16 +42,22 @@ const BADGE: Record<DisplayStatus, { label: string; className: string }> = {
  * @param props - The document as returned by the service.
  */
 export function DocumentStatus({ document }: { document: DocumentBody }) {
+  // Status, latest job and badge of the document
   const status = displayStatus(document);
   const job = document.latest_job;
   const badge = BADGE[status];
+
+  // A running job past its first attempt is a retry
   const retrying =
     job !== null && job.attempt > 1 && status !== "ready" && status !== "failed";
+
+  // Page progress as a percentage, when the page count is known
   const percent = job?.pages_total
     ? Math.round((job.pages_done / job.pages_total) * 100)
     : undefined;
   return (
     <div className="flex min-w-0 flex-col gap-1 text-xs">
+      {/* The badge, plus the attempt count while retrying */}
       <div className="flex flex-wrap items-center gap-1.5">
         <Badge variant="outline" className={cn("rounded-sm", badge.className)}>
           {badge.label}
@@ -61,6 +68,7 @@ export function DocumentStatus({ document }: { document: DocumentBody }) {
           </span>
         )}
       </div>
+      {/* While processing: the stage in plain words and a progress bar */}
       {status === "processing" && job !== null && (
         <>
           <p className="text-muted-foreground">
@@ -76,6 +84,7 @@ export function DocumentStatus({ document }: { document: DocumentBody }) {
           />
         </>
       )}
+      {/* Once ready: what the ingestion found */}
       {status === "ready" && job?.summary && (
         <p className="text-muted-foreground">
           {[
@@ -85,6 +94,7 @@ export function DocumentStatus({ document }: { document: DocumentBody }) {
           ].join(", ")}
         </p>
       )}
+      {/* Once failed: the reason the service gave */}
       {status === "failed" && job?.failure_reason && (
         <p className="leading-5 text-destructive">{job.failure_reason}</p>
       )}

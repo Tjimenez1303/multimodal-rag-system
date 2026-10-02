@@ -28,6 +28,7 @@ def transport_error(error: httpx.TransportError, *, service: str) -> ProviderErr
     Returns:
         A timeout error for timeouts, an unavailable error otherwise.
     """
+    # A timeout is reported apart from a service that cannot be reached
     if isinstance(error, httpx.TimeoutException):
         return ProviderTimeoutError(f"The {service} did not answer in time")
     return ProviderUnavailableError(f"The {service} is unreachable")
@@ -44,6 +45,7 @@ def status_error(status: int | None, *, service: str) -> ProviderError:
         An unavailable error for 429, 5xx or an unknown status, and a response
         error for any other status.
     """
+    # Overload and server errors may pass, so they count as unavailable
     if status is None or status == _TOO_MANY_REQUESTS or status >= _FIRST_SERVER_ERROR:
         return ProviderUnavailableError(f"The {service} answered {status}")
     return ProviderResponseError(f"The {service} rejected the request: {status}")

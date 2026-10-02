@@ -137,13 +137,16 @@ def translated_errors() -> Iterator[None]:
     try:
         yield
     except sa_exc.TimeoutError as error:
+        # No pooled connection was free within pool_timeout
         raise StorageTimeoutError("No database connection was free in time") from error
     except sa_exc.DBAPIError as error:
+        # Driver errors become storage errors when they mean an outage or a timeout
         translated = _translate(error)
         if translated is None:
             raise
         raise translated from error
     except OSError as error:
+        # The host cannot be reached at all
         raise StorageUnavailableError("The database cannot be reached") from error
 
 
@@ -186,6 +189,7 @@ async def connect(engine: AsyncEngine) -> AsyncIterator[AsyncConnection]:
 
 
 def _translate(error: sa_exc.DBAPIError) -> StorageError | None:
+    # Classify the error by its PostgreSQL SQLSTATE code
     if error.connection_invalidated:
         return StorageUnavailableError("The database connection was lost")
     sqlstate = getattr(error.orig, "sqlstate", None) or ""

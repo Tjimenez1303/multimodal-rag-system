@@ -26,6 +26,7 @@ from multimodal_rag.ingestion.domain import (
 )
 
 
+# Values passed across the ports
 @dataclass(frozen=True, slots=True)
 class Page[T]:
     """One page of results from a paginated query.
@@ -98,6 +99,7 @@ class SearchHit:
     similarity: float
 
 
+# Ports the ingestion core calls, implemented by the adapters
 class Clock(Protocol):
     """Source of the current time."""
 

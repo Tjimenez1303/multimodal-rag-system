@@ -25,11 +25,14 @@ export interface CitationMarkerOptions {
  * @returns The tree transformer.
  */
 export function citationMarkers({ numbers }: CitationMarkerOptions) {
+  // Only numbers the response really cites become markers
   const citationNumbers = new Set(numbers);
   return (tree: Root) => {
+    // Replace each [n] in the text with a citation element carrying n
     findAndReplace(tree, [
       /\[(\d+)\]/g,
       (marker: string, number: string) => {
+        // Leave unknown numbers as plain text
         if (!citationNumbers.has(Number(number))) return false;
         const node: Text = {
           type: "text",

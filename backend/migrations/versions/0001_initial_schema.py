@@ -35,6 +35,7 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     """Apply this revision."""
+    # Documents, unique by the fingerprint of their bytes
     op.create_table(
         "documents",
         sa.Column("id", sa.Uuid(), nullable=False),
@@ -58,6 +59,8 @@ def upgrade() -> None:
         ["created_at", "id"],
         unique=False,
     )
+
+    # Elements extracted from each page of a document
     op.create_table(
         "extracted_elements",
         sa.Column("id", sa.Uuid(), nullable=False),
@@ -136,6 +139,8 @@ def upgrade() -> None:
         ["document_id", "reading_order"],
         unique=False,
     )
+
+    # Ingestion jobs, which are also the job queue
     op.create_table(
         "ingestion_jobs",
         sa.Column("id", sa.Uuid(), nullable=False),
@@ -201,6 +206,8 @@ def upgrade() -> None:
         ["status", "lease_expires_at"],
         unique=False,
     )
+
+    # Relationships between elements
     op.create_table(
         "element_relationships",
         sa.Column("document_id", sa.Uuid(), nullable=False),
@@ -243,12 +250,15 @@ def upgrade() -> None:
         ["document_id"],
         unique=False,
     )
+
+    # Notify the ingestion_jobs channel on every new job
     op.execute(NOTIFY_FUNCTION)
     op.execute(NOTIFY_TRIGGER)
 
 
 def downgrade() -> None:
     """Revert this revision."""
+    # Drop the trigger, then every table in reverse dependency order
     op.execute("DROP TRIGGER ingestion_jobs_notify ON ingestion_jobs")
     op.execute("DROP FUNCTION notify_ingestion_job()")
     op.drop_index(

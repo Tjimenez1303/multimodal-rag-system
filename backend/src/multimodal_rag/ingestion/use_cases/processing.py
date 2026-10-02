@@ -60,8 +60,11 @@ from multimodal_rag.shared.errors import (
 
 logger = logging.getLogger(__name__)
 
+# Service names used in failure reasons shown to clients
 EMBEDDING_MODEL = "embedding model"
 VECTOR_INDEX = "vector index"
+
+# Element kinds counted as text in the job summary
 _TEXT_KINDS = frozenset(
     {
         ElementKind.HEADING,
@@ -75,6 +78,8 @@ _UNREACHABLE = (ProviderUnavailableError, ProviderTimeoutError)
 _CONTINUES = RelationshipKind.CONTINUES
 # Records the stage of a running attempt, keeping its page progress.
 type _Stage = Callable[[JobStage], Awaitable[None]]
+
+# Failure code stored for each extraction error
 _FAILURE_BY_ERROR: dict[type[ExtractionError], FailureCode] = {
     EncryptedDocumentError: FailureCode.ENCRYPTED_DOCUMENT,
     CorruptDocumentError: FailureCode.CORRUPT_DOCUMENT,
@@ -183,14 +188,17 @@ class ProcessJob:
             StorageUnavailableError: If the database is unreachable.
             StorageTimeoutError: If the database does not answer in time.
         """
+        # Every write of this attempt carries its fencing token
         lease_token = job.held_lease()
         try:
+            # Run every stage of the pipeline
             summary = await self._run(job, lease_token)
         except LeaseLostError, StorageUnavailableError, StorageTimeoutError:
             # Not the document's fault: the attempt is abandoned without failing the
             # job, and the next attempt deletes whatever this one indexed.
             raise
         except ServiceFailedError as error:
+            # A model or the index failed after its retries: fail with a clear cause
             logger.warning("job failed because the %s failed", error.service)
             if error.transient:
                 reason = f"The {error.service} was unavailable after its retries."
@@ -200,6 +208,7 @@ class ProcessJob:
                 code = FailureCode.INTERNAL_ERROR
             return await self._fail(job, lease_token, code, reason)
         except ExtractionError as error:
+            # The PDF itself is the problem: encrypted, damaged or without text
             code = _FAILURE_BY_ERROR.get(type(error), FailureCode.INTERNAL_ERROR)
             logger.warning("job failed with %s", code)
             return await self._fail(job, lease_token, code, _FAILURE_REASONS[code])
@@ -207,6 +216,8 @@ class ProcessJob:
             logger.exception("job failed with an internal error")
             code = FailureCode.INTERNAL_ERROR
             return await self._fail(job, lease_token, code, _FAILURE_REASONS[code])
+
+        # Every stage succeeded: store the summary and release the lease
         finished = await self._jobs.complete(
             job_id=job.id, lease_token=lease_token, summary=summary
         )
@@ -214,10 +225,15 @@ class ProcessJob:
         return finished
 
     async def _run(self, job: IngestionJob, lease_token: uuid.UUID) -> JobSummary:
+        # Load the document and start from a clean index for it
         document = await self._documents.get(job.document_id)
         logger.info("job started, attempt %s, document %s", job.attempt, document.id)
         await _using(VECTOR_INDEX, self._index.delete_document(document.id))
+
+        # Extract every page, saving page images and figure crops
         extraction = await self._extract(document, job, lease_token)
+
+        # A document without any text cannot answer questions
         if not any(_has_text(element) for element in extraction.elements):
             raise NoExtractableTextError(f"Document {document.id} yields no text")
         pages = extraction.pages
@@ -225,6 +241,8 @@ class ProcessJob:
         stage = partial(
             self._progress, job, lease_token, pages_done=pages, pages_total=pages
         )
+
+        # Flag decorative images and choose the figures worth describing
         await stage(JobStage.DESCRIBING_FIGURES)
         triage = self._options.figure_policy.triage(
             extraction.elements,
@@ -233,14 +251,22 @@ class ProcessJob:
             pages_total=pages,
             describe=self._describer is not None,
         )
+
+        # Link captions, nearby text and tables continued across pages
         links = link_elements(
             triage.elements,
             page_sizes=extraction.page_sizes,
             extracted=extraction.links,
             near_max_points=self._options.near_text_max_points,
         )
+
+        # Describe the chosen figures with the vision model
         elements = await self._describe(triage.elements, triage.to_describe, links)
+
+        # Build, embed and index the retrieval units, still hidden from search
         units = await self._index_units(document, elements, links, stage)
+
+        # Replace the stored elements and relationships in one transaction
         await stage(JobStage.FINALIZING)
         await self._elements.replace_for_document(
             job_id=job.id,
@@ -249,18 +275,23 @@ class ProcessJob:
             elements=elements,
             relationships=links,
         )
+
+        # Make the new units visible to search
         await _using(VECTOR_INDEX, self._index.publish(document.id))
         return _summary(extraction, elements, links, units)
 
     async def _extract(
         self, document: Document, job: IngestionJob, lease_token: uuid.UUID
     ) -> _Extraction:
+        # Start with the page count known at upload, if any
         extraction = _Extraction(
             document_id=document.id, pages=document.page_count or 0
         )
         await self._progress(
             job, lease_token, JobStage.EXTRACTING, 0, document.page_count
         )
+
+        # Run the extractor on a local copy of the PDF, batch by batch
         with self._blobs.materialize(document.blob_key) as path:
             batches = self._extractor.extract(
                 path=path,
@@ -270,6 +301,7 @@ class ProcessJob:
             )
             # Extraction blocks on CPU, so each batch runs in a worker thread.
             while (batch := await asyncio.to_thread(next, batches, None)) is not None:
+                # Store each batch, then report how far extraction got
                 await self._collect(batch, extraction)
                 await self._progress(
                     job,
@@ -282,11 +314,14 @@ class ProcessJob:
 
     async def _collect(self, batch: ExtractionBatch, extraction: _Extraction) -> None:
         # Keys derive from the document and page, so a retried job overwrites them.
+        # Save the rendered image of every page
         for page_number, page_png in batch.page_images.items():
             key = ExtractedElement.page_image_key_for(
                 document_id=extraction.document_id, page_number=page_number
             )
             await self._blobs.save_bytes(key, page_png)
+
+        # Save each figure crop and remember its fingerprint
         for element in batch.elements:
             png = batch.images.get(element.id)
             if png is not None:
@@ -297,6 +332,8 @@ class ProcessJob:
                 extraction.image_hashes[element.id] = hashlib.sha256(png).hexdigest()
                 element = element.with_image_key(key)
             extraction.elements.append(element)
+
+        # Accumulate the links, page sizes and recognized pages of the batch
         extraction.links += batch.relationships
         extraction.page_sizes |= batch.page_sizes
         extraction.recognized.update(batch.recognized_pages)
@@ -308,10 +345,13 @@ class ProcessJob:
         chosen: Sequence[uuid.UUID],
         links: Sequence[ElementRelationship],
     ) -> list[ExtractedElement]:
+        # Nothing to describe when the model is off or no figure was chosen
         by_id = {element.id: element for element in elements}
         if self._describer is None or not chosen:
             return list(elements)
         describer = self._describer
+
+        # Describe at most figure_concurrency figures at a time
         slots = asyncio.Semaphore(self._options.figure_concurrency)
         unreachable = asyncio.Event()
 
@@ -326,6 +366,7 @@ class ProcessJob:
                     describer, image, by_id, links, unreachable
                 )
 
+        # Describe every chosen figure concurrently, then put them back in order
         async with asyncio.TaskGroup() as group:
             tasks = [group.create_task(describe(by_id[i])) for i in chosen]
         for task in tasks:
@@ -340,23 +381,30 @@ class ProcessJob:
         links: Sequence[ElementRelationship],
         unreachable: asyncio.Event,
     ) -> ExtractedElement:
+        # Gather the caption and nearby text that accompany the figure
         context = description_context(image, elements=by_id, relationships=links)
         # Only figures whose crop was stored are described, under this derived key.
         key = ExtractedElement.image_key_for(
             document_id=image.document_id, element_id=image.id
         )
+
+        # Read the crop and send it to the vision model
         png = await self._blobs.read_bytes(key)
         try:
             text = await describer.describe(
                 image_png=png, caption=context.caption, context=context.context
             )
         except _UNREACHABLE:
+            # An unreachable model stops further calls for this job
             unreachable.set()
             logger.warning("vision model unreachable, remaining figures skipped")
             return image.with_description(status=DescriptionStatus.NOT_DESCRIBED)
         except ProviderResponseError:
+            # A rejected figure is left undescribed, the job goes on
             logger.warning("vision model rejected figure %s", image.id)
             return image.with_description(status=DescriptionStatus.NOT_DESCRIBED)
+
+        # Keep the description and flag identifiers the figure does not show
         return image.with_description(
             status=DescriptionStatus.DESCRIBED,
             description=text,
@@ -372,6 +420,7 @@ class ProcessJob:
         links: Sequence[ElementRelationship],
         stage: _Stage,
     ) -> tuple[RetrievalUnit, ...]:
+        # Group the elements into structure-aware retrieval units
         await stage(JobStage.BUILDING_UNITS)
         units = build_units(
             document_id=document.id,
@@ -381,10 +430,14 @@ class ProcessJob:
             counter=self._tokens,
             max_tokens=self._options.max_unit_tokens,
         )
+
+        # Embed each unit, truncated to what the embedding model reads
         await stage(JobStage.EMBEDDING)
         limit = self._options.embedder_max_input_tokens
         inputs = [self._tokens.truncate(unit.embedding_text, limit) for unit in units]
         vectors = await _using(EMBEDDING_MODEL, self._embedder.embed(inputs))
+
+        # Write the units to the index with their vectors
         await stage(JobStage.INDEXING)
         await _using(VECTOR_INDEX, self._index.upsert_units(units, vectors))
         return units
@@ -397,6 +450,7 @@ class ProcessJob:
         pages_done: int,
         pages_total: int | None,
     ) -> None:
+        # Persist the stage and page progress, fenced by the lease token
         await self._jobs.update_progress(
             job_id=job.id,
             lease_token=lease_token,
@@ -412,6 +466,7 @@ class ProcessJob:
         code: FailureCode,
         reason: str,
     ) -> IngestionJob:
+        # Remove whatever this attempt indexed, then mark the job failed
         try:
             await self._index.delete_document(job.document_id)
         except ProviderError:
@@ -427,6 +482,7 @@ async def _using[T](service: str, call: Awaitable[T]) -> T:
     try:
         return await call
     except ProviderError as error:
+        # Unreachable or timed out counts as transient, anything else does not
         transient = isinstance(error, _UNREACHABLE)
         raise ServiceFailedError(service, transient=transient) from error
 
@@ -437,9 +493,14 @@ def _summary(
     links: Sequence[ElementRelationship],
     units: Sequence[RetrievalUnit],
 ) -> JobSummary:
+    # Description outcome of every image
     statuses = [e.description_status for e in elements if e.kind is ElementKind.IMAGE]
+
+    # Tables that are continued, and tables that continue another
     continued = {link.target_id for link in links if link.kind is _CONTINUES}
     continuing = {link.source_id for link in links if link.kind is _CONTINUES}
+
+    # Count what the job produced
     return JobSummary(
         pages=extraction.pages,
         text_elements=sum(e.kind in _TEXT_KINDS for e in elements),

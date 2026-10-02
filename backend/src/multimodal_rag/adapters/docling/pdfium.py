@@ -23,6 +23,7 @@ from multimodal_rag.ingestion.errors import (
 )
 from multimodal_rag.ingestion.ports import PdfInfo
 
+# PDFium error codes that mean a password or security handler is needed
 _ENCRYPTION_ERRORS = frozenset(
     {pdfium_raw.FPDF_ERR_PASSWORD, pdfium_raw.FPDF_ERR_SECURITY}
 )
@@ -63,11 +64,14 @@ class PdfiumInspector:
             UnsupportedMediaTypeError: If PDFium cannot load the file as a PDF.
         """
         try:
+            # Opening the file proves it is a PDF and gives its page count
             with open_pdf(path) as document, pypdfium2_lock:
                 return PdfInfo(page_count=len(document), encrypted=False)
         except EncryptedDocumentError:
+            # Encrypted PDFs are accepted, their pages are counted later
             return PdfInfo(page_count=None, encrypted=True)
         except CorruptDocumentError as error:
+            # Anything else is not a readable PDF
             raise UnsupportedMediaTypeError("The file is not a readable PDF") from error
 
 
@@ -89,14 +93,17 @@ def open_pdf(path: Path) -> Iterator[pdfium.PdfDocument]:
             security handler.
         CorruptDocumentError: If PDFium cannot load the file.
     """
+    # Load the document under the lock Docling also takes around PDFium
     with pypdfium2_lock:
         try:
             document = pdfium.PdfDocument(path)
         except pdfium.PdfiumError as error:
+            # Tell encrypted files apart from damaged ones
             if error.err_code in _ENCRYPTION_ERRORS:
                 raise EncryptedDocumentError("The PDF is encrypted") from error
             raise CorruptDocumentError("PDFium cannot load the PDF") from error
     try:
+        # Hand the document to the block and always close it afterwards
         yield document
     finally:
         with pypdfium2_lock:
@@ -120,6 +127,7 @@ def read_layout(path: Path) -> PdfLayout:
         CorruptDocumentError: If the PDF or one of its pages cannot be loaded.
     """
     with open_pdf(path) as document:
+        # Count the pages and find those without any text layer
         with pypdfium2_lock:
             try:
                 page_count = len(document)
@@ -130,6 +138,8 @@ def read_layout(path: Path) -> PdfLayout:
                 )
             except pdfium.PdfiumError as error:
                 raise CorruptDocumentError("PDFium cannot load a page") from error
+
+        # Read the bookmarks with Docling's own outline reader
         outline = tuple(
             OutlineEntry(depth=item.level, title=item.title, page=item.page_no)
             for item in extract_outline_from_pdfium(document)
@@ -140,6 +150,7 @@ def read_layout(path: Path) -> PdfLayout:
 
 
 def _character_count(document: pdfium.PdfDocument, index: int) -> int:
+    # Open the page and its text layer, closing both afterwards
     page = document[index]
     try:
         text_page = page.get_textpage()

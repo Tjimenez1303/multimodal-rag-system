@@ -30,6 +30,7 @@ from multimodal_rag.ingestion.use_cases.intake import Submission
 from multimodal_rag.ingestion.use_cases.library import DocumentView, ElementView
 
 
+# Bodies of the upload and job routes
 class UploadAccepted(BaseModel):
     """Identifiers returned by an upload.
 
@@ -134,6 +135,7 @@ class JobBody(BaseModel):
     finished_at: datetime | None
 
 
+# Bodies of the document library routes
 class DocumentBody(BaseModel):
     """A document of the library with its newest job.
 
@@ -163,6 +165,7 @@ class DocumentBody(BaseModel):
         Returns:
             The response body.
         """
+        # Flatten the document and its latest job into one body
         document = view.document
         job = view.latest_job
         return cls(
@@ -187,6 +190,7 @@ class DocumentPageBody(BaseModel):
     next_cursor: str | None
 
 
+# Bodies of the element listing route
 class BoundingBoxBody(BaseModel):
     """Position on a page in PDF points with a top-left origin.
 
@@ -288,6 +292,7 @@ class ElementBody(BaseModel):
         Returns:
             The response body.
         """
+        # Copy the element's fields, box, table rows and relationships
         element = view.element
         box = element.bbox
         table = element.table
@@ -338,6 +343,7 @@ class ElementPageBody(BaseModel):
     next_cursor: str | None
 
 
+# Bodies of the question route
 class QuestionBody(BaseModel):
     """A question about the ingested documents.
 
@@ -575,6 +581,7 @@ class AnswerBody(BaseModel):
         Returns:
             The response body.
         """
+        # Serialize the answer, giving every image the URL of its crop
         primary = answer.primary_image
         return cls(
             status=answer.status,

@@ -64,12 +64,16 @@ def find_statements(answer: str) -> tuple[Statement, ...]:
         The statements of at least ``MIN_STATEMENT_WORDS`` words, in order.
     """
     statements = []
+
+    # Split each line into sentences, keeping where every statement ends
     for line in _LINE.finditer(answer):
         start = line.start()
         for separator in [*SENTENCE_END.finditer(line.group()), None]:
             stop = line.end() if separator is None else line.start() + separator.start()
             piece = answer[start:stop]
             text = piece.strip()
+
+            # Only statements with enough words can carry a citation
             if len(_WORD.findall(text)) >= MIN_STATEMENT_WORDS:
                 end = start + len(piece.rstrip())
                 statements.append(Statement(text=text, end=end))
@@ -104,17 +108,24 @@ def attribute(
     Raises:
         ValueError: If the vectors do not match the statements and units.
     """
+    # Words of every unit, compared with the words of each statement
     unit_words = [_words(unit.embedding_text) for unit in units]
     markers: list[tuple[int, int]] = []
+
+    # Score each statement against every unit: shared words plus meaning
     for statement, vector in zip(statements, statement_vectors, strict=True):
         words = _words(statement.text)
         scores = [
             WORD_WEIGHT * _share(words, candidate) + VECTOR_WEIGHT * _cosine(vector, v)
             for candidate, v in zip(unit_words, unit_vectors, strict=True)
         ]
+
+        # Keep the best unit when it scores at least min_score
         best = max(range(len(scores)), key=scores.__getitem__, default=None)
         if best is not None and scores[best] >= min_score:
             markers.append((statement.end, best + 1))
+
+    # Insert the markers from the end, so earlier offsets stay valid
     for end, number in reversed(markers):
         answer = _with_marker(answer, end=end, number=number)
     return Attribution(text=answer, attributed=len(markers))
@@ -134,5 +145,6 @@ def _cosine(first: Sequence[float], second: Sequence[float]) -> float:
 
 
 def _with_marker(answer: str, *, end: int, number: int) -> str:
+    # Put the marker before the final punctuation of the statement
     at = end - 1 if answer[end - 1] in _FINAL_PUNCTUATION else end
     return f"{answer[:at]} [{number}]{answer[at:]}"

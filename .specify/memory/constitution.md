@@ -164,8 +164,10 @@ deployment must fail loudly instead of running with wrong values.
 - Every public module, class and function MUST have a Google-style docstring with Args,
   Returns and Raises sections as applicable. Types belong in the signature, and examples are
   included only when they add clarity.
-- Inline comments MUST be one line and explain what non-obvious code does and why it is
-  there. They MUST NOT reference tickets or bugs.
+- Inline comments MUST be one line. A comment above each logical step of a function body
+  names what the step achieves, and when the step calls another function it says what the
+  call is for. Non-obvious code also gets a comment explaining why it is there. Comments MUST
+  NOT reference tickets or bugs.
 - The README MUST contain a logical architecture diagram, setup instructions, test
   instructions and a technical decision log covering at least the chunking strategy and the
   stack.
@@ -211,4 +213,4 @@ MUST be recorded in the plan's Complexity Tracking table together with the simpl
 alternative that was rejected. Pull request reviews MUST verify compliance, and CI enforces
 the automatable rules (import boundaries, lint, types, coverage, workflow audit).
 
-**Version**: 1.0.0 | **Ratified**: 2026-09-28 | **Last Amended**: 2026-09-28
+**Version**: 1.1.0 | **Ratified**: 2026-09-28 | **Last Amended**: 2026-10-02

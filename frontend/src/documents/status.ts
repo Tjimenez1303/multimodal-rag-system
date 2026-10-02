@@ -10,6 +10,7 @@ export type DisplayStatus = "pending" | "processing" | "ready" | "failed";
  * @returns Pending (also without a job), processing, ready or failed.
  */
 export function displayStatus(document: DocumentBody): DisplayStatus {
+  // A missing job counts as pending, a completed one as ready
   switch (document.latest_job?.status) {
     case undefined:
     case "pending":

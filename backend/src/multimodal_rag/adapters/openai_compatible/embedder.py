@@ -84,6 +84,7 @@ class OpenAICompatibleEmbedder:
                 the wrong shape.
             DataInconsistencyError: If a vector has an unexpected length.
         """
+        # Send the passages in batches of batch_size, keeping their order
         vectors: list[list[float]] = []
         for batch in batched(texts, self._batch_size, strict=False):
             answer = await post_json(
@@ -113,17 +114,23 @@ class OpenAICompatibleEmbedder:
                 the wrong shape.
             DataInconsistencyError: If the vector has an unexpected length.
         """
+        # Prefix the query with the retrieval instruction the model was trained on
         [vector] = await self.embed(
             [f"Instruct: {self._query_instruction}\nQuery:{text}"]
         )
         return vector
 
     def _vectors(self, answer: EmbeddingList, *, expected: int) -> list[list[float]]:
+        # The server must return exactly one vector per input
         if sorted(item.index for item in answer.data) != list(range(expected)):
             raise ProviderResponseError(f"The {SERVICE} answered the wrong vectors")
+
+        # Put the vectors back in input order
         vectors = [
             item.embedding for item in sorted(answer.data, key=lambda i: i.index)
         ]
+
+        # Every vector must have the configured length
         if any(len(vector) != self._dimensions for vector in vectors):
             raise DataInconsistencyError(
                 f"The {SERVICE} returned vectors that are not {self._dimensions} long"

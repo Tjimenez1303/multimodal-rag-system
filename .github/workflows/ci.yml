@@ -1,5 +1,6 @@
 name: CI
 
+# Runs on every push to main and on every pull request
 on:
   push:
     branches: [main]
@@ -8,11 +9,13 @@ on:
 permissions:
   contents: read
 
+# A newer push to the same branch cancels the run in progress
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  # Static checks: the same pre-commit hooks developers run locally
   checks:
     name: Lint, types and import contracts
     runs-on: ubuntu-24.04
@@ -36,6 +39,7 @@ jobs:
       - name: Run pre-commit hooks
         run: uv run --project backend pre-commit run --all-files --show-diff-on-failure
 
+  # Backend tests: unit, contract and integration, with the 90% coverage gate
   tests:
     name: Tests with coverage gate
     runs-on: ubuntu-24.04
@@ -82,6 +86,7 @@ jobs:
           DOCLING_ARTIFACTS_PATH: ${{ runner.temp }}/docling-models
           EMBEDDER_TOKENIZER_PATH: ${{ runner.temp }}/embedder-tokenizer/tokenizer.json
 
+  # Frontend: client drift, unit tests with coverage, build, then end-to-end
   frontend:
     name: Frontend tests, client drift, build and end-to-end
     runs-on: ubuntu-24.04

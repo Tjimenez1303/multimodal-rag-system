@@ -10,6 +10,7 @@ from multimodal_rag.answering.domain import NotEnoughReason
 SUPPORTED_LANGUAGES = ("en", "es")
 FALLBACK_LANGUAGE = "en"
 
+# Message of every reason, per supported language
 _MESSAGES: dict[str, dict[NotEnoughReason, str]] = {
     "en": {
         NotEnoughReason.NO_SEARCHABLE_DOCUMENTS: (
@@ -57,4 +58,5 @@ def not_enough_message(reason: NotEnoughReason, *, language: str) -> str:
     Returns:
         The message in that language, or in English when it is not supported.
     """
+    # Fall back to English for a language without messages
     return _MESSAGES.get(language, _MESSAGES[FALLBACK_LANGUAGE])[reason]

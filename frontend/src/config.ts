@@ -11,6 +11,7 @@ export interface RuntimeConfig {
   statusPollSeconds: number;
 }
 
+// Validation rules of each field
 const runtimeConfigSchema = z.object({
   answerWaitSeconds: z.number().positive(),
   maxFilterDocuments: z.number().int().min(1),
@@ -34,6 +35,7 @@ export class ConfigError extends Error {
 export async function loadConfig(): Promise<RuntimeConfig> {
   let body: unknown;
   try {
+    // Fetch the file fresh on every load, within the timeout
     const response = await fetch(new URL("/config.json", window.location.origin), {
       cache: "no-store",
       signal: AbortSignal.timeout(CONFIG_TIMEOUT_MS),
@@ -43,9 +45,12 @@ export async function loadConfig(): Promise<RuntimeConfig> {
     }
     body = await response.json();
   } catch (error) {
+    // Any network or parsing error becomes a ConfigError
     if (error instanceof ConfigError) throw error;
     throw new ConfigError("config.json could not be loaded", { cause: error });
   }
+
+  // Validate the values before the app relies on them
   const parsed = runtimeConfigSchema.safeParse(body);
   if (!parsed.success) {
     throw new ConfigError("config.json is invalid", { cause: parsed.error });
@@ -64,6 +69,8 @@ export const ConfigContext = createContext<RuntimeConfig | null>(null);
  */
 export function useConfig(): RuntimeConfig {
   const config = useContext(ConfigContext);
+
+  // Fail loudly when a component renders outside the provider
   if (config === null) {
     throw new Error("useConfig must be used inside ConfigContext");
   }

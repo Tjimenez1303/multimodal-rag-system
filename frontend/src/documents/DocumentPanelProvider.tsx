@@ -21,12 +21,17 @@ const PANEL_STYLE = { "--sidebar-width": "22rem" } as CSSProperties;
  * @param props - The layout the panel belongs to.
  */
 export function DocumentPanelProvider({ children }: { children: ReactNode }) {
+  // Open unless the user collapsed the panel earlier in this tab
   const [open, setOpen] = useState(() => !loadPanelCollapsed());
   const uploadFocus = useRef<(() => void) | null>(null);
+
+  // Every open or close is saved for the next reload
   const changeOpen = useCallback((next: boolean) => {
     setOpen(next);
     savePanelCollapsed(!next);
   }, []);
+
+  // Controls the rest of the client uses to open the panel and focus the upload
   const controls = useMemo(
     () => ({
       requestUpload: () => {
@@ -42,6 +47,7 @@ export function DocumentPanelProvider({ children }: { children: ReactNode }) {
   );
   return (
     <DocumentPanelContext value={controls}>
+      {/* shadcn's sidebar holds the open state and the panel width */}
       <SidebarProvider open={open} onOpenChange={changeOpen} style={PANEL_STYLE}>
         {children}
       </SidebarProvider>

@@ -49,6 +49,7 @@ class DoclingExtractor:
         threads: int,
         batch_timeout_seconds: float,
     ) -> None:
+        # OCR, table structure, figure classification and images, all on CPU
         options = PdfPipelineOptions(
             artifacts_path=artifacts_path,
             document_timeout=batch_timeout_seconds,
@@ -67,6 +68,8 @@ class DoclingExtractor:
         )
         # The parser takes its threads from its own options, not from the pipeline.
         backend_options = ThreadedDoclingParseBackendOptions(parser_threads=threads)
+
+        # One converter for PDFs, reused by every job of this process
         self._converter = DocumentConverter(
             format_options={
                 InputFormat.PDF: PdfFormatOption(
@@ -108,6 +111,7 @@ class DoclingExtractor:
             EncryptedDocumentError: If the PDF is encrypted.
             CorruptDocumentError: If the PDF or one of its pages cannot be parsed.
         """
+        # Read document-wide facts first: page count, scanned pages and outline
         layout = read_layout(path)
         context = DocumentContext(
             document_id=document_id,
@@ -115,10 +119,16 @@ class DoclingExtractor:
             pages_without_text=layout.pages_without_text,
             headings=HeadingLevels(layout.outline),
         )
+
+        # Reading order continues across batches
         next_order = 0
+
+        # Convert the PDF batch_size pages at a time
         for first in range(1, layout.page_count + 1, batch_size):
             last = min(first + batch_size - 1, layout.page_count)
             result = self._convert(path, first, last)
+
+            # Map Docling's output to domain elements, crops and caption links
             mapped = map_document(
                 result.document,
                 context=context,
@@ -130,6 +140,8 @@ class DoclingExtractor:
             )
             next_order += len(mapped.elements)
             logger.debug("extracted pages %s to %s", first, last)
+
+            # Hand the batch to the caller, with its page images and recognized pages
             yield ExtractionBatch(
                 first_page=first,
                 last_page=last,
@@ -148,6 +160,7 @@ class DoclingExtractor:
 
     def _convert(self, path: Path, first: int, last: int) -> ConversionResult:
         try:
+            # Convert only the pages of this batch
             result = self._converter.convert(path, page_range=(first, last))
         except ConversionError as error:
             raise CorruptDocumentError(
@@ -168,6 +181,8 @@ def _page_images(result: ConversionResult, first: int, last: int) -> dict[int, b
         CorruptDocumentError: If Docling rendered no image for one of the pages.
     """
     images: dict[int, bytes] = {}
+
+    # Encode the rendered image of each page of the batch as PNG
     for page_number in range(first, last + 1):
         page = result.document.pages.get(page_number)
         image = page.image.pil_image if page and page.image else None

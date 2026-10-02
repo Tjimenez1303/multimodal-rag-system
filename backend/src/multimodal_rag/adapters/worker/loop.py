@@ -29,6 +29,7 @@ from multimodal_rag.shared.resilience import RetryPolicy, call_with_retry
 
 logger = logging.getLogger(__name__)
 
+# Database failures that may pass, so they never fail a job
 _DATABASE_OUTAGES = (StorageUnavailableError, StorageTimeoutError)
 
 
@@ -85,19 +86,28 @@ class WorkerLoop:
             stop: Event that ends the loop and cancels a running attempt.
         """
         attempts = 0
+
+        # Keep working until asked to stop or until the job budget is spent
         while not stop.is_set() and attempts < self._max_jobs:
             try:
+                # Claim the oldest claimable job, giving up only if stop is requested
                 job = await _first_of(self._claim(), stop)
             except Exception:
                 logger.exception("claiming a job failed for good, the worker stops")
                 raise
             if stop.is_set():
                 break
+
+            # Nothing to do: sleep until a job is enqueued or the poll interval passes
             if job is None:
                 await _first_of(self._sleep_until_woken(), stop)
                 continue
+
+            # Run the attempt while a heartbeat keeps its lease alive
             await self._attempt(job, stop)
             attempts += 1
+
+        # Exit so compose restarts the process with fresh memory
         if attempts >= self._max_jobs:
             logger.info("worker ran %s jobs, exiting to be restarted", attempts)
 
@@ -118,11 +128,15 @@ class WorkerLoop:
                 await self._wakeups.wait()
 
     async def _attempt(self, job: IngestionJob, stop: asyncio.Event) -> None:
+        # Tag every log line of this attempt with its request and job ids
         clear_correlation()
         bind_correlation(request_id=job.correlation_id, job_id=str(job.id))
         logger.info("job claimed")
+
+        # Renew the lease in the background while the job runs
         heartbeat = asyncio.ensure_future(self._keep_leased(job.id, job.held_lease()))
         try:
+            # Run the job until it finishes, stop is requested or the lease is lost
             finished = await _first_of(self._process(job), stop, heartbeat)
             if finished is None:
                 logger.warning("stop requested, attempt %s abandoned", job.attempt)
@@ -133,6 +147,7 @@ class WorkerLoop:
         except Exception:  # one broken job must not end the worker
             logger.exception("job attempt ended unexpectedly")
         finally:
+            # Always stop the heartbeat and clear the log context
             heartbeat.cancel()
             await asyncio.gather(heartbeat, return_exceptions=True)
             clear_correlation()
@@ -165,6 +180,7 @@ async def _first_of[T](
     Raises:
         Exception: The error of ``work``, or of ``guard`` when it failed first.
     """
+    # Race the work against the stop signal and the optional guard
     task = asyncio.ensure_future(work)
     stopped = asyncio.ensure_future(stop.wait())
     waited = {task, stopped} if guard is None else {task, stopped, guard}
@@ -176,6 +192,8 @@ async def _first_of[T](
         if not task.done():
             task.cancel()
             await asyncio.gather(task, return_exceptions=True)
+
+    # The work was cancelled: surface the guard's error, if it failed
     if task.cancelled():
         if guard is not None and guard.done() and not guard.cancelled():
             guard.result()  # raises the guard's error, such as a lost lease

@@ -32,9 +32,11 @@ import { PageDialog } from "@/images/PageDialog";
  * @param props - The response, as returned by the service.
  */
 export function SourceList({ response }: { response: AnswerBody }) {
+  // Passages the model saw but did not cite
   const uncited = uncitedSources(response);
   return (
     <div className="flex flex-col gap-3">
+      {/* One numbered line per citation */}
       <ol aria-label="Sources" className="divide-y rounded-lg border bg-card">
         {response.citations.map((citation) => (
           <SourceLine
@@ -44,6 +46,7 @@ export function SourceList({ response }: { response: AnswerBody }) {
           />
         ))}
       </ol>
+      {/* Uncited passages stay behind a collapsible, closed by default */}
       {uncited.length > 0 && (
         <Sources className="mb-0 text-muted-foreground">
           <SourcesTrigger
@@ -76,6 +79,7 @@ function SourceLine({
   citation: CitationBody;
   sources: SourceBody[];
 }) {
+  // Quality flags of the cited passages: OCR confidence and generated descriptions
   const citations = useCitations();
   const [open, setOpen] = useState(false);
   const lowConfidence = sources.some((source) => source.low_confidence_text);
@@ -84,6 +88,7 @@ function SourceLine({
     ...new Set(sources.flatMap((source) => source.unverified_identifiers)),
   ];
   return (
+    // Focusable target of the answer's markers, highlighted when activated
     <li
       id={citations?.sourceLineId(citation.number)}
       aria-label={`Source ${citation.number}, ${citation.document_name}, ${formatPages(citation.pages)}`}
@@ -100,6 +105,7 @@ function SourceLine({
             {citation.number}
           </span>
           <div className="min-w-0 flex-1">
+            {/* Document and pages, then the quality badges */}
             <p className="text-sm leading-6 break-words">
               {sourceLabel(citation.document_name, citation.pages)}
             </p>
@@ -137,6 +143,7 @@ function SourceLine({
               </div>
             )}
           </div>
+          {/* Open the cited page, or expand the passage details */}
           <div className="flex shrink-0 items-center gap-0.5">
             <PageDialog
               documentId={citation.document_id}
@@ -165,6 +172,7 @@ function SourceLine({
             </CollapsibleTrigger>
           </div>
         </div>
+        {/* The cited passages, revealed by the chevron */}
         <CollapsibleContent className="mt-2 ml-7.5 flex flex-col gap-3">
           {sources.map((source) => (
             <SourceDetails key={source.unit_id} source={source} />
@@ -178,6 +186,7 @@ function SourceLine({
 function SourceDetails({ source }: { source: SourceBody }) {
   return (
     <div className="flex flex-col gap-1.5 text-xs">
+      {/* Section path, then the table rows or the text excerpt */}
       {source.section.length > 0 && (
         <p className="font-medium text-muted-foreground">
           {source.section.join(" › ")}

@@ -91,12 +91,16 @@ class OpenAICompatibleRelevanceJudge:
             ProviderResponseError: If the model rejects the request or answers
                 without the log probabilities of ``yes`` or ``no``.
         """
+        # Nothing to judge
         if not passages:
             return []
+
+        # Tokens left for the passage once the prompt template is counted
         budget = self._max_input_tokens - self._tokens.count(
             _TEMPLATE.format(system=SYSTEM, user=self._user(question, ""))
         )
         try:
+            # Judge every passage concurrently, each in its own request
             async with asyncio.TaskGroup() as group:
                 tasks = [
                     group.create_task(
@@ -114,6 +118,7 @@ class OpenAICompatibleRelevanceJudge:
         return [task.result() for task in tasks]
 
     async def _judge_one(self, question: str, passage: str) -> float:
+        # Ask for a single token with the log probabilities of its candidates
         payload = {
             "model": self._model,
             "messages": [
@@ -126,6 +131,8 @@ class OpenAICompatibleRelevanceJudge:
             "top_logprobs": TOP_LOGPROBS,
             "chat_template_kwargs": {"enable_thinking": False},
         }
+
+        # Call chat/completions with retries on transient failures
         completion = await post_json(
             self._client,
             "chat/completions",
@@ -148,6 +155,8 @@ def _relevance(logprobs: dict[str, float] | None) -> float:
     if logprobs is None or ("yes" not in logprobs and "no" not in logprobs):
         logger.warning("%s answered without a yes or no judgement", SERVICE)
         raise ProviderResponseError(f"The {SERVICE} answered without a judgement")
+
+    # Turn log probabilities into the probability of yes against no
     yes = math.exp(logprobs["yes"]) if "yes" in logprobs else 0.0
     no = math.exp(logprobs["no"]) if "no" in logprobs else 0.0
     if yes + no == 0:

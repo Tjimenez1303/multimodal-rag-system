@@ -9,6 +9,7 @@ import { visit } from "unist-util-visit";
  */
 export function noRemoteMedia() {
   return (tree: Root) => {
+    // Replace every Markdown image with its alt text, so nothing is fetched
     visit(tree, "image", (node, index, parent) => {
       if (parent === undefined || index === undefined) return;
       parent.children[index] = { type: "text", value: node.alt ?? "" };

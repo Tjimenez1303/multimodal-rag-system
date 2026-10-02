@@ -30,6 +30,7 @@ export function FailureNotice({
   action,
   className,
 }: FailureNoticeProps) {
+  // Whether the reference was copied, to confirm it on the button
   const [copied, setCopied] = useState(false);
 
   async function copyReference(value: string) {
@@ -40,6 +41,7 @@ export function FailureNotice({
   return (
     <Alert variant="destructive" className={className}>
       <CircleAlertIcon aria-hidden="true" />
+      {/* The message, then the reference to quote and an optional action */}
       <AlertTitle className="leading-6">{message}</AlertTitle>
       {(reference !== null || action !== undefined) && (
         <AlertDescription className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">

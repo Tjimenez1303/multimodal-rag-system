@@ -23,10 +23,13 @@ def export_openapi(destination: Path) -> None:
     Args:
         destination: File to write, replaced when it exists.
     """
+    # Build the app with every router and no readiness checks
     app = create_app(
         readiness_checks={},
         routers=(ingestion_router, documents_router, questions_router),
     )
+
+    # Write the contract as indented JSON
     destination.write_text(json.dumps(app.openapi(), indent=2) + "\n")
 
 

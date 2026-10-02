@@ -20,6 +20,7 @@ export interface FigureCardProps {
  * the page it comes from (FR-015 to FR-018). The image URL is used as returned.
  */
 export function FigureCard({ image, size = "primary" }: FigureCardProps) {
+  // Link the caption to the figure, and remember whether the image failed to load
   const captionId = useId();
   const [broken, setBroken] = useState(false);
   const primary = size === "primary";
@@ -34,6 +35,7 @@ export function FigureCard({ image, size = "primary" }: FigureCardProps) {
           primary ? "max-h-80 min-h-40" : "max-h-40 min-h-24",
         )}
       >
+        {/* A placeholder replaces an image that failed to load */}
         {broken ? (
           <div className="flex flex-col items-center gap-1.5 py-8 text-muted-foreground">
             <ImageOffIcon aria-hidden="true" className="size-5" />
@@ -53,6 +55,7 @@ export function FigureCard({ image, size = "primary" }: FigureCardProps) {
           />
         )}
       </div>
+      {/* Caption and location under the image */}
       <figcaption id={captionId} className="flex flex-col gap-0.5 px-3 pt-2 text-xs">
         <span
           className={cn(
@@ -66,6 +69,7 @@ export function FigureCard({ image, size = "primary" }: FigureCardProps) {
           {pageLocation(image.document_name, image.page)}
         </span>
       </figcaption>
+      {/* Open the figure full size, or the page it comes from */}
       <div className="flex gap-1 px-2 pt-1 pb-2">
         <ImageDialog
           image={image}

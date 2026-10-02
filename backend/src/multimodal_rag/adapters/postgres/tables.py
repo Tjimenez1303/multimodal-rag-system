@@ -16,6 +16,7 @@ from multimodal_rag.ingestion.domain import (
     TextOrigin,
 )
 
+# Constraint and index names follow one pattern, so migrations name them predictably
 metadata = sa.MetaData(
     naming_convention={
         "ix": "ix_%(table_name)s_%(column_0_N_name)s",
@@ -33,6 +34,7 @@ ACTIVE_JOB_PREDICATE = "status <> 'failed'"
 
 
 def _one_of(column: str, values: type[StrEnum]) -> str:
+    # Build a CHECK clause from the members of a Python enum
     allowed = ", ".join(f"'{member}'" for member in values)
     return f"{column} IN ({allowed})"
 
@@ -41,6 +43,7 @@ def _timestamp(name: str, *, nullable: bool) -> sa.Column[datetime]:
     return sa.Column(name, sa.DateTime(timezone=True), nullable=nullable)
 
 
+# An uploaded PDF, unique by the SHA-256 of its bytes
 documents = sa.Table(
     "documents",
     metadata,
@@ -51,11 +54,13 @@ documents = sa.Table(
     sa.Column("page_count", sa.Integer(), nullable=True),
     sa.Column("blob_key", sa.Text(), nullable=False),
     _timestamp("created_at", nullable=False),
+    # Size and page count are positive, and the index serves keyset pagination
     sa.CheckConstraint("size_bytes > 0", name="positive_size"),
     sa.CheckConstraint("page_count IS NULL OR page_count > 0", name="positive_pages"),
     sa.Index(None, "created_at", "id"),
 )
 
+# One ingestion attempt cycle of a document, also the job queue itself
 ingestion_jobs = sa.Table(
     "ingestion_jobs",
     metadata,
@@ -83,6 +88,7 @@ ingestion_jobs = sa.Table(
     _timestamp("started_at", nullable=True),
     _timestamp("finished_at", nullable=True),
     _timestamp("updated_at", nullable=False),
+    # Status, stage and failure code are limited to their enum values
     sa.CheckConstraint(_one_of("status", JobStatus), name="valid_status"),
     sa.CheckConstraint(
         f"stage IS NULL OR {_one_of('stage', JobStage)}", name="valid_stage"
@@ -101,6 +107,7 @@ ingestion_jobs = sa.Table(
     sa.CheckConstraint(
         "(status = 'failed') = (failure_code IS NOT NULL)", name="failure_iff_failed"
     ),
+    # Lookups by lease expiry and by document
     sa.Index(None, "status", "lease_expires_at"),
     sa.Index(None, "document_id", "created_at"),
     # Serves the claim, which takes the oldest pending job first.
@@ -120,6 +127,7 @@ ingestion_jobs = sa.Table(
     ),
 )
 
+# Every element extracted from a page: text, table or image
 extracted_elements = sa.Table(
     "extracted_elements",
     metadata,
@@ -154,6 +162,7 @@ extracted_elements = sa.Table(
         server_default="[]",
     ),
     sa.Column("is_decorative", sa.Boolean(), nullable=False, server_default="false"),
+    # Kinds and origins are limited to their enum values, boxes are well formed
     sa.CheckConstraint(_one_of("kind", ElementKind), name="valid_kind"),
     sa.CheckConstraint(_one_of("origin", TextOrigin), name="valid_origin"),
     sa.CheckConstraint(
@@ -170,10 +179,12 @@ extracted_elements = sa.Table(
         name="confidence_in_range",
     ),
     # Keyset pagination of elements relies on one element per reading position.
+    # One position per element in a document's reading order
     sa.UniqueConstraint("document_id", "reading_order"),
     sa.Index(None, "document_id", "page"),
 )
 
+# Links between elements: captions, nearby text and continued tables
 element_relationships = sa.Table(
     "element_relationships",
     metadata,
@@ -197,6 +208,7 @@ element_relationships = sa.Table(
     ),
     sa.Column("kind", sa.String(16), primary_key=True),
     sa.Column("score", sa.Float(), nullable=True),
+    # Kinds are limited to their enum values and an element never links to itself
     sa.CheckConstraint(_one_of("kind", RelationshipKind), name="valid_kind"),
     sa.CheckConstraint("source_id <> target_id", name="no_self_link"),
     sa.Index(None, "document_id"),

@@ -13,10 +13,15 @@ const PLACEHOLDER = "__CSP_NONCE__";
  * @returns The nonce applied, or `null` when the page carries none.
  */
 export function applyStyleNonce(document: Document): string | null {
+  // Read the nonce nginx wrote into the meta tag
   const meta = document.querySelector<HTMLMetaElement>('meta[property="csp-nonce"]');
   // Browsers hide the attribute once the policy applies, and keep the property.
   const nonce = meta?.nonce || meta?.getAttribute("nonce");
+
+  // Development serves the placeholder, so there is nothing to apply
   if (!nonce || nonce === PLACEHOLDER) return null;
+
+  // Let get-nonce hand the value to the style tags Radix injects
   setNonce(nonce);
   return nonce;
 }

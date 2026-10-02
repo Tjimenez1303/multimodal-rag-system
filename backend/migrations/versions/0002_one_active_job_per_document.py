@@ -19,6 +19,7 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     """Apply this revision."""
+    # At most one job that has not failed per document
     op.create_index(
         "uq_ingestion_jobs_document_id_active",
         "ingestion_jobs",

@@ -85,7 +85,15 @@ citations in the answer are then checked against the passages the model was give
 answer can never cite a page that was not retrieved.
 
 The diagram is an editable draw.io file. Open it in [draw.io](https://app.diagrams.net)
-to change it.
+to change it. Its other pages draw the backend, the frontend and the database in detail.
+
+## Documentation
+
+- [Backend developer guide](docs/backend/README.md): layers, request flows, a codemap of
+  every module, the data model, and recipes for common changes
+- [Frontend developer guide](docs/frontend/README.md): boot sequence, feature folders,
+  state and errors, a codemap, and recipes for common changes
+- [Architecture decision records](docs/adr)
 
 ## Requirements
 

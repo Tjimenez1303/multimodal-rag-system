@@ -22,6 +22,8 @@ from multimodal_rag.shared.resilience import RetryPolicy
 logger = logging.getLogger(__name__)
 
 SERVICE = "answer model"
+
+# JSON schema the answer model must follow, enforced by the server
 ANSWER_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
@@ -33,6 +35,7 @@ ANSWER_SCHEMA: dict[str, Any] = {
 }
 
 
+# The same schema, validated again on our side
 class _AnswerContent(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(extra="forbid", strict=True)
 
@@ -82,6 +85,7 @@ class OpenAICompatibleAnswerGenerator:
             AnswerModelResponseError: If the answer does not follow the schema or was
                 cut by the token limit.
         """
+        # System rules, then sources and question, with a strict JSON answer format
         payload = {
             "model": self._model,
             "messages": [
@@ -100,6 +104,8 @@ class OpenAICompatibleAnswerGenerator:
                 },
             },
         }
+
+        # Call chat/completions with retries on transient failures
         completion = await post_json(
             self._client,
             "chat/completions",
@@ -108,11 +114,15 @@ class OpenAICompatibleAnswerGenerator:
             service=SERVICE,
             retry=self._retry,
         )
+
+        # An answer cut at the token limit is incomplete JSON
         if completion.reached_token_limit:
             logger.warning(
                 "%s stopped at the token limit of %s", SERVICE, self._max_tokens
             )
             raise AnswerModelResponseError()
+
+        # Parse the JSON the model wrote into its two fields
         try:
             content = _AnswerContent.model_validate_json(completion.content)
         except pydantic.ValidationError as error:

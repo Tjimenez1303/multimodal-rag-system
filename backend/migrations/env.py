@@ -19,6 +19,7 @@ config = context.config
 
 
 def _settings() -> DatabaseSettings:
+    # Tests pass the URL as an Alembic option; the command line reads the environment
     url_override = config.get_main_option("sqlalchemy.url")
     if url_override:
         return DatabaseSettings(database_url=url_override)
@@ -26,12 +27,14 @@ def _settings() -> DatabaseSettings:
 
 
 def _run_migrations(connection: Connection) -> None:
+    # Point Alembic at the shared table metadata and run the pending revisions
     context.configure(connection=connection, target_metadata=metadata)
     with context.begin_transaction():
         context.run_migrations()
 
 
 async def _run_async_migrations(settings: DatabaseSettings) -> None:
+    # Open a connection without a pool, migrate, and release it
     engine = create_migration_engine(settings)
     async with engine.connect() as connection:
         await connection.run_sync(_run_migrations)
@@ -44,6 +47,7 @@ settings = _settings()
 if config.cmd_opts is not None:
     configure_logging(log_format=settings.log_format, level=settings.log_level)
 
+# Offline mode prints the SQL instead of running it, with literal values
 if context.is_offline_mode():
     context.configure(
         url=settings.database_url, target_metadata=metadata, literal_binds=True
@@ -51,4 +55,5 @@ if context.is_offline_mode():
     with context.begin_transaction():
         context.run_migrations()
 else:
+    # Online mode runs the revisions against the database
     asyncio.run(_run_async_migrations(settings))

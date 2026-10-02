@@ -9,6 +9,7 @@ sets ``logprobs`` and ``top_logprobs``.
 import pydantic
 
 
+# The fields of the OpenAI answer body that the clients read
 class _Message(pydantic.BaseModel):
     content: str | None = None
 
@@ -59,6 +60,7 @@ class ChatCompletion(pydantic.BaseModel):
             The candidates the server listed, by token text, or ``None`` when the
             answer carries no log probabilities.
         """
+        # The server returns no log probabilities unless the request asked for them
         logprobs = self.choices[0].logprobs
         if logprobs is None or not logprobs.content:
             return None

@@ -7,11 +7,13 @@
 
 name: multimodal-rag
 
+# Build and image shared by the migrate, api and worker services
 x-backend: &backend
   build:
     context: ./backend
   image: multimodal-rag-backend:local
 
+# Environment shared by every backend process
 x-backend-env: &backend-env
   DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:?set in .env}:${POSTGRES_PASSWORD:?set in .env}@postgres:5432/${POSTGRES_DB:?set in .env}
   BLOB_ROOT: /data/blobs
@@ -21,6 +23,7 @@ x-backend-env: &backend-env
   MAX_ATTEMPTS: ${MAX_ATTEMPTS:-3}
 
 services:
+  # PostgreSQL: documents, jobs, elements, and the job queue itself
   postgres:
     image: postgres:18.6
     environment:
@@ -36,6 +39,7 @@ services:
       retries: 20
     restart: unless-stopped
 
+  # Qdrant: the vector index of the retrieval units
   qdrant:
     image: qdrant/qdrant:v1.19.1
     volumes:
@@ -52,6 +56,7 @@ services:
       retries: 20
     restart: unless-stopped
 
+  # One-shot migration that must succeed before the API and the worker start
   migrate:
     <<: *backend
     command: ["alembic", "upgrade", "head"]
@@ -62,6 +67,7 @@ services:
         condition: service_healthy
     restart: "no"
 
+  # REST API: uploads, library, job status and questions
   api:
     <<: *backend
     command: ["python", "-m", "multimodal_rag", "api"]
@@ -106,6 +112,7 @@ services:
         condition: service_completed_successfully
     restart: unless-stopped
 
+  # Ingestion worker: claims jobs and runs the PDF pipeline
   worker:
     <<: *backend
     command: ["python", "-m", "multimodal_rag", "worker"]
@@ -168,13 +175,16 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+# Models served by Docker Model Runner on the host
 models:
+  # Vision model, also the answer model, with thinking turned off
   vlm:
     model: ai/qwen3.5:9b
     context_size: 16384
     runtime_flags:
       - --chat-template-kwargs
       - '{"enable_thinking": false}'
+  # Embedding model for passages and queries
   embedder:
     model: ai/qwen3-embedding:0.6b
     context_size: 8192
@@ -190,6 +200,7 @@ models:
     model: ai/qwen3-reranker:0.6B
     context_size: 8192
 
+# Named volumes that keep data across restarts
 volumes:
   pgdata:
   qdrant:

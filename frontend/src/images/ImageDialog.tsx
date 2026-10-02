@@ -25,6 +25,7 @@ export interface ImageDialogProps {
 export function ImageDialog({ image, trigger }: ImageDialogProps) {
   return (
     <Dialog>
+      {/* The trigger opens the dialog and gets the focus back when it closes */}
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col gap-3 sm:max-w-5xl">
         <DialogHeader className="pr-10">
@@ -33,6 +34,7 @@ export function ImageDialog({ image, trigger }: ImageDialogProps) {
             {pageLocation(image.document_name, image.page)}
           </DialogDescription>
         </DialogHeader>
+        {/* The figure at full size, scrolling when larger than the dialog */}
         <div className="min-h-0 flex-1 overflow-auto rounded-md border bg-white">
           <img
             src={image.url}

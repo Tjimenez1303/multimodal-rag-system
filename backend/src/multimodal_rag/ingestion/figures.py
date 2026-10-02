@@ -104,15 +104,23 @@ class FigurePolicy:
         Raises:
             UnknownPageSizeError: If an image lies on a page of unknown size.
         """
+        # Find images repeated on many pages, such as logos in a header
         repeated = self._repeated(elements, image_hashes, pages_total)
         updated: list[ExtractedElement] = []
         chosen: list[uuid.UUID] = []
+
+        # Walk every element, deciding the fate of each image
         for element in elements:
+            # Text and tables pass through unchanged
             if element.kind is not ElementKind.IMAGE:
                 updated.append(element)
                 continue
+
+            # Flag logos, stamps and repeated images as decorative
             if element.image_class in DECORATIVE_CLASSES or element.id in repeated:
                 element = element.as_decorative()
+
+            # Describe large content figures, skip the rest
             if describe and _worth_describing(element, image_hashes, page_sizes):
                 chosen.append(element.id)
             else:
@@ -126,6 +134,7 @@ class FigurePolicy:
         image_hashes: Mapping[uuid.UUID, str],
         pages_total: int,
     ) -> set[uuid.UUID]:
+        # Group image ids and pages by the fingerprint of the crop
         pages_by_hash: dict[str, set[int]] = defaultdict(set)
         ids_by_hash: dict[str, list[uuid.UUID]] = defaultdict(list)
         for element in elements:
@@ -133,6 +142,8 @@ class FigurePolicy:
             if element.kind is ElementKind.IMAGE and fingerprint is not None:
                 pages_by_hash[fingerprint].add(element.page)
                 ids_by_hash[fingerprint].append(element.id)
+
+        # Keep the images that appear on enough pages, or a large share of them
         repeated: set[uuid.UUID] = set()
         for fingerprint, pages in pages_by_hash.items():
             share = len(pages) / max(pages_total, 1)
@@ -158,8 +169,11 @@ def unverified_identifiers(
         Identifiers absent from the labels and the caption, in order of appearance,
         compared without regard to case.
     """
+    # Words the figure itself shows: its labels and its caption
     known = " ".join((*labels, caption or "")).casefold()
     unverified: dict[str, None] = {}
+
+    # Keep tokens that look like identifiers and appear nowhere in the figure
     for token in _TOKEN.findall(description):
         is_identifier = any(c.isdigit() for c in token) and (
             "-" in token or any(c.isalpha() for c in token)
@@ -186,6 +200,7 @@ def description_context(
         The caption and the nearby text, each joined in reading order.
     """
 
+    # Join the text of every element linked to the image by the given kind
     def joined(kind: RelationshipKind) -> str | None:
         sources = sorted(
             (
@@ -198,6 +213,7 @@ def description_context(
         texts = [element.text for element in sources if element.text]
         return "\n".join(texts) or None
 
+    # The caption and the nearest paragraph give the vision model context
     return DescriptionContext(
         caption=joined(RelationshipKind.CAPTION_OF),
         context=joined(RelationshipKind.NEAR),
@@ -209,7 +225,10 @@ def _worth_describing(
     image_hashes: Mapping[uuid.UUID, str],
     page_sizes: Mapping[int, PageSize],
 ) -> bool:
+    # Decorative images and images without a crop are never described
     if image.is_decorative or image.id not in image_hashes:
         return False
+
+    # Describe only figures that cover enough of their page
     page = PageSize.of_page(page_sizes, image.page)
     return image.bbox.area / page.area >= MIN_DESCRIBED_AREA_SHARE

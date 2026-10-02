@@ -13,6 +13,8 @@ from multimodal_rag.shared.logging import bind_correlation, clear_correlation
 logger = logging.getLogger(__name__)
 
 REQUEST_ID_HEADER = "x-request-id"
+
+# Incoming ids are reused only when short and made of safe characters
 _SAFE_REQUEST_ID = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
 # Probed every few seconds by the orchestrator, so logged below INFO.
 _QUIET_ROUTES = frozenset({"/health/live", "/health/ready"})
@@ -39,16 +41,19 @@ class RequestContextMiddleware:
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         """Handle one ASGI call."""
+        # Only HTTP requests are tracked; other ASGI calls pass through
         if scope["type"] != "http":
             await self._app(scope, receive, send)
             return
 
+        # Reuse the caller's id or create one, and store it for the handlers
         request_id = self._incoming_id(scope) or uuid.uuid4().hex
         scope.setdefault("state", {})["request_id"] = request_id
         status = 500
         response_started = False
         started = time.perf_counter()
 
+        # Copy the id into the response headers and remember the status sent
         async def send_with_id(message: Message) -> None:
             nonlocal status, response_started
             if message["type"] == "http.response.start":
@@ -59,6 +64,7 @@ class RequestContextMiddleware:
                 message["headers"] = headers
             await send(message)
 
+        # Tag every log line of this request with its id
         clear_correlation()
         bind_correlation(request_id=request_id)
         try:
@@ -70,6 +76,7 @@ class RequestContextMiddleware:
             if status != 500 or not response_started:
                 raise
         finally:
+            # Always write the summary line and clear the log context
             self._log_completion(scope, status=status, started=started)
             clear_correlation()
 
@@ -77,6 +84,8 @@ class RequestContextMiddleware:
     def _log_completion(scope: Scope, *, status: int, started: float) -> None:
         # Starlette stores the matched route in the scope, unmatched paths have none.
         route = getattr(scope.get("route"), "path", None)
+
+        # OpenTelemetry-style fields of the summary line
         fields: dict[str, object] = {
             "http.request.method": scope["method"],
             "http.response.status_code": status,
@@ -84,11 +93,14 @@ class RequestContextMiddleware:
         }
         if route is not None:
             fields["http.route"] = route
+
+        # Health probes are logged at DEBUG to keep the logs readable
         level = logging.DEBUG if route in _QUIET_ROUTES else logging.INFO
         logger.log(level, "request completed", extra=fields)
 
     @staticmethod
     def _incoming_id(scope: Scope) -> str | None:
+        # Find the X-Request-ID header, if the client sent a usable one
         for name, value in scope.get("headers", []):
             if name.decode("latin-1").lower() == REQUEST_ID_HEADER:
                 candidate = value.decode("latin-1")
@@ -108,6 +120,7 @@ def request_id_of(request: Request) -> str:
     Returns:
         The id, 32 hex characters when generated.
     """
+    # Requests that skipped the middleware still get an id
     request_id: str | None = getattr(request.state, "request_id", None)
     if not request_id:
         request_id = uuid.uuid4().hex

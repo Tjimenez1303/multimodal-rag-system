@@ -47,13 +47,18 @@ async def post_json[M: pydantic.BaseModel](
     """
 
     async def attempt() -> M:
+        # Send the request, classifying a failure to reach the server
         try:
             response = await client.post(path, json=payload)
         except httpx.TransportError as error:
             raise transport_error(error, service=service) from error
+
+        # Classify an error status as transient or as a rejection
         if response.is_error:
             logger.warning("%s answered status %s", service, response.status_code)
             raise status_error(response.status_code, service=service)
+
+        # Validate the body against the expected answer model
         try:
             return answer.model_validate_json(response.content)
         except pydantic.ValidationError as error:
@@ -61,4 +66,5 @@ async def post_json[M: pydantic.BaseModel](
                 f"The {service} answered an unexpected body"
             ) from error
 
+    # Retry the whole attempt on transient failures
     return await call_with_retry(retry, attempt)

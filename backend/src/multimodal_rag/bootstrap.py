@@ -100,6 +100,7 @@ def create_api_app() -> ASGIApp:
     Raises:
         ConfigurationError: If a required setting is missing or invalid.
     """
+    # Load the settings, set up logging and build the shared resources
     settings = ApiSettings.load()
     configure_logging(log_format=settings.log_format, level=settings.log_level)
     engine = create_engine(settings)
@@ -107,16 +108,25 @@ def create_api_app() -> ASGIApp:
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncGenerator[ApiState]:
+        # Build every adapter and use case at startup, closing them at shutdown
         async with AsyncExitStack() as resources:
             resources.push_async_callback(engine.dispose)
+
+            # One vector index shared by the ingestion and answering use cases
             index = _vector_index(settings, resources)
+
+            # Create the use cases and their dependencies, shared by the routes
             ingestion = _ingestion_state(settings, engine, storage, index=index)
             answering = await _answering_state(
                 settings, engine, storage, resources, index=index
             )
+
             logger.info("api ready, version %s", __version__)
+
+            # Starlette copies this state into every request for the dependencies
             yield ApiState(**ingestion, **answering)
 
+    # Assemble the FastAPI app with health probes, routes and body limits
     app = create_app(
         readiness_checks={
             "database": partial(check_database, engine),
@@ -146,6 +156,8 @@ def _vector_index(
         check_compatibility=False,
     )
     resources.push_async_callback(qdrant.close)
+
+    # Wrap the client in the VectorIndex adapter
     return QdrantVectorIndex(
         qdrant,
         collection=settings.qdrant_collection,
@@ -161,10 +173,13 @@ def _ingestion_state(
     *,
     index: QdrantVectorIndex,
 ) -> IngestionState:
+    # Postgres adapters shared by the ingestion use cases
     clock = SystemClock()
     jobs = PostgresJobQueue(engine)
     documents = PostgresDocumentRepository(engine)
     elements = PostgresElementRepository(engine)
+
+    # One use case per ingestion and library route
     return IngestionState(
         submit_document=SubmitDocument(
             documents=documents,
@@ -202,6 +217,8 @@ async def _answering_state(
 ) -> AnsweringState:
     # No client connects here, so the API starts while the models are down.
     retry = RetryPolicy.for_providers(settings)
+
+    # One HTTP client per model, each with its own timeout
     embedder_client = await resources.enter_async_context(
         httpx.AsyncClient(
             base_url=str(settings.embedder_url),
@@ -220,6 +237,8 @@ async def _answering_state(
             timeout=settings.reranker_timeout_seconds,
         )
     )
+
+    # Wire the answering use case to its model, index and storage adapters
     return AnsweringState(
         answer_question=AnswerQuestion(
             embedder=OpenAICompatibleEmbedder(
@@ -281,6 +300,7 @@ async def run_worker(*, stop: asyncio.Event | None = None) -> None:
     Raises:
         ConfigurationError: If a required setting is missing or invalid.
     """
+    # Load the settings, set up logging and stop on SIGTERM or SIGINT
     settings = WorkerSettings.load()
     configure_logging(log_format=settings.log_format, level=settings.log_level)
     stop = stop or _stop_on_signals()
@@ -291,12 +311,15 @@ async def run_worker(*, stop: asyncio.Event | None = None) -> None:
         settings.vlm_model,
         settings.embedder_model,
     )
+
+    # Database engine and the LISTEN connection that wakes the worker
     engine = create_engine(settings)
     notifications = PostgresJobNotifications(
         settings.database_url,
         timeout_seconds=settings.db_connect_timeout_seconds,
     )
     try:
+        # Touch the liveness file and serve jobs side by side until stopped
         async with asyncio.TaskGroup() as group:
             group.create_task(
                 liveness.keep_alive(
@@ -305,6 +328,7 @@ async def run_worker(*, stop: asyncio.Event | None = None) -> None:
             )
             group.create_task(_serve_jobs(settings, engine, notifications, stop))
     finally:
+        # Release the connections whatever happened
         await notifications.close()
         await engine.dispose()
     logger.info("worker stopped")
@@ -316,11 +340,13 @@ async def _serve_jobs(
     notifications: PostgresJobNotifications,
     stop: asyncio.Event,
 ) -> None:
+    # Stopped before starting: nothing to load
     if stop.is_set():
         return
     # Imported here so the API process never loads torch and the extraction models.
     from multimodal_rag.adapters.docling.extractor import DoclingExtractor
 
+    # Load the extraction models once, before the first job
     extractor = DoclingExtractor(
         artifacts_path=settings.docling_artifacts_path,
         threads=settings.extraction_threads,
@@ -328,6 +354,8 @@ async def _serve_jobs(
     )
     await asyncio.to_thread(extractor.warm_up)
     jobs = PostgresJobQueue(engine)
+
+    # Build the job pipeline and run the claim loop until stopped
     async with AsyncExitStack() as clients:
         process = await _process_job(settings, engine, jobs, extractor, clients)
         logger.info("worker ready")
@@ -353,6 +381,7 @@ async def _process_job(
     extractor: DocumentExtractor,
     clients: AsyncExitStack,
 ) -> ProcessJob:
+    # Vector index, creating the collection on first start
     retry = RetryPolicy.for_providers(settings)
     qdrant = AsyncQdrantClient(
         url=str(settings.qdrant_url),
@@ -366,12 +395,16 @@ async def _process_job(
         retry=retry,
     )
     await index.ensure_collection()
+
+    # HTTP client of the embedding model
     embedder_client = await clients.enter_async_context(
         httpx.AsyncClient(
             base_url=str(settings.embedder_url),
             timeout=settings.embedder_timeout_seconds,
         )
     )
+
+    # Vision model client, only when figure description is enabled
     describer = None
     if settings.figure_description_enabled:
         vlm_client = await clients.enter_async_context(
@@ -382,6 +415,8 @@ async def _process_job(
         describer = OpenAICompatibleFigureDescriber(
             vlm_client, model=settings.vlm_model, retry=retry
         )
+
+    # Wire the pipeline use case to every adapter it needs
     return ProcessJob(
         documents=PostgresDocumentRepository(engine),
         jobs=jobs,
@@ -427,12 +462,14 @@ def worker_is_alive() -> bool:
     Raises:
         ConfigurationError: If a required setting is missing or invalid.
     """
+    # Alive when the file was touched within liveness_max_age_seconds
     settings = WorkerSettings.load()
     age = LivenessFile(settings.liveness_file).age_seconds()
     return age is not None and age <= settings.liveness_max_age_seconds
 
 
 def _stop_on_signals() -> asyncio.Event:
+    # An event set by the termination signals
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
     for signum in (signal.SIGTERM, signal.SIGINT):

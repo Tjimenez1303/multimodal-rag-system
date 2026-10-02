@@ -14,6 +14,7 @@ from multimodal_rag.adapters.http.routes_ingestion import (
 from multimodal_rag.adapters.http.schemas import AnswerBody, QuestionBody
 from multimodal_rag.answering.domain import AnswerImage
 
+# Response header sent with 503 when every answering place is taken
 _RETRY_AFTER: dict[str, Any] = {
     "Retry-After": {
         "description": "Seconds to wait before retrying, sent with answering_busy",
@@ -57,6 +58,7 @@ async def ask_question(
         figures that go with it, or an empty 499 response when the client left.
     """
 
+    # Build the URL of a figure's crop from the image route
     def image_url(image: AnswerImage) -> str:
         return request.url_for(
             "get_document_image",
@@ -64,7 +66,12 @@ async def ask_question(
             element_id=str(image.element_id),
         ).path
 
+    # Answer the question, cancelling the work if the client leaves
     result = await run_until_disconnect(request, lambda: answer(body.question))
+
+    # Nobody is listening any more; the status only reaches the log
     if result is None:
         return Response(status_code=CLIENT_CLOSED_REQUEST)
+
+    # Serialize the answer with image URLs the client can load
     return AnswerBody.from_answer(result, image_url=image_url)

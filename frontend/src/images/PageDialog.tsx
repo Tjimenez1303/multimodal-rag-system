@@ -52,10 +52,13 @@ function PageView({
   initialPage,
   scope = "source",
 }: Omit<PageDialogProps, "trigger">) {
+  // Pages in order, starting at initialPage or the first one
   const sorted = [...new Set(pages)].sort((a, b) => a - b);
   const [index, setIndex] = useState(() =>
     Math.max(0, initialPage === undefined ? 0 : sorted.indexOf(initialPage)),
   );
+
+  // Pages whose image failed to load, and the page shown now
   const [failed, setFailed] = useState<ReadonlySet<number>>(new Set());
   const page = sorted[index] ?? sorted[0] ?? 1;
   const location = pageLocation(documentName, page);
@@ -68,6 +71,7 @@ function PageView({
         </DialogDescription>
       </DialogHeader>
       <div className="min-h-0 flex-1 overflow-auto rounded-md border bg-muted/40">
+        {/* The rendered page from the API, or a notice when it cannot load */}
         {failed.has(page) ? (
           <div className="flex h-72 flex-col items-center justify-center gap-2 text-muted-foreground">
             <FileWarningIcon aria-hidden="true" className="size-6" />
@@ -85,6 +89,7 @@ function PageView({
           />
         )}
       </div>
+      {/* Previous and next buttons when there is more than one page */}
       {sorted.length > 1 && (
         <div className="flex items-center justify-between">
           <Button

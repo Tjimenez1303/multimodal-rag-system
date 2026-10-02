@@ -18,6 +18,7 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     """Apply this revision."""
+    # Look up relationships by target as well as by source
     op.create_index(
         op.f("ix_element_relationships_target_id"),
         "element_relationships",

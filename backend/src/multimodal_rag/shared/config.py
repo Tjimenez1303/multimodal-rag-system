@@ -32,9 +32,12 @@ class DatabaseSettings(BaseSettings):
 
     model_config = SettingsConfigDict(case_sensitive=False, extra="ignore")
 
+    # Connection string and logging
     database_url: str = Field(pattern=r"^postgresql\+asyncpg://")
     log_format: Literal["json", "console"] = "json"
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
+
+    # Connection pool and timeouts
     db_connect_timeout_seconds: PositiveFloat = 5.0
     db_statement_timeout_ms: PositiveInt = 15_000
     db_pool_size: PositiveInt = 10
@@ -52,8 +55,10 @@ class DatabaseSettings(BaseSettings):
                 invalid. The message names every offending variable.
         """
         try:
+            # Let pydantic-settings read and validate every variable
             return cls()
         except pydantic.ValidationError as error:
+            # Name every offending variable in one message, in its environment spelling
             problems = ", ".join(
                 f"{'_'.join(str(part) for part in issue['loc']).upper()} "
                 f"({issue['msg']})"
@@ -99,9 +104,12 @@ class ProviderSettings(CommonSettings):
         provider_retry_timeout_seconds: Total time budget across all attempts.
     """
 
+    # Vector index
     qdrant_url: HttpUrl
     qdrant_collection: str = "retrieval_units"
     qdrant_timeout_seconds: PositiveFloat = 10.0
+
+    # Embedding model
     embedder_url: HttpUrl
     embedder_model: str = Field(min_length=1)
     embedder_timeout_seconds: PositiveFloat = 60.0
@@ -115,6 +123,8 @@ class ProviderSettings(CommonSettings):
         min_length=1,
     )
     embedder_tokenizer_path: Path
+
+    # Retries of calls to models and to the vector index
     provider_retry_attempts: PositiveInt = 4
     provider_retry_initial_wait_seconds: PositiveFloat = 0.5
     provider_retry_max_wait_seconds: PositiveFloat = 10.0
@@ -158,17 +168,24 @@ class ApiSettings(ProviderSettings):
             written without source markers.
     """
 
+    # Upload limits
     max_upload_bytes: PositiveInt = 200 * _MEGABYTE
     max_upload_pages: PositiveInt = 500
+
+    # HTTP server and readiness probe
     # All interfaces inside the container, while compose publishes 127.0.0.1 only.
     api_host: str = "0.0.0.0"
     api_port: PositiveInt = 8000
     readiness_timeout_seconds: PositiveFloat = 2.0
+
+    # Answer model
     answer_model_url: HttpUrl
     answer_model: str = Field(min_length=1)
     answer_model_timeout_seconds: PositiveFloat = 60.0
     answer_max_tokens: PositiveInt = 800
     answer_temperature: float = Field(default=0.0, ge=0, le=2)
+
+    # Retrieval and reranking
     retrieval_top_k: PositiveInt = 8
     reranker_url: HttpUrl
     reranker_model: str = Field(min_length=1)
@@ -183,16 +200,23 @@ class ApiSettings(ProviderSettings):
     reranker_max_input_tokens: PositiveInt = 2048
     rerank_candidates: PositiveInt = 16
     min_relevance: float = Field(default=0.30, ge=0, le=1)
+
+    # Answer shaping
     low_confidence_threshold: float = Field(default=0.90, ge=0, le=1)
     max_question_chars: PositiveInt = 2000
     max_filter_documents: PositiveInt = 20
+
+    # Admission control and deadline
     answer_concurrency: PositiveInt = 2
     answer_queue_limit: int = Field(default=6, ge=0)
     answer_deadline_seconds: PositiveFloat = 90.0
+
+    # Attribution of answers written without source markers
     attribution_min_score: float = Field(default=0.5, ge=0, le=1)
 
     @pydantic.model_validator(mode="after")
     def _answering_fits_its_limits(self) -> Self:
+        # Each model call must fit inside the whole question's deadline
         if self.answer_model_timeout_seconds >= self.answer_deadline_seconds:
             raise ValueError(
                 "ANSWER_MODEL_TIMEOUT_SECONDS must be shorter than "
@@ -202,6 +226,8 @@ class ApiSettings(ProviderSettings):
             raise ValueError(
                 "RERANKER_TIMEOUT_SECONDS must be shorter than ANSWER_DEADLINE_SECONDS"
             )
+
+        # The reranker needs at least as many candidates as passages it keeps
         if self.rerank_candidates < self.retrieval_top_k:
             raise ValueError("RERANK_CANDIDATES must be at least RETRIEVAL_TOP_K")
         return self
@@ -241,23 +267,34 @@ class WorkerSettings(ProviderSettings):
         near_text_max_points: Largest distance, in PDF points, for nearby text.
     """
 
+    # Vision model and embedding input
     vlm_url: HttpUrl
     vlm_model: str = Field(min_length=1)
     vlm_timeout_seconds: PositiveFloat = 120.0
     embedder_max_input_tokens: PositiveInt = 2048
+
+    # Job leases and polling
     lease_seconds: PositiveInt = 90
     heartbeat_seconds: PositiveInt = 30
     poll_seconds: PositiveFloat = 2.0
     claim_retry_max_wait_seconds: PositiveFloat = 30.0
     claim_retry_jitter_seconds: float = Field(default=1.0, ge=0)
+
+    # Restart after this many jobs to release memory held by the extractor
     worker_max_jobs: PositiveInt = 20
+
+    # Docling extraction
     extraction_page_batch: PositiveInt = 4
     extraction_threads: PositiveInt = 4
     extraction_batch_timeout_seconds: PositiveFloat = 120.0
     docling_artifacts_path: Path | None = None
+
+    # Liveness file read by the container healthcheck
     liveness_file: Path = Path("/tmp/multimodal-rag-worker.alive")
     liveness_interval_seconds: PositiveFloat = 10.0
     liveness_max_age_seconds: PositiveFloat = 60.0
+
+    # Figures and retrieval units
     figure_description_enabled: bool = True
     figure_concurrency: PositiveInt = 2
     max_unit_tokens: PositiveInt = 480
@@ -267,12 +304,17 @@ class WorkerSettings(ProviderSettings):
 
     @pydantic.model_validator(mode="after")
     def _intervals_fit_their_limits(self) -> Self:
+        # A heartbeat must renew the lease before it expires
         if self.heartbeat_seconds >= self.lease_seconds:
             raise ValueError("HEARTBEAT_SECONDS must be shorter than LEASE_SECONDS")
+
+        # A whole retrieval unit must fit in one embedding request
         if self.embedder_max_input_tokens < self.max_unit_tokens:
             raise ValueError(
                 "EMBEDDER_MAX_INPUT_TOKENS must hold a whole unit of MAX_UNIT_TOKENS"
             )
+
+        # The liveness file must be touched before it counts as stale
         if self.liveness_interval_seconds >= self.liveness_max_age_seconds:
             raise ValueError(
                 "LIVENESS_INTERVAL_SECONDS must be shorter than "

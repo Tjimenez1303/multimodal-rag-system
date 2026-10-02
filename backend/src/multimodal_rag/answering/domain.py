@@ -55,6 +55,7 @@ class Question:
                 ``max_chars``, or the restriction is empty, holds more than
                 ``max_documents`` ids or repeats an id.
         """
+        # The text must be present and within the length limit
         trimmed = text.strip()
         if not trimmed:
             raise InvalidQuestionError("The question is empty")
@@ -62,8 +63,12 @@ class Question:
             raise InvalidQuestionError(
                 f"The question has {len(trimmed)} characters, the limit is {max_chars}"
             )
+
+        # No restriction means every ready document is searched
         if document_ids is None:
             return cls(text=trimmed)
+
+        # A restriction names between one and max_documents distinct documents
         if not 1 <= len(document_ids) <= max_documents:
             raise InvalidQuestionError(
                 f"document_ids must hold 1 to {max_documents} ids"

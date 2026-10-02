@@ -40,10 +40,12 @@ export function uploadDocument(
   file: File,
   { onProgress }: { onProgress: (sentFraction: number) => void },
 ): Promise<UploadResult> {
+  // Tag the upload with an id the user can quote, and wrap the file in a form
   const requestId = crypto.randomUUID();
   const body = new FormData();
   body.append("file", file);
   return new Promise((resolve) => {
+    // XMLHttpRequest instead of fetch, because only it reports upload progress
     const request = new XMLHttpRequest();
     let stall: ReturnType<typeof setTimeout> | undefined;
     const fail = (failure: ServiceFailure) => {
@@ -59,20 +61,28 @@ export function uploadDocument(
         fail({ kind: "unreachable", requestId });
       }, UPLOAD_STALL_SECONDS * 1000);
     };
+
+    // Report the sent fraction and restart the stall timer on every progress event
     request.upload.addEventListener("progress", (event) => {
       if (event.lengthComputable && event.total > 0)
         onProgress(event.loaded / event.total);
       watchStall();
     });
     request.upload.addEventListener("load", () => onProgress(1));
+
+    // A network error means the service could not be reached
     request.addEventListener("error", () => {
       reportUnreachable();
       fail({ kind: "unreachable", requestId });
     });
+
+    // A response arrived: classify it
     request.addEventListener("load", () => {
       clearTimeout(stall);
       resolve(outcome(request, requestId));
     });
+
+    // Send the form with the request id header
     request.open("POST", UPLOAD_URL);
     request.setRequestHeader("X-Request-ID", requestId);
     onProgress(0);
@@ -82,6 +92,7 @@ export function uploadDocument(
 }
 
 function outcome(request: XMLHttpRequest, requestId: string): UploadResult {
+  // A success status needs a body that matches the contract
   const body = parseJson(request.responseText);
   if (request.status >= 200 && request.status < 300) {
     reportReachable();
@@ -90,6 +101,8 @@ function outcome(request: XMLHttpRequest, requestId: string): UploadResult {
       ? { ok: true, data: accepted.data as UploadAccepted, requestId }
       : { ok: false, failure: toUploadFailure({ kind: "unreadable", requestId }) };
   }
+
+  // An error with an RFC 9457 body comes from the API itself
   const problem = zProblem.safeParse(body);
   if (problem.success) {
     reportReachable();

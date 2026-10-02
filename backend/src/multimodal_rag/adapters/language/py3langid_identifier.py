@@ -27,6 +27,7 @@ class Py3LangidIdentifier:
             The best ranked candidate, or the first candidate when the model knows
             none of them.
         """
+        # Rank every language, then keep the first one among the candidates
         ranking: list[tuple[str, float]] = self._model.rank(text)
         allowed = set(candidates)
         return next(

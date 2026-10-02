@@ -60,10 +60,16 @@ def assemble_sources(
         DataInconsistencyError: If an element of a unit is missing.
     """
     sources = []
+
+    # Describe each supplied unit in the order the reranker judged it
     for rank, item in enumerate(judged, start=1):
         unit = item.hit.unit
+
+        # Read the unit's elements and its described figure, if any
         members = _members(unit, elements)
         described = _described_figure(unit, members)
+
+        # Build the source with its location, excerpt, citation and quality flags
         sources.append(
             RetrievedSource(
                 unit_id=unit.id,
@@ -97,6 +103,7 @@ def assemble_sources(
 def _members(
     unit: RetrievalUnit, elements: Mapping[uuid.UUID, ExtractedElement]
 ) -> tuple[ExtractedElement, ...]:
+    # Every element a unit refers to must be stored
     missing = [i for i in elements_of(unit) if i not in elements]
     if missing:
         raise DataInconsistencyError(f"Unit {unit.id} refers to missing elements")
@@ -106,6 +113,7 @@ def _members(
 def _described_figure(
     unit: RetrievalUnit, members: Sequence[ExtractedElement]
 ) -> ExtractedElement | None:
+    # Only figure units carry a generated description
     if unit.unit_type is not UnitType.FIGURE:
         return None
     return next(
@@ -121,6 +129,7 @@ def _described_figure(
 def _tables(
     unit: RetrievalUnit, members: Sequence[ExtractedElement]
 ) -> tuple[TableContent, ...]:
+    # Only table units carry table rows
     if unit.unit_type is not UnitType.TABLE:
         return ()
     return tuple(
